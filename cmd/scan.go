@@ -6,6 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	scanRoot string
+	scanFull bool
+)
+
 // scanCmd represents the scan command.
 var scanCmd = &cobra.Command{
 	Use:   "scan",
@@ -29,4 +34,7 @@ scan.`,
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
+
+	scanCmd.Flags().StringVar(&scanRoot, "root", "", "scan only this project root instead of all configured roots")
+	scanCmd.Flags().BoolVar(&scanFull, "full", false, "force a full rescan instead of an incremental one")
 }

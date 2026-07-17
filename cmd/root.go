@@ -2,6 +2,17 @@ package cmd
 
 import "github.com/spf13/cobra"
 
+// Global flag values shared by every subcommand. Populated by rootCmd's
+// persistent flags; subcommands read these instead of redefining them.
+var (
+	cfgPath    string
+	jsonOutput bool
+	verbose    bool
+	noColor    bool
+	dryRun     bool
+	assumeYes  bool
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "libra",
 	Short: "Analyze and manage local developer storage",
@@ -22,4 +33,14 @@ default to --dry-run.`,
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+func init() {
+	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&cfgPath, "config", "", "path to libra config file (default: .libra.yaml)")
+	flags.BoolVar(&jsonOutput, "json", false, "output machine-readable JSON instead of text")
+	flags.BoolVar(&verbose, "verbose", false, "print additional diagnostic detail")
+	flags.BoolVar(&noColor, "no-color", false, "disable ANSI color in text output")
+	flags.BoolVar(&dryRun, "dry-run", false, "show what would happen without changing anything")
+	flags.BoolVar(&assumeYes, "yes", false, "skip interactive confirmation prompts")
 }

@@ -6,6 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	summaryDrive string
+	summaryType  string
+)
+
 // summaryCmd represents the summary command.
 var summaryCmd = &cobra.Command{
 	Use:   "summary",
@@ -25,4 +30,7 @@ needs review, or is blocked from cleanup.`,
 
 func init() {
 	rootCmd.AddCommand(summaryCmd)
+
+	summaryCmd.Flags().StringVar(&summaryDrive, "drive", "", "limit the summary to this drive (e.g. C:)")
+	summaryCmd.Flags().StringVar(&summaryType, "type", "", "limit the summary to this resource type (e.g. sdk)")
 }

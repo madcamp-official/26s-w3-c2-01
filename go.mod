@@ -1,6 +1,6 @@
 module github.com/madcamp-official/26s-w3-c2-01
 
-go 1.22
+go 1.25.0
 
 require github.com/spf13/cobra v1.10.2
 

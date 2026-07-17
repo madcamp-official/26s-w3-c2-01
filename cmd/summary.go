@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -23,8 +22,22 @@ needs review, or is blocked from cleanup.`,
   libra summary --type sdk`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintln(cmd.OutOrStdout(), "summary: not yet implemented")
-		return nil
+		// Mock numbers until scan/store wiring lands (Day2); shape matches
+		// the F-06 example in docs/libra_cli_commands_and_schedule.md.
+		view := output.SummaryView{
+			Drive: summaryDrive,
+			ResourcesByType: []output.SummaryLine{
+				{Label: "Windows SDKs", Bytes: 12459999232},
+				{Label: "Visual Studio tools", Bytes: 25986469478},
+				{Label: ".NET SDKs", Bytes: 5798727680},
+				{Label: "Node project artifacts", Bytes: 19434323968},
+				{Label: "MSBuild outputs", Bytes: 8162838528},
+			},
+			SafeReclaimable: 10416967680,
+			NeedsReview:     13316730880,
+			Blocked:         63146360832,
+		}
+		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
 	},
 }
 

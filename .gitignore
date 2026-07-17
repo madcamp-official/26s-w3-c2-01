@@ -1,0 +1,9 @@
+# Go build artifacts
+/libra
+/libra.exe
+*.test
+*.out
+
+# Local development files
+.idea/
+.vscode/

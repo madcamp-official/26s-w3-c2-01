@@ -5,6 +5,7 @@ type ResourceType string
 
 const (
 	ResourceTypeWindowsSDK   ResourceType = "windows-sdk"
+	ResourceTypeNetFXSDK     ResourceType = "netfx-sdk" // .NET Framework SDK, distinct from the .NET (Core) SDK
 	ResourceTypeVisualStudio ResourceType = "visual-studio"
 	ResourceTypeMSBuild      ResourceType = "msbuild"
 	ResourceTypeDotNetSDK    ResourceType = "dotnet-sdk"

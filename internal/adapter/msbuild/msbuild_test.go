@@ -2,7 +2,6 @@ package msbuild
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -10,49 +9,8 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
-// fakeBuildProjectParser is a placeholder BuildProjectParser used to
-// validate this test harness before the real XML-parsing implementation
-// lands (Day2/3). It only knows about the fixtures under testdata/msbuild.
-type fakeBuildProjectParser struct{}
-
-func (fakeBuildProjectParser) CanParse(path string) bool {
-	switch filepath.Ext(path) {
-	case ".vcxproj", ".csproj":
-		return true
-	default:
-		return false
-	}
-}
-
-func (fakeBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuildProject, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return ParsedBuildProject{}, err
-	}
-
-	switch filepath.Base(path) {
-	case "GameClient.vcxproj":
-		return ParsedBuildProject{
-			Project: domain.BuildProject{Name: "GameClient", Path: path, Type: domain.ProjectTypeMSBuildCpp, LastModifiedAt: info.ModTime()},
-			Declared: []DeclaredProperty{
-				{Name: "WindowsTargetPlatformVersion", Value: "10.0.22621.0"},
-				{Name: "PlatformToolset", Value: "v143"},
-			},
-		}, nil
-	case "SampleDotNetApp.csproj":
-		return ParsedBuildProject{
-			Project: domain.BuildProject{Name: "SampleDotNetApp", Path: path, Type: domain.ProjectTypeMSBuildDotNet, LastModifiedAt: info.ModTime()},
-			Declared: []DeclaredProperty{
-				{Name: "TargetFramework", Value: "net8.0"},
-			},
-		}, nil
-	default:
-		return ParsedBuildProject{}, nil
-	}
-}
-
-// fakeWorkspaceParser is a placeholder WorkspaceParser, same purpose as
-// fakeBuildProjectParser above but for .sln files.
+// fakeWorkspaceParser is a placeholder WorkspaceParser used to validate this
+// test harness before the real .sln-parsing implementation lands.
 type fakeWorkspaceParser struct{}
 
 func (fakeWorkspaceParser) CanParse(path string) bool {
@@ -71,8 +29,8 @@ func (fakeWorkspaceParser) Parse(ctx context.Context, path string) (ParsedWorksp
 	}
 }
 
-func TestBuildProjectParser_CanParse(t *testing.T) {
-	var parser BuildProjectParser = fakeBuildProjectParser{}
+func TestXMLBuildProjectParser_CanParse(t *testing.T) {
+	var parser BuildProjectParser = XMLBuildProjectParser{}
 
 	cases := []struct {
 		name string
@@ -94,29 +52,36 @@ func TestBuildProjectParser_CanParse(t *testing.T) {
 	}
 }
 
-func TestBuildProjectParser_Parse(t *testing.T) {
-	var parser BuildProjectParser = fakeBuildProjectParser{}
+func TestXMLBuildProjectParser_Parse(t *testing.T) {
+	var parser BuildProjectParser = XMLBuildProjectParser{}
 
 	cases := []struct {
 		name         string
 		path         string
 		wantProject  string
+		wantType     domain.ProjectType
 		wantDeclared []DeclaredProperty
 	}{
 		{
-			name:        "cpp project declares a Windows SDK version",
+			name:        "cpp project declares its Windows SDK and toolset properties",
 			path:        "../../../testdata/msbuild/GameClient/GameClient.vcxproj",
 			wantProject: "GameClient",
+			wantType:    domain.ProjectTypeMSBuildCpp,
 			wantDeclared: []DeclaredProperty{
+				{Name: "ProjectGuid", Value: "{11111111-2222-3333-4444-555555555555}"},
 				{Name: "WindowsTargetPlatformVersion", Value: "10.0.22621.0"},
 				{Name: "PlatformToolset", Value: "v143"},
+				{Name: "ConfigurationType", Value: "Application"},
+				{Name: "UseDebugLibraries", Value: "true"},
 			},
 		},
 		{
-			name:        "dotnet project declares a target framework",
+			name:        "dotnet project declares its output type and target framework",
 			path:        "../../../testdata/msbuild/SampleDotNetApp/SampleDotNetApp.csproj",
 			wantProject: "SampleDotNetApp",
+			wantType:    domain.ProjectTypeMSBuildDotNet,
 			wantDeclared: []DeclaredProperty{
+				{Name: "OutputType", Value: "Exe"},
 				{Name: "TargetFramework", Value: "net8.0"},
 			},
 		},
@@ -130,6 +95,9 @@ func TestBuildProjectParser_Parse(t *testing.T) {
 			}
 			if got.Project.Name != tc.wantProject {
 				t.Errorf("Project.Name = %q, want %q", got.Project.Name, tc.wantProject)
+			}
+			if got.Project.Type != tc.wantType {
+				t.Errorf("Project.Type = %v, want %v", got.Project.Type, tc.wantType)
 			}
 			if !reflect.DeepEqual(got.Declared, tc.wantDeclared) {
 				t.Errorf("Declared = %+v, want %+v", got.Declared, tc.wantDeclared)

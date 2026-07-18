@@ -22,9 +22,12 @@ type Detector interface {
 	// directory, but in a linked worktree it is a file pointing at the real
 	// repository elsewhere -- either form counts.
 	CanDetect(dir string) bool
-	// Detect builds the domain.BuildProject for the Git repository rooted at
-	// dir. Callers should only call this after CanDetect reports true.
-	Detect(ctx context.Context, dir string) (domain.BuildProject, error)
+	// Detect builds the domain.BuildProject(s) for the Git repository rooted
+	// at dir. Callers should only call this after CanDetect reports true. It
+	// returns a slice, rather than a single BuildProject, so that a Git root
+	// containing more than one independent build project is not precluded by
+	// the return type.
+	Detect(ctx context.Context, dir string) ([]domain.BuildProject, error)
 }
 
 // FilesystemDetector is the real Detector implementation: it checks for a
@@ -36,22 +39,22 @@ func (FilesystemDetector) CanDetect(dir string) bool {
 	return err == nil
 }
 
-func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildProject, error) {
+func (FilesystemDetector) Detect(ctx context.Context, dir string) ([]domain.BuildProject, error) {
 	abs, err := pathutil.Absolute(dir)
 	if err != nil {
-		return domain.BuildProject{}, err
+		return nil, err
 	}
 
 	info, err := os.Stat(abs)
 	if err != nil {
-		return domain.BuildProject{}, err
+		return nil, err
 	}
 
-	return domain.BuildProject{
+	return []domain.BuildProject{{
 		Name:           filepath.Base(abs),
 		Path:           abs,
 		Type:           domain.ProjectTypeGit,
 		Drive:          filepath.VolumeName(abs),
 		LastModifiedAt: info.ModTime(),
-	}, nil
+	}}, nil
 }

@@ -38,13 +38,16 @@ func TestFilesystemDetector_Detect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Detect returned error: %v", err)
 	}
-	if got.Type != domain.ProjectTypeGit {
-		t.Errorf("Type = %v, want %v", got.Type, domain.ProjectTypeGit)
+	if len(got) != 1 {
+		t.Fatalf("got %d build projects, want 1: %+v", len(got), got)
 	}
-	if got.Name != filepath.Base(repoDir) {
-		t.Errorf("Name = %q, want %q", got.Name, filepath.Base(repoDir))
+	if got[0].Type != domain.ProjectTypeGit {
+		t.Errorf("Type = %v, want %v", got[0].Type, domain.ProjectTypeGit)
 	}
-	if got.LastModifiedAt.IsZero() {
+	if got[0].Name != filepath.Base(repoDir) {
+		t.Errorf("Name = %q, want %q", got[0].Name, filepath.Base(repoDir))
+	}
+	if got[0].LastModifiedAt.IsZero() {
 		t.Errorf("LastModifiedAt is zero, want the directory's mod time")
 	}
 }

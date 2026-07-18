@@ -44,15 +44,15 @@ func (XMLBuildProjectParser) CanParse(path string) bool {
 	}
 }
 
-func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuildProject, error) {
+func (XMLBuildProjectParser) Parse(ctx context.Context, path string) ([]ParsedBuildProject, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	var file xmlProjectFile
 	if err := xml.Unmarshal(data, &file); err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	var declared []DeclaredProperty
@@ -67,12 +67,12 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuil
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	root, name, drive, err := ProjectRoot(path)
 	if err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	projectType := domain.ProjectTypeMSBuildCpp
@@ -80,7 +80,7 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuil
 		projectType = domain.ProjectTypeMSBuildDotNet
 	}
 
-	return ParsedBuildProject{
+	return []ParsedBuildProject{{
 		Project: domain.BuildProject{
 			Name:           name,
 			Path:           root,
@@ -89,5 +89,5 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuil
 			LastModifiedAt: info.ModTime(),
 		},
 		Declared: declared,
-	}, nil
+	}}, nil
 }

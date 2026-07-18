@@ -37,9 +37,11 @@ type BuildProjectParser interface {
 	// CanParse reports whether path is a project file this parser handles.
 	CanParse(path string) bool
 	// Parse reads the project file at path and returns the detected build
-	// project along with any declared properties relevant to dependency
-	// analysis.
-	Parse(ctx context.Context, path string) (ParsedBuildProject, error)
+	// project(s) along with any declared properties relevant to dependency
+	// analysis. It returns a slice, rather than a single ParsedBuildProject,
+	// so that a project file describing more than one build project is not
+	// precluded by the return type.
+	Parse(ctx context.Context, path string) ([]ParsedBuildProject, error)
 }
 
 // ParsedWorkspace is the result of parsing a single .sln file: the workspace

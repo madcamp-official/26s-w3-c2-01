@@ -93,16 +93,19 @@ func TestXMLBuildProjectParser_Parse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse(%q) returned error: %v", tc.path, err)
 			}
-			if got.Project.Name != tc.wantProject {
-				t.Errorf("Project.Name = %q, want %q", got.Project.Name, tc.wantProject)
+			if len(got) != 1 {
+				t.Fatalf("got %d parsed build projects, want 1: %+v", len(got), got)
 			}
-			if got.Project.Type != tc.wantType {
-				t.Errorf("Project.Type = %v, want %v", got.Project.Type, tc.wantType)
+			if got[0].Project.Name != tc.wantProject {
+				t.Errorf("Project.Name = %q, want %q", got[0].Project.Name, tc.wantProject)
 			}
-			if !reflect.DeepEqual(got.Declared, tc.wantDeclared) {
-				t.Errorf("Declared = %+v, want %+v", got.Declared, tc.wantDeclared)
+			if got[0].Project.Type != tc.wantType {
+				t.Errorf("Project.Type = %v, want %v", got[0].Project.Type, tc.wantType)
 			}
-			if got.Project.LastModifiedAt.IsZero() {
+			if !reflect.DeepEqual(got[0].Declared, tc.wantDeclared) {
+				t.Errorf("Declared = %+v, want %+v", got[0].Declared, tc.wantDeclared)
+			}
+			if got[0].Project.LastModifiedAt.IsZero() {
 				t.Errorf("Project.LastModifiedAt is zero, want the fixture file's mod time")
 			}
 		})

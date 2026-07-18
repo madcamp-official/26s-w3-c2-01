@@ -19,8 +19,10 @@ type xmlProperty struct {
 }
 
 // xmlPropertyGroup mirrors MSBuild's <PropertyGroup>: an arbitrary set of
-// named properties.
+// named properties, optionally gated by a Configuration/Platform Condition
+// (e.g. Condition="'$(Configuration)|$(Platform)'=='Debug|x64'").
 type xmlPropertyGroup struct {
+	Condition  string        `xml:"Condition,attr"`
 	Properties []xmlProperty `xml:",any"`
 }
 
@@ -58,6 +60,18 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]
 
 	var declared []DeclaredProperty
 	for _, group := range file.PropertyGroups {
+		if group.Condition != "" {
+			// Conditional PropertyGroups (e.g. Debug/Release- or
+			// Platform-specific overrides) are skipped rather than merged
+			// in unconditionally: evaluating the Condition expression
+			// against one specific Configuration/Platform isn't
+			// implemented, and merging it in blindly would silently prefer
+			// one configuration's values with no way to tell which. Once
+			// domain.UnverifiedScope exists (see
+			// docs/libra_integration_contracts.md §19.1), skipped groups
+			// should be recorded there instead of silently dropped.
+			continue
+		}
 		for _, prop := range group.Properties {
 			declared = append(declared, DeclaredProperty{
 				Name:  prop.XMLName.Local,

@@ -75,6 +75,18 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
+// Save writes cfg to path as YAML, creating or truncating the file.
+func Save(path string, cfg Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write config %q: %w", path, err)
+	}
+	return nil
+}
+
 func (c Config) Validate() error {
 	if c.Version != CurrentVersion {
 		return fmt.Errorf("version must be %d", CurrentVersion)

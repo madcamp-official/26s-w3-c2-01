@@ -846,6 +846,12 @@ MVP 결정표:
 | 분석 실패·불명확 | 최소 `REVIEW` |
 | 경로가 사라짐·변경됨 | 실행 대상 제외 |
 
+Windows MVP 보호 경로는 현재 장비에서 확인되는 `%WINDIR%`,
+`%ProgramFiles%`, `%ProgramFiles(x86)%`, `%ProgramData%`로 확정한다. A의
+경로 분류기는 해당 경로 내부 여부와 근거를 반환하고, 중앙 `RiskPolicy`가
+`SystemManaged=true`, `Risk=BLOCKED`를 적용한다. Adapter는 Risk를 직접
+판정하지 않는다.
+
 ### 20.4 Impact (`DECISION_REQUIRED`)
 
 ```go

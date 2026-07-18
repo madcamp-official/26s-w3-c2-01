@@ -24,18 +24,39 @@ type DeclaredProperty struct {
 	Value string
 }
 
-// ParsedProject is the result of parsing a single project file.
-type ParsedProject struct {
-	Project  domain.Project
+// ParsedBuildProject is the result of parsing a single .vcxproj or .csproj
+// file.
+type ParsedBuildProject struct {
+	Project  domain.BuildProject
 	Declared []DeclaredProperty
 }
 
-// ProjectParser detects and parses .sln, .vcxproj, and .csproj files,
+// BuildProjectParser detects and parses .vcxproj and .csproj files,
 // including properties inherited from Directory.Build.props.
-type ProjectParser interface {
+type BuildProjectParser interface {
 	// CanParse reports whether path is a project file this parser handles.
 	CanParse(path string) bool
-	// Parse reads the project file at path and returns the detected project
-	// along with any declared properties relevant to dependency analysis.
-	Parse(ctx context.Context, path string) (ParsedProject, error)
+	// Parse reads the project file at path and returns the detected build
+	// project along with any declared properties relevant to dependency
+	// analysis.
+	Parse(ctx context.Context, path string) (ParsedBuildProject, error)
+}
+
+// ParsedWorkspace is the result of parsing a single .sln file: the workspace
+// itself, plus the paths of the build projects it references. Those paths
+// are not yet resolved to BuildProject IDs -- that resolution happens once
+// every referenced path has been scanned and parsed on its own (see
+// domain.WorkspaceProject).
+type ParsedWorkspace struct {
+	Workspace    domain.Workspace
+	ProjectPaths []string
+}
+
+// WorkspaceParser detects and parses .sln files.
+type WorkspaceParser interface {
+	// CanParse reports whether path is a workspace file this parser handles.
+	CanParse(path string) bool
+	// Parse reads the workspace file at path and returns the detected
+	// workspace along with the paths of the build projects it references.
+	Parse(ctx context.Context, path string) (ParsedWorkspace, error)
 }

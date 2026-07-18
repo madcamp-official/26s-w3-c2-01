@@ -64,6 +64,7 @@ func (s *ResourceService) Observe(ctx context.Context, detected domain.Resource)
 		return ResourceObservation{}, fmt.Errorf("measure resource %q: %w", displayPath, err)
 	}
 	detected.LogicalSize = measured.LogicalSize
+	detected.SizeKnown = measured.SizeKnown
 	detected.LastModifiedAt = measured.LastModifiedAt
 	detected.LastObservedAt = s.now()
 

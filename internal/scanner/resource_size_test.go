@@ -34,6 +34,9 @@ func TestMeasureResourceAggregatesKnownPath(t *testing.T) {
 	if got.LogicalSize != 12 || got.FilesInspected != 2 {
 		t.Fatalf("MeasureResource() = %#v, want 12 bytes across 2 files", got)
 	}
+	if !got.SizeKnown {
+		t.Fatal("SizeKnown = false, want true for a complete measurement")
+	}
 	if got.LastModifiedAt == nil || !got.LastModifiedAt.Equal(latest) {
 		t.Fatalf("LastModifiedAt = %v, want %v", got.LastModifiedAt, latest)
 	}
@@ -49,5 +52,8 @@ func TestMeasureResourceReportsMissingPathAsIssue(t *testing.T) {
 	}
 	if len(got.Issues) != 1 {
 		t.Fatalf("Issues = %v, want one missing-root issue", got.Issues)
+	}
+	if got.SizeKnown {
+		t.Fatal("SizeKnown = true, want false when the resource path is missing")
 	}
 }

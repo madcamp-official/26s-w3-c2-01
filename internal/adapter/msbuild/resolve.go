@@ -222,19 +222,41 @@ type ResolvedDependency struct {
 // ResolveDependencies matches every recognized declared property --
 // currently WindowsTargetPlatformVersion and TargetFramework -- against
 // installed resources, returning one ResolvedDependency per successful
-// match. Properties with an unrecognized name or no matching installed
-// resource are silently skipped: there is no domain type yet to record why a
-// property went unmatched (see docs/libra_integration_contracts.md §19.1,
-// UnverifiedScope).
+// match.
+//
+// A recognized property gated by a Configuration/Platform Condition is not
+// matched at all: evaluating the Condition isn't implemented, and matching
+// it unconditionally would silently prefer one configuration over another.
+// It is reported as an UnverifiedScope instead, so callers can distinguish
+// "checked, no dependency" from "not checked" (see
+// docs/libra_integration_contracts.md §19.1).
+//
+// A recognized, unconditional property with no matching installed resource,
+// and any unrecognized property name, are silently skipped: neither
+// represents a scope of analysis libra didn't attempt.
 func ResolveDependencies(
 	projectID string,
 	sourcePath string,
 	declared []DeclaredProperty,
 	installed []domain.Resource,
 	collectedAt time.Time,
-) []ResolvedDependency {
-	var resolved []ResolvedDependency
+) (resolved []ResolvedDependency, unverified []domain.UnverifiedScope) {
 	for _, d := range declared {
+		if !isRecognizedProperty(d.Name) {
+			continue
+		}
+		if d.Condition != "" {
+			unverified = append(unverified, domain.UnverifiedScope{
+				BuildProjectID: projectID,
+				Source:         sourcePath,
+				Property:       d.Name,
+				RawValue:       d.Value,
+				Condition:      d.Condition,
+				Reason:         "MSBUILD_CONDITION_NOT_EVALUATED",
+			})
+			continue
+		}
+
 		var dependency domain.Dependency
 		var evidence domain.Evidence
 		var ok bool
@@ -243,13 +265,20 @@ func ResolveDependencies(
 			dependency, evidence, ok = ResolveWindowsSDKDependency(projectID, sourcePath, d, installed, collectedAt)
 		case "TargetFramework":
 			dependency, evidence, ok = ResolveDotNetSDKDependency(projectID, sourcePath, d, installed, collectedAt)
-		default:
-			continue
 		}
 		if !ok {
 			continue
 		}
 		resolved = append(resolved, ResolvedDependency{Dependency: dependency, Evidence: []domain.Evidence{evidence}})
 	}
-	return resolved
+	return resolved, unverified
+}
+
+func isRecognizedProperty(name string) bool {
+	switch name {
+	case "WindowsTargetPlatformVersion", "TargetFramework":
+		return true
+	default:
+		return false
+	}
 }

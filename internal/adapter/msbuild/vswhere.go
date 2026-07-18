@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
@@ -55,6 +56,9 @@ func (l VSWhereToolLocator) run(ctx context.Context, path string, args ...string
 }
 
 func (l VSWhereToolLocator) Locate(ctx context.Context) ([]domain.Resource, error) {
+	if err := adapter.RequireWindows("Visual Studio detection"); err != nil {
+		return nil, err
+	}
 	vswhere := l.path()
 	if _, err := os.Stat(vswhere); os.IsNotExist(err) {
 		return nil, nil

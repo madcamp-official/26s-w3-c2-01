@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
@@ -42,6 +43,9 @@ func (d FilesystemDetector) root() string {
 }
 
 func (d FilesystemDetector) Detect(ctx context.Context) ([]domain.Resource, error) {
+	if err := adapter.RequireWindows("Windows SDK detection"); err != nil {
+		return nil, err
+	}
 	var resources []domain.Resource
 
 	win10, err := d.listVersionedResources(filepath.Join(d.root(), "10", "Include"), domain.ResourceTypeWindowsSDK, "Windows SDK")

@@ -36,9 +36,9 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO resources (
 			id, resource_type, name, version, path, normalized_path,
-			logical_size, reclaimable_size, regenerable, system_managed,
+			logical_size, size_known, reclaimable_size, regenerable, system_managed,
 			last_modified_at, last_observed_at, risk, confidence
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -46,6 +46,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			path = excluded.path,
 			normalized_path = excluded.normalized_path,
 			logical_size = excluded.logical_size,
+			size_known = excluded.size_known,
 			reclaimable_size = excluded.reclaimable_size,
 			regenerable = excluded.regenerable,
 			system_managed = excluded.system_managed,
@@ -55,7 +56,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			confidence = excluded.confidence
 	`,
 		resource.ID, resource.Type, resource.Name, nullableString(resource.Version),
-		resource.DisplayPath, resource.NormalizedPath, resource.LogicalSize,
+		resource.DisplayPath, resource.NormalizedPath, resource.LogicalSize, boolInt(resource.SizeKnown),
 		resource.ReclaimableSize, boolInt(resource.Regenerable), boolInt(resource.SystemManaged),
 		lastModifiedAt, resource.LastObservedAt.UTC().Format(time.RFC3339Nano),
 		resource.Risk, resource.Confidence,
@@ -101,7 +102,7 @@ func (r *ResourceRepository) ListByType(ctx context.Context, resourceType domain
 
 const resourceSelect = `
 	SELECT id, resource_type, name, version, path, normalized_path,
-		logical_size, reclaimable_size, regenerable, system_managed,
+		logical_size, size_known, reclaimable_size, regenerable, system_managed,
 		last_modified_at, last_observed_at, risk, confidence
 	FROM resources`
 
@@ -116,10 +117,11 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 	var lastObservedAt string
 	var regenerable int
 	var systemManaged int
+	var sizeKnown int
 	err := row.Scan(
 		&resource.ID, &resource.Type, &resource.Name, &version,
 		&resource.DisplayPath, &resource.NormalizedPath,
-		&resource.LogicalSize, &resource.ReclaimableSize,
+		&resource.LogicalSize, &sizeKnown, &resource.ReclaimableSize,
 		&regenerable, &systemManaged, &lastModifiedAt, &lastObservedAt,
 		&resource.Risk, &resource.Confidence,
 	)
@@ -131,6 +133,7 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 	}
 	resource.Regenerable = regenerable == 1
 	resource.SystemManaged = systemManaged == 1
+	resource.SizeKnown = sizeKnown == 1
 	if lastModifiedAt.Valid {
 		parsed, err := time.Parse(time.RFC3339Nano, lastModifiedAt.String)
 		if err != nil {

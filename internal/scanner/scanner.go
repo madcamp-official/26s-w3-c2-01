@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // Scanner traverses configured roots. Recoverable path issues are returned in
@@ -134,26 +136,31 @@ func (s *ParallelScanner) prepareRoots(roots []string, matcher excludeMatcher, r
 	tasks := make([]directoryTask, 0, len(roots))
 	seen := make(map[string]struct{}, len(roots))
 	for _, root := range roots {
-		normalized, err := normalizePath(root)
+		identity, err := pathutil.Normalize(root)
 		if err != nil {
 			result.Issues = append(result.Issues, Issue{Path: root, Operation: "normalize root", Err: err})
 			continue
 		}
-		if _, exists := seen[normalized]; exists || matcher.Matches(normalized) {
+		displayPath, err := pathutil.Absolute(root)
+		if err != nil {
+			result.Issues = append(result.Issues, Issue{Path: root, Operation: "resolve root", Err: err})
 			continue
 		}
-		seen[normalized] = struct{}{}
+		if _, exists := seen[identity]; exists || matcher.Matches(displayPath) {
+			continue
+		}
+		seen[identity] = struct{}{}
 
-		info, err := s.lstat(normalized)
+		info, err := s.lstat(displayPath)
 		if err != nil {
-			result.Issues = append(result.Issues, Issue{Path: normalized, Operation: "inspect root", Err: err})
+			result.Issues = append(result.Issues, Issue{Path: displayPath, Operation: "inspect root", Err: err})
 			continue
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || isReparsePoint(info) {
-			result.Issues = append(result.Issues, Issue{Path: normalized, Operation: "inspect root", Err: errors.New("root is not a traversable directory")})
+			result.Issues = append(result.Issues, Issue{Path: displayPath, Operation: "inspect root", Err: errors.New("root is not a traversable directory")})
 			continue
 		}
-		tasks = append(tasks, directoryTask{path: normalized})
+		tasks = append(tasks, directoryTask{path: displayPath})
 	}
 	return tasks
 }

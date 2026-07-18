@@ -753,3 +753,11 @@ cleanup 관련 기능은 다음도 필요하다.
 [ ] restore
 [ ] 2인 리뷰
 ```
+
+---
+
+## 관련 통합 계약
+
+A·B·C 사이의 프로젝트 의미, 경로 identity, scanner 전달 값, DB 저장, 오류, 진행률, CLI·JSON 계약은 [`libra_integration_contracts.md`](./libra_integration_contracts.md)를 기준으로 검토한다.
+
+해당 문서에서 `DECISION_REQUIRED`로 표시된 항목은 공용 domain, DB schema 또는 CLI 계약에 영향을 주므로 팀 합의와 필요한 리뷰 없이 구현하지 않는다.

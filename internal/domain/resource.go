@@ -1,5 +1,12 @@
 package domain
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+	"time"
+)
+
 // ResourceType classifies the kind of development resource libra detected.
 type ResourceType string
 
@@ -26,15 +33,29 @@ const (
 
 // Resource is an SDK, tool, cache, or build artifact discovered by scan.
 type Resource struct {
-	ID          string
-	Name        string
-	Type        ResourceType
-	Version     string
-	Path        string
-	LogicalSize int64
-	Regenerable bool
-	Risk        RiskLevel
+	ID              string
+	Name            string
+	Type            ResourceType
+	Version         string
+	DisplayPath     string
+	NormalizedPath  string
+	LogicalSize     int64
+	ReclaimableSize int64
+	Regenerable     bool
+	SystemManaged   bool
+	LastModifiedAt  *time.Time
+	LastObservedAt  time.Time
+	Risk            RiskLevel
 	// Confidence is analysis-coverage confidence (0-100), not a real
 	// probability. See EvidenceKind weighting in evidence.go.
 	Confidence int
+}
+
+// ResourceID returns the stable identity shared by detectors and storage.
+// NUL separators make the serialization unambiguous while preserving the
+// agreed Type + Version + NormalizedPath key fields.
+func ResourceID(resourceType ResourceType, version, normalizedPath string) string {
+	key := strings.Join([]string{string(resourceType), version, normalizedPath}, "\x00")
+	digest := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(digest[:])
 }

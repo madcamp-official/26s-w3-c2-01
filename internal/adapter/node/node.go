@@ -112,8 +112,9 @@ func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (doma
 
 	return domain.BuildProject{
 		Name:           name,
-		Path:           abs,
 		Type:           domain.ProjectTypeNode,
+		RootPath:       abs,
+		ManifestPath:   filepath.Join(abs, manifestFile),
 		Drive:          filepath.VolumeName(abs),
 		LastModifiedAt: entry.ModifiedAt,
 	}, nil

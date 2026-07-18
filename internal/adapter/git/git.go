@@ -48,8 +48,9 @@ func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) ([]do
 
 	return []domain.BuildProject{{
 		Name:           filepath.Base(abs),
-		Path:           abs,
 		Type:           domain.ProjectTypeGit,
+		RootPath:       abs,
+		ManifestPath:   filepath.Join(abs, ".git"),
 		Drive:          filepath.VolumeName(abs),
 		LastModifiedAt: entry.ModifiedAt,
 	}}, nil

@@ -23,7 +23,7 @@ func (fakeWorkspaceParser) Parse(ctx context.Context, entry scanner.Entry) (Pars
 	switch filepath.Base(entry.Path) {
 	case "GameClient.sln":
 		return ParsedWorkspace{
-			Workspace:    domain.Workspace{Name: "GameClient", Path: entry.Path, Type: domain.WorkspaceTypeVSSolution},
+			Workspace:    domain.Workspace{Name: "GameClient", ManifestPath: entry.Path, Type: domain.WorkspaceTypeVSSolution},
 			ProjectPaths: []string{filepath.Join(filepath.Dir(entry.Path), "GameClient.vcxproj")},
 		}, nil
 	default:

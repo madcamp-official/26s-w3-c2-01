@@ -509,7 +509,7 @@ manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가
 
 ### 15.2 stable ID (`DECISION_REQUIRED`, Resource·Dependency·Evidence는 `CONFIRMED`)
 
-Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
+Resource, Dependency, Evidence ID는 확정되었고 Project ID만 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
@@ -834,13 +834,19 @@ type Evidence struct {
 
 계약 제안:
 
-- Evidence는 특정 scan에 귀속한다.
+- Evidence는 `evidence.scan_id` foreign key로 특정 scan에 귀속한다 (`CONFIRMED`).
 - 현재 dependency는 최신 유효 Evidence만 사용한다.
 - 과거 Evidence는 기록으로 유지할 수 있다.
 - 민감한 원문은 저장하지 않는다.
 - source 파일이 바뀌면 기존 Evidence의 유효성을 다시 평가한다.
 
-중복 키, 만료 정책, raw value redaction은 구현 전에 확정한다.
+내용 기반 Evidence ID를 중복 키로 사용하고 같은 근거를 다시 발견하면
+`CollectedAt`을 갱신한다 (`CONFIRMED`). 만료 정책과 raw value redaction은
+구현 전에 확정한다.
+
+기존 Evidence는 migration이 생성하는 `migration:003:legacy-evidence` scan에
+귀속하여 삭제 없이 보존한다. Dependency는 최신 관계를 upsert하며 과거 graph
+snapshot과 미발견 관계 삭제는 snapshot 계약을 확정할 때까지 수행하지 않는다.
 
 ### 20.2 Confidence (`DECISION_REQUIRED`)
 

@@ -1,6 +1,6 @@
 # Libra 통합 계약 및 사전 합의
 
-> 상태: 초안 v0.2  
+> 상태: 초안 v0.3  
 > 작성일: 2026-07-18  
 > 목적: A·B·C가 독립적으로 구현한 기능을 결합할 때 데이터의 의미와 형태가 달라지는 문제를 방지한다.
 
@@ -759,7 +759,7 @@ type Requirement struct {
 
 Configuration·Platform을 분석하지 않았으면 반드시 `UnverifiedScope`를 남긴다. `Latest`, `10.0`, 미설치 SDK, Debug/Release 차이 및 조건별 dependency 표현은 B가 구현 전에 확정한다.
 
-### 19.2 Node workspace (`DECISION_REQUIRED`)
+### 19.2 Node workspace (`CONFIRMED`, MVP 범위)
 
 ```text
 각 package.json  → BuildProject 후보
@@ -768,14 +768,22 @@ root node_modules → workspace 소유 Resource
 하위 node_modules → 해당 package 소유 Resource
 ```
 
-다음 항목을 Node adapter 구현 전에 결정한다.
+Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapter/node`
+(Mac C 소유 영역)에서 다음과 같이 MVP 범위로 확정하고 구현했다. workspace
+지원 자체는 범위 밖으로 명시적으로 미루고, 단일 package.json 케이스만
+다룬다.
 
-- npm/pnpm/Yarn workspace 지원 범위
-- 여러 lockfile의 우선순위
-- lockfile 없는 node_modules의 재생성 가능성
-- malformed package.json 저장 방식
-- nested node_modules 탐색
-- `.pnpm` store 크기 소유권
+| 항목 | MVP 결론 |
+|---|---|
+| npm/pnpm/Yarn workspace 지원 범위 | 미지원. workspace root나 monorepo 탐색을 하지 않는다. |
+| 여러 lockfile의 우선순위 | 불필요. `package-lock.json`/`npm-shrinkwrap.json`/`pnpm-lock.yaml`/`yarn.lock` 중 하나라도 있으면 재생성 근거로 충분하다고 본다(존재 여부만 확인, 어떤 패키지 매니저인지는 판단하지 않음). |
+| lockfile 없는 node_modules의 재생성 가능성 | `Regenerable=false`. `Confidence`도 낮춰서(§20.2 확정 전 임시값) INFERRED 수준으로 취급한다. |
+| malformed package.json 저장 방식 | `Detector.Detect`가 error를 반환한다. 다른 후보나 전체 scan을 막지 않는 recoverable 실패로 간주하되(§5), orchestration이 아직 없어 실제 issue 수집·저장은 후속 작업이다. |
+| nested node_modules 탐색 | 미지원. project root 바로 아래에 있는 `node_modules`/`dist`/`.next`/`build`/`out`만 candidate로 본다. |
+| `.pnpm` store 크기 소유권 | 범위 밖. 전역 pnpm store 분석은 원래 일정에서도 P1(`pnpm 전역 저장소`)이라 이번 결정에 포함하지 않는다. |
+
+workspace/monorepo 지원이 실제로 필요해지면 이 절을 다시 `DECISION_REQUIRED`로
+되돌리고 별도 PR로 재논의한다.
 
 ### 19.3 산출물 판정 (`DECISION_REQUIRED`)
 
@@ -790,6 +798,14 @@ root node_modules → workspace 소유 Resource
 ```
 
 이름만 일치하면 `build-output + REVIEW + INFERRED`, 설정에서 확인되면 `SAFE 후보 + DECLARED/RESOLVED`로 처리한다.
+
+이 절 자체는 adapter 전반에 걸친 결정이라 Node adapter 하나로 `CONFIRMED`
+처리하지 않는다. 다만 `internal/adapter/node`의 현재 구현은 이미 이 원칙을
+따른다: `dist`/`.next`/`build`/`out`은 디렉터리 이름만으로 판정하므로 항상
+`INFERRED` 수준 Confidence를 부여하고, Git tracked 원본 확인이나 output
+path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy`에 SAFE
+분기가 아직 없어(§20.3 코드 참고) 실제 저장되는 Risk는 현재 모두
+`REVIEW`로 귀결된다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
@@ -1210,7 +1226,7 @@ exit code 변경
 
 ```text
 [ ] MSBuild 해석 수준
-[ ] Node monorepo 경계
+[x] Node monorepo 경계 (미지원으로 확정, §19.2)
 [x] Resource 병합 규칙
 [ ] Evidence field와 만료
 [ ] Confidence 공식

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 // ToolLocator finds Visual Studio and MSBuild installations, typically via
@@ -32,16 +33,19 @@ type ParsedBuildProject struct {
 }
 
 // BuildProjectParser detects and parses .vcxproj and .csproj files,
-// including properties inherited from Directory.Build.props.
+// including properties inherited from Directory.Build.props. It takes
+// scanner.Entry, rather than a bare path, so it can reuse the file metadata
+// (size, modified time) the scanner already collected while walking instead
+// of re-querying the filesystem for it.
 type BuildProjectParser interface {
-	// CanParse reports whether path is a project file this parser handles.
-	CanParse(path string) bool
-	// Parse reads the project file at path and returns the detected build
-	// project(s) along with any declared properties relevant to dependency
-	// analysis. It returns a slice, rather than a single ParsedBuildProject,
-	// so that a project file describing more than one build project is not
-	// precluded by the return type.
-	Parse(ctx context.Context, path string) ([]ParsedBuildProject, error)
+	// CanParse reports whether entry is a project file this parser handles.
+	CanParse(entry scanner.Entry) bool
+	// Parse reads the project file at entry.Path and returns the detected
+	// build project(s) along with any declared properties relevant to
+	// dependency analysis. It returns a slice, rather than a single
+	// ParsedBuildProject, so that a project file describing more than one
+	// build project is not precluded by the return type.
+	Parse(ctx context.Context, entry scanner.Entry) ([]ParsedBuildProject, error)
 }
 
 // ParsedWorkspace is the result of parsing a single .sln file: the workspace
@@ -54,11 +58,13 @@ type ParsedWorkspace struct {
 	ProjectPaths []string
 }
 
-// WorkspaceParser detects and parses .sln files.
+// WorkspaceParser detects and parses .sln files. It takes scanner.Entry for
+// the same reason as BuildProjectParser: to reuse metadata the scanner
+// already collected instead of re-querying the filesystem.
 type WorkspaceParser interface {
-	// CanParse reports whether path is a workspace file this parser handles.
-	CanParse(path string) bool
-	// Parse reads the workspace file at path and returns the detected
+	// CanParse reports whether entry is a workspace file this parser handles.
+	CanParse(entry scanner.Entry) bool
+	// Parse reads the workspace file at entry.Path and returns the detected
 	// workspace along with the paths of the build projects it references.
-	Parse(ctx context.Context, path string) (ParsedWorkspace, error)
+	Parse(ctx context.Context, entry scanner.Entry) (ParsedWorkspace, error)
 }

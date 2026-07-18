@@ -12,4 +12,5 @@ type ResourceRepository interface {
 	Upsert(context.Context, domain.Resource) error
 	FindByID(context.Context, string) (domain.Resource, error)
 	ListByType(context.Context, domain.ResourceType) ([]domain.Resource, error)
+	List(context.Context) ([]domain.Resource, error)
 }

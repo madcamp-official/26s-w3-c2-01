@@ -171,6 +171,9 @@ func (*projectRepositoryCapture) FindByID(context.Context, string) (domain.Build
 func (*projectRepositoryCapture) FindByManifestPath(context.Context, domain.ProjectType, string) (domain.BuildProject, error) {
 	return domain.BuildProject{}, errors.New("not implemented")
 }
+func (*projectRepositoryCapture) List(context.Context) ([]domain.BuildProject, error) {
+	return nil, errors.New("not implemented")
+}
 
 type workspaceRepositoryCapture struct{}
 

@@ -54,6 +54,25 @@ func TestResourceRepositoryListsOnlyRequestedType(t *testing.T) {
 	}
 }
 
+func TestResourceRepositoryListReturnsEveryType(t *testing.T) {
+	repository := newTestResourceRepository(t)
+	windowsSDK := testResource(t, domain.ResourceTypeWindowsSDK, "10.0.22621.0")
+	dotnetSDK := testResource(t, domain.ResourceTypeDotNetSDK, "8.0.100")
+	for _, resource := range []domain.Resource{windowsSDK, dotnetSDK} {
+		if err := repository.Upsert(context.Background(), resource); err != nil {
+			t.Fatalf("Upsert() error = %v", err)
+		}
+	}
+
+	got, err := repository.List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("List() returned %d resources, want 2", len(got))
+	}
+}
+
 func TestResourceRepositoryRejectsInvalidStableID(t *testing.T) {
 	repository := newTestResourceRepository(t)
 	resource := testResource(t, domain.ResourceTypeWindowsSDK, "10.0.22621.0")

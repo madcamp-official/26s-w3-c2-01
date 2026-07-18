@@ -10,6 +10,7 @@ type ProjectRepository interface {
 	UpsertObserved(context.Context, string, []domain.BuildProject) error
 	FindByID(context.Context, string) (domain.BuildProject, error)
 	FindByManifestPath(context.Context, domain.ProjectType, string) (domain.BuildProject, error)
+	List(context.Context) ([]domain.BuildProject, error)
 }
 
 type WorkspaceRepository interface {

@@ -34,6 +34,26 @@ func TestProjectRepositoryUpsertsBatchAndFindsIdentity(t *testing.T) {
 	}
 }
 
+func TestProjectRepositoryListReturnsAllObservedProjects(t *testing.T) {
+	db, scanID := newProjectStore(t)
+	repository := NewProjectRepository(db)
+	projects := []domain.BuildProject{
+		preparedProject(t, "One.csproj", domain.ProjectTypeMSBuildDotNet),
+		preparedProject(t, "Two.vcxproj", domain.ProjectTypeMSBuildCpp),
+	}
+	if err := repository.UpsertObserved(context.Background(), scanID, projects); err != nil {
+		t.Fatalf("UpsertObserved() error = %v", err)
+	}
+
+	listed, err := repository.List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("List() returned %d projects, want 2", len(listed))
+	}
+}
+
 func TestProjectRepositoryBatchRollsBackOnMissingScan(t *testing.T) {
 	db, _ := newProjectStore(t)
 	repository := NewProjectRepository(db)

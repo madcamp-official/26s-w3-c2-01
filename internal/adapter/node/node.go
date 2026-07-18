@@ -70,17 +70,14 @@ const (
 // (contains package.json) and, if so, builds the resulting
 // domain.BuildProject.
 //
-// This only detects the project itself; it does not persist it.
-// domain.BuildProject persistence is still DECISION_REQUIRED
-// (docs/libra_integration_contracts.md §7.2), so callers should not wire
-// Detect's result into a repository yet. DetectArtifacts, below, is
-// independent of this restriction because Resource persistence already has
-// a confirmed pipeline (§7.3, §18.4) via app.ResourceService.
+// This only returns the project fact. The application pipeline prepares its
+// normalized identity and persists it through ProjectRepository. Artifacts
+// follow the separate ResourceService pipeline.
 type Detector interface {
 	// CanDetect reports whether entry's directory contains package.json.
 	CanDetect(entry scanner.Entry) bool
 	// Detect builds the domain.BuildProject for the Node project rooted at
-	// dir. Callers should only call this after CanDetect reports true. A
+	// entry. Callers should only call this after CanDetect reports true. A
 	// malformed package.json is returned as an error, not a panic or a
 	// silently empty project, so orchestration can record it as a
 	// recoverable per-candidate issue.

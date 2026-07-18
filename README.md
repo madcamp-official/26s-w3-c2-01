@@ -1481,7 +1481,6 @@ Daemon
 * Windows SDK Adapter
 * Visual Studio·MSBuild Adapter
 * .NET Adapter
-* Node Adapter
 * Evidence와 graph 생성
 
 주요 산출물:
@@ -1491,7 +1490,6 @@ ProjectDetector
 WindowsSdkAdapter
 MsBuildAdapter
 DotnetAdapter
-NodeAdapter
 ```
 
 ## 팀원 C: CLI & Safety
@@ -1502,6 +1500,7 @@ NodeAdapter
 * summary·explain·impact 출력
 * plan 알고리즘
 * cleanup·quarantine·restore
+* Node Adapter
 * 사용자 문서
 * 통합 테스트와 데모 데이터
 
@@ -1512,6 +1511,7 @@ CLI
 PlanService
 CleanupService
 RestoreService
+NodeAdapter
 Demo fixtures
 ```
 

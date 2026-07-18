@@ -1,4 +1,4 @@
-name: Windows CI
+name: CI
 
 on:
   push:
@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
@@ -22,7 +26,8 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Check formatting
+      - name: Check formatting (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $unformatted = gofmt -l .
@@ -30,6 +35,16 @@ jobs:
             Write-Output "Files need gofmt:`n$($unformatted -join "`n")"
             exit 1
           }
+
+      - name: Check formatting (macOS)
+        if: runner.os != 'Windows'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
 
       - name: Test
         run: go test ./...

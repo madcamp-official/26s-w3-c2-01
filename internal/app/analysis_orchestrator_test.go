@@ -93,6 +93,62 @@ func TestAnalysisOrchestratorMarksPersistenceFailure(t *testing.T) {
 	}
 }
 
+func TestAnalysisOrchestratorObservesProjectOwnedResources(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resourcePath := filepath.Join(root, "node_modules")
+	if err := os.Mkdir(resourcePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scans := &scanRepositoryCapture{}
+	orchestrator := NewAnalysisOrchestrator(scanner.New(1), scans, &projectRepositoryCapture{},
+		&workspaceRepositoryCapture{}, resourceObserverFake{observedAt: time.Now()}, &dependencyRepositoryCapture{}).
+		WithDetectors([]ProjectDetector{projectResourceDetectorFake{root: root, resourcePath: resourcePath}}, nil, nil)
+
+	result, err := orchestrator.Run(context.Background(), AnalysisOptions{
+		ScanID: "scan-project-resources", Scan: scanner.Options{Roots: []string{root}, MaxDepth: 2},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	// The project's own node_modules is observed and persisted as a Resource,
+	// even with no system resource detectors and no dependency edge.
+	if len(result.Projects) != 1 || len(result.Resources) != 1 {
+		t.Fatalf("Run() projects/resources = %d/%d, want 1/1", len(result.Projects), len(result.Resources))
+	}
+	if len(result.Dependencies) != 0 {
+		t.Fatalf("Run() dependencies = %d, want 0 (edges deferred to Day 4)", len(result.Dependencies))
+	}
+	if result.Resources[0].Type != domain.ResourceTypeNodeModules {
+		t.Fatalf("observed resource type = %q, want node-modules", result.Resources[0].Type)
+	}
+}
+
+// projectResourceDetectorFake reports one project plus its own node_modules
+// as a ProjectResourceCandidate, exercising the project-owned-resource path.
+type projectResourceDetectorFake struct{ root, resourcePath string }
+
+func (d projectResourceDetectorFake) Observe(_ context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if filepath.Base(entry.Path) != "package.json" {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Projects: []domain.BuildProject{{
+			Name: "app", Type: domain.ProjectTypeNode, RootPath: d.root,
+			ManifestPath: entry.Path, LastModifiedAt: entry.ModifiedAt,
+		}},
+		ProjectResources: []ProjectResourceCandidate{{
+			OwnerManifestPath: entry.Path,
+			Resource: domain.Resource{
+				Name: "node_modules", Type: domain.ResourceTypeNodeModules, DisplayPath: d.resourcePath, Confidence: 60,
+			},
+		}},
+	}}}
+}
+
 type projectDetectorFake struct{ root string }
 
 func (d projectDetectorFake) Observe(_ context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {

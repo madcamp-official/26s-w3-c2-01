@@ -103,6 +103,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	o.phase(&result, PhaseDiscoverProjects)
 	observedAt := o.now()
 	workspaceCandidates := make([]workspaceCandidate, 0)
+	var projectResourceFacts []domain.Resource
 	for _, candidate := range candidates {
 		for _, projectFact := range candidate.Projects {
 			project, err := PrepareBuildProject(projectFact, observedAt)
@@ -111,6 +112,9 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 				continue
 			}
 			result.Projects = append(result.Projects, project)
+		}
+		for _, projectResource := range candidate.ProjectResources {
+			projectResourceFacts = append(projectResourceFacts, projectResource.Resource)
 		}
 		if candidate.Workspace != nil {
 			workspace, err := PrepareWorkspace(*candidate.Workspace, observedAt)
@@ -128,19 +132,16 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		detected := detector.Detect(ctx, options.Environment)
 		result.Issues = append(result.Issues, detected.Issues...)
 		result.Unverified = append(result.Unverified, detected.Unverified...)
-		for _, resourceFact := range detected.Items {
-			observed, err := o.resources.Observe(ctx, resourceFact)
-			if err != nil {
-				return o.fail(ctx, result, record, fmt.Errorf("observe resource: %w", err))
-			}
-			result.Resources = append(result.Resources, observed.Resource)
-			for _, issue := range observed.Issues {
-				result.Issues = append(result.Issues, Issue{
-					Code: IssueAccessDenied, Phase: PhaseDiscoverSystemResources, Path: issue.Path,
-					Operation: issue.Operation, Severity: IssueWarning, Message: issue.Err.Error(), Cause: issue.Err,
-				})
-			}
+		if err := o.observeResourceFacts(ctx, &result, detected.Items); err != nil {
+			return o.fail(ctx, result, record, fmt.Errorf("observe resource: %w", err))
 		}
+	}
+	// Project-scoped resources (Node's node_modules/dist/build) were collected
+	// during project discovery; observe them the same way as system resources
+	// so they are sized, risk-classified, and persisted. Linking each back to
+	// its owning project (a dependency edge) is deferred to the Day 4 graph.
+	if err := o.observeResourceFacts(ctx, &result, projectResourceFacts); err != nil {
+		return o.fail(ctx, result, record, fmt.Errorf("observe project resource: %w", err))
 	}
 
 	o.phase(&result, PhaseAnalyzeProjectSettings)
@@ -200,6 +201,26 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		return result, err
 	}
 	return result, nil
+}
+
+// observeResourceFacts enriches, risk-classifies, and persists each detected
+// resource fact through the ResourceObserver, appending the results and any
+// recoverable measurement issues to result.
+func (o *AnalysisOrchestrator) observeResourceFacts(ctx context.Context, result *ScanResult, facts []domain.Resource) error {
+	for _, resourceFact := range facts {
+		observed, err := o.resources.Observe(ctx, resourceFact)
+		if err != nil {
+			return err
+		}
+		result.Resources = append(result.Resources, observed.Resource)
+		for _, issue := range observed.Issues {
+			result.Issues = append(result.Issues, Issue{
+				Code: IssueAccessDenied, Phase: PhaseDiscoverSystemResources, Path: issue.Path,
+				Operation: issue.Operation, Severity: IssueWarning, Message: issue.Err.Error(), Cause: issue.Err,
+			})
+		}
+	}
+	return nil
 }
 
 func (o *AnalysisOrchestrator) phase(result *ScanResult, phase AnalysisPhase) {

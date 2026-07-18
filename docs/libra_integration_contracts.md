@@ -308,6 +308,21 @@ type ResourceRepository interface {
 `scan_resources`, 미발견 resource의 상태 전환은 구현 전에 다시 합의한다
 (`DECISION_REQUIRED`).
 
+### 7.4 Dependency repository (`CONFIRMED`)
+
+```go
+type DependencyRepository interface {
+    UpsertGraph(context.Context, string, domain.Dependency, []domain.Evidence) error
+    FindResourcesByProject(context.Context, string) ([]domain.Dependency, error)
+    FindProjectsByResource(context.Context, string) ([]domain.Dependency, error)
+    FindEvidence(context.Context, string) ([]domain.Evidence, error)
+}
+```
+
+첫 번째 `string`은 Evidence가 귀속될 scan ID다. Dependency와 모든 Evidence는
+하나의 DB transaction에서 upsert하며 일부만 저장하지 않는다. 동일 Evidence
+ID를 다시 관측하면 scan ID와 `CollectedAt`을 최신 관측으로 갱신한다.
+
 ## 8. 결과 모델 계층 계약
 
 서로 다른 목적의 결과를 한 타입에 합치지 않는다.
@@ -1232,6 +1247,7 @@ exit code 변경
 [ ] Adapter 공통 반환 타입
 [ ] Project repository interface
 [x] Resource repository interface
+[x] Dependency repository interface
 [ ] structured Issue
 [ ] JSON envelope와 exit code
 ```

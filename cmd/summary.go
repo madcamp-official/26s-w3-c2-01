@@ -1,39 +1,49 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/spf13/cobra"
 )
 
-// summaryCmd represents the summary command
+var (
+	summaryDrive string
+	summaryType  string
+)
+
+// summaryCmd represents the summary command.
 var summaryCmd = &cobra.Command{
 	Use:   "summary",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("summary called")
+	Short: "Summarize developer storage usage and reclaimable space",
+	Long: `summary reports project and resource counts, storage usage broken
+down by resource type and drive, and how much space is safely reclaimable,
+needs review, or is blocked from cleanup.`,
+	Example: `  libra summary
+  libra summary --drive C:
+  libra summary --type sdk`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Mock numbers until scan/store wiring lands (Day2); shape matches
+		// the F-06 example in docs/libra_cli_commands_and_schedule.md.
+		view := output.SummaryView{
+			Drive: summaryDrive,
+			ResourcesByType: []output.SummaryLine{
+				{Label: "Windows SDKs", Bytes: 12459999232},
+				{Label: "Visual Studio tools", Bytes: 25986469478},
+				{Label: ".NET SDKs", Bytes: 5798727680},
+				{Label: "Node project artifacts", Bytes: 19434323968},
+				{Label: "MSBuild outputs", Bytes: 8162838528},
+			},
+			SafeReclaimable: 10416967680,
+			NeedsReview:     13316730880,
+			Blocked:         63146360832,
+		}
+		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(summaryCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// summaryCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// summaryCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	summaryCmd.Flags().StringVar(&summaryDrive, "drive", "", "limit the summary to this drive (e.g. C:)")
+	summaryCmd.Flags().StringVar(&summaryType, "type", "", "limit the summary to this resource type (e.g. sdk)")
 }

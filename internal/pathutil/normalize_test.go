@@ -35,3 +35,39 @@ func TestAbsolutePreservesDisplayCase(t *testing.T) {
 		t.Fatalf("Absolute() = %q, want display case preserved", got)
 	}
 }
+
+func TestEqualNormalizesPaths(t *testing.T) {
+	root := t.TempDir()
+	equal, err := Equal(filepath.Join(root, "child", ".."), root)
+	if err != nil {
+		t.Fatalf("Equal() error = %v", err)
+	}
+	if !equal {
+		t.Fatal("Equal() = false, want true")
+	}
+}
+
+func TestIsSameOrChildUsesPathBoundaries(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "same", path: root, want: true},
+		{name: "child", path: filepath.Join(root, "SDK", "bin"), want: true},
+		{name: "prefix sibling", path: root + "-backup", want: false},
+		{name: "parent", path: filepath.Dir(root), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsSameOrChild(tt.path, root)
+			if err != nil {
+				t.Fatalf("IsSameOrChild() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("IsSameOrChild() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

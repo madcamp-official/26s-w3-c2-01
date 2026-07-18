@@ -290,6 +290,24 @@ type ProjectRepository interface {
 5. partial parse 결과를 project로 저장할지 issue만 저장할지
 6. Workspace 및 WorkspaceProject 저장 방식
 
+### 7.3 Resource repository (`CONFIRMED`)
+
+Day 3 MVP는 현재 `resources` 테이블에 최신 관측 값을 단건 upsert하고 C가
+필요한 ID·type 조회를 제공한다.
+
+```go
+type ResourceRepository interface {
+    Upsert(context.Context, domain.Resource) error
+    FindByID(context.Context, string) (domain.Resource, error)
+    ListByType(context.Context, domain.ResourceType) ([]domain.Resource, error)
+}
+```
+
+현재 schema에는 `scan_id`와 resource status가 없으므로 이번 scan에서 보이지
+않은 resource를 삭제하거나 `STALE`로 바꾸지 않는다. scan별 snapshot,
+`scan_resources`, 미발견 resource의 상태 전환은 구현 전에 다시 합의한다
+(`DECISION_REQUIRED`).
+
 ## 8. 결과 모델 계층 계약
 
 서로 다른 목적의 결과를 한 타입에 합치지 않는다.
@@ -489,13 +507,13 @@ type BuildProject struct {
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`)
+### 15.2 stable ID (`DECISION_REQUIRED`, Resource는 `CONFIRMED`)
 
-MVP 제안:
+Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
-Resource ID   = hash(resource_type + version + normalized_path)
+Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
 Dependency ID = hash(source_id + relation + target_id)
 ```
 
@@ -677,10 +695,32 @@ COMPLETED
 
 기존 문서의 `SCANNING_FILES` 등 phase 이름은 위 목록과 통합해야 하며 두 종류의 문자열을 동시에 유지하지 않는다.
 
-### 18.4 Resource 병합 (`DECISION_REQUIRED`)
+### 18.4 Resource 병합 (`CONFIRMED`)
 
 ```text
 ResourceKey = Type + Version + NormalizedPath
+```
+
+Resource의 사용자 표시 경로와 비교용 경로는 별도 필드로 유지한다. 기존
+`Path` 필드는 `DisplayPath`로 이름을 변경한다.
+
+```go
+type Resource struct {
+    ID              string
+    Name            string
+    Type            ResourceType
+    Version         string
+    DisplayPath     string
+    NormalizedPath  string
+    LogicalSize     int64
+    ReclaimableSize int64
+    Regenerable     bool
+    SystemManaged   bool
+    LastModifiedAt  *time.Time
+    LastObservedAt  time.Time
+    Risk            RiskLevel
+    Confidence      int
+}
 ```
 
 필드 충돌 시 근거 우선순위:
@@ -801,7 +841,7 @@ UnverifiedScope = 항목별 감점
 
 Confidence가 높다는 사실은 Risk가 SAFE라는 의미가 아니다.
 
-### 20.3 Risk 중앙 정책 (`DECISION_REQUIRED`)
+### 20.3 Risk 중앙 정책 (`CONFIRMED`)
 
 adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판정한다.
 
@@ -811,7 +851,7 @@ type RiskPolicy interface {
 }
 ```
 
-MVP 결정표 제안:
+MVP 결정표:
 
 | 조건 | Risk |
 |---|---|
@@ -823,6 +863,12 @@ MVP 결정표 제안:
 | project 내부 산출물이고 재생성 Evidence가 명확함 | `SAFE` |
 | 분석 실패·불명확 | 최소 `REVIEW` |
 | 경로가 사라짐·변경됨 | 실행 대상 제외 |
+
+Windows MVP 보호 경로는 현재 장비에서 확인되는 `%WINDIR%`,
+`%ProgramFiles%`, `%ProgramFiles(x86)%`, `%ProgramData%`로 확정한다. A의
+경로 분류기는 해당 경로 내부 여부와 근거를 반환하고, 중앙 `RiskPolicy`가
+`SystemManaged=true`, `Risk=BLOCKED`를 적용한다. Adapter는 Risk를 직접
+판정하지 않는다.
 
 ### 20.4 Impact (`DECISION_REQUIRED`)
 
@@ -1143,12 +1189,14 @@ exit code 변경
 
 ```text
 [ ] Project root와 manifest 의미
-[ ] Project·Resource·Dependency ID 규칙
+[ ] Project·Dependency ID 규칙
+[x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
 [ ] 현재 상태와 snapshot 저장
 [ ] Adapter 공통 반환 타입
-[ ] Project/Resource repository interface
+[ ] Project repository interface
+[x] Resource repository interface
 [ ] structured Issue
 [ ] JSON envelope와 exit code
 ```
@@ -1158,10 +1206,10 @@ exit code 변경
 ```text
 [ ] MSBuild 해석 수준
 [ ] Node monorepo 경계
-[ ] Resource 병합 규칙
+[x] Resource 병합 규칙
 [ ] Evidence field와 만료
 [ ] Confidence 공식
-[ ] 중앙 RiskPolicy
+[x] 중앙 RiskPolicy
 [ ] Impact enum
 [ ] 산출물 소유권 판정
 ```

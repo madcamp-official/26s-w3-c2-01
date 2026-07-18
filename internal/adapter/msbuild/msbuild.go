@@ -23,6 +23,10 @@ type ToolLocator interface {
 type DeclaredProperty struct {
 	Name  string
 	Value string
+	// Condition is the MSBuild Condition attribute on the PropertyGroup this
+	// property came from (e.g. Condition="'$(Configuration)|$(Platform)'
+	// =='Debug|x64'"). Empty if the PropertyGroup was unconditional.
+	Condition string
 }
 
 // ParsedBuildProject is the result of parsing a single .vcxproj or .csproj

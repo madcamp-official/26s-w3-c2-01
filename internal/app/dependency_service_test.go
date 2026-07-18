@@ -9,8 +9,9 @@ import (
 )
 
 type dependencyRepositoryStub struct {
-	upserted []DependencyObservation
-	failOn   string // scanID that should fail, for testing stop-on-error
+	upserted   []DependencyObservation
+	failOn     string // scanID that should fail, for testing stop-on-error
+	byResource map[string][]domain.Dependency
 }
 
 func (r *dependencyRepositoryStub) UpsertGraph(_ context.Context, scanID string, dependency domain.Dependency, evidence []domain.Evidence) error {
@@ -25,8 +26,11 @@ func (*dependencyRepositoryStub) FindResourcesByProject(context.Context, string)
 	return nil, errors.New("not implemented")
 }
 
-func (*dependencyRepositoryStub) FindProjectsByResource(context.Context, string) ([]domain.Dependency, error) {
-	return nil, errors.New("not implemented")
+func (r *dependencyRepositoryStub) FindProjectsByResource(_ context.Context, resourceID string) ([]domain.Dependency, error) {
+	if r.byResource == nil {
+		return nil, errors.New("not implemented")
+	}
+	return r.byResource[resourceID], nil
 }
 
 func (*dependencyRepositoryStub) FindEvidence(context.Context, string) ([]domain.Evidence, error) {

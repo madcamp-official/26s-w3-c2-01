@@ -58,24 +58,20 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]
 		return nil, err
 	}
 
+	// Conditional PropertyGroups (e.g. Debug/Release- or Platform-specific
+	// overrides) are collected like any other, carrying their Condition
+	// along. Evaluating the Condition against a specific Configuration/
+	// Platform isn't implemented, so the resolver (not this parser) decides
+	// what to do with a non-empty Condition -- typically recording it as a
+	// domain.UnverifiedScope rather than guessing which configuration's
+	// value applies.
 	var declared []DeclaredProperty
 	for _, group := range file.PropertyGroups {
-		if group.Condition != "" {
-			// Conditional PropertyGroups (e.g. Debug/Release- or
-			// Platform-specific overrides) are skipped rather than merged
-			// in unconditionally: evaluating the Condition expression
-			// against one specific Configuration/Platform isn't
-			// implemented, and merging it in blindly would silently prefer
-			// one configuration's values with no way to tell which. Once
-			// domain.UnverifiedScope exists (see
-			// docs/libra_integration_contracts.md §19.1), skipped groups
-			// should be recorded there instead of silently dropped.
-			continue
-		}
 		for _, prop := range group.Properties {
 			declared = append(declared, DeclaredProperty{
-				Name:  prop.XMLName.Local,
-				Value: prop.Value,
+				Name:      prop.XMLName.Local,
+				Value:     prop.Value,
+				Condition: group.Condition,
 			})
 		}
 	}

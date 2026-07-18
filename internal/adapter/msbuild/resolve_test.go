@@ -205,9 +205,12 @@ func TestResolveDependencies(t *testing.T) {
 	}
 	collectedAt := time.Date(2026, 7, 19, 3, 0, 0, 0, time.UTC)
 
-	got := ResolveDependencies("project-1", `D:\Projects\Game\Game.vcxproj`, declared, installed, collectedAt)
+	got, unverified := ResolveDependencies("project-1", `D:\Projects\Game\Game.vcxproj`, declared, installed, collectedAt)
 	if len(got) != 2 {
 		t.Fatalf("got %d resolved dependencies, want 2: %+v", len(got), got)
+	}
+	if len(unverified) != 0 {
+		t.Fatalf("got %d unverified scopes, want 0: %+v", len(unverified), unverified)
 	}
 
 	byProperty := map[string]ResolvedDependency{}
@@ -219,5 +222,25 @@ func TestResolveDependencies(t *testing.T) {
 	}
 	if rd, ok := byProperty["TargetFramework"]; !ok || rd.Evidence[0].ResolvedValue != "8.0.404" {
 		t.Errorf("TargetFramework resolution = %+v", rd)
+	}
+}
+
+func TestResolveDependencies_ConditionalPropertyIsUnverifiedNotMatched(t *testing.T) {
+	installed := installedSDKs("10.0.22621.0")
+	declared := []DeclaredProperty{
+		{Name: "WindowsTargetPlatformVersion", Value: "10.0.22621.0", Condition: "'$(Configuration)|$(Platform)'=='Debug|x64'"},
+	}
+	collectedAt := time.Date(2026, 7, 19, 3, 0, 0, 0, time.UTC)
+
+	resolved, unverified := ResolveDependencies("project-1", `D:\Projects\Game\Game.vcxproj`, declared, installed, collectedAt)
+	if len(resolved) != 0 {
+		t.Fatalf("got %d resolved dependencies, want 0 (conditional property must not be matched): %+v", len(resolved), resolved)
+	}
+	if len(unverified) != 1 {
+		t.Fatalf("got %d unverified scopes, want 1: %+v", len(unverified), unverified)
+	}
+	u := unverified[0]
+	if u.BuildProjectID != "project-1" || u.Property != "WindowsTargetPlatformVersion" || u.Condition == "" {
+		t.Errorf("unverified[0] = %+v", u)
 	}
 }

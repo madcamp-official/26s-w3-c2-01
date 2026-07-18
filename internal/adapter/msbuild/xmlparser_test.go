@@ -9,7 +9,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
-func TestXMLBuildProjectParser_SkipsConditionalPropertyGroups(t *testing.T) {
+func TestXMLBuildProjectParser_CarriesConditionOnConditionalPropertyGroups(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "Conditional.vcxproj")
 	content := `<?xml version="1.0" encoding="utf-8"?>
@@ -39,15 +39,27 @@ func TestXMLBuildProjectParser_SkipsConditionalPropertyGroups(t *testing.T) {
 	}
 
 	declared := got[0].Declared
-	if len(declared) != 1 {
-		t.Fatalf("Declared = %+v, want exactly the one unconditional property", declared)
+	if len(declared) != 3 {
+		t.Fatalf("Declared = %+v, want 3 properties (1 unconditional + 2 conditional)", declared)
 	}
-	if declared[0].Name != "WindowsTargetPlatformVersion" || declared[0].Value != "10.0.22621.0" {
-		t.Errorf("Declared[0] = %+v, want WindowsTargetPlatformVersion=10.0.22621.0", declared[0])
-	}
+
+	byName := map[string][]DeclaredProperty{}
 	for _, d := range declared {
-		if d.Name == "OutDir" {
-			t.Errorf("Declared contains conditional property %+v, want it skipped", d)
+		byName[d.Name] = append(byName[d.Name], d)
+	}
+
+	sdk := byName["WindowsTargetPlatformVersion"]
+	if len(sdk) != 1 || sdk[0].Condition != "" {
+		t.Errorf("WindowsTargetPlatformVersion = %+v, want one unconditional entry", sdk)
+	}
+
+	outDirs := byName["OutDir"]
+	if len(outDirs) != 2 {
+		t.Fatalf("OutDir = %+v, want 2 conditional entries", outDirs)
+	}
+	for _, d := range outDirs {
+		if d.Condition == "" {
+			t.Errorf("OutDir entry %+v, want a non-empty Condition", d)
 		}
 	}
 }

@@ -30,7 +30,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $unformatted = gofmt -l .
+          $gofmt = Join-Path (go env GOROOT) 'bin\gofmt.exe'
+          $unformatted = & $gofmt -l .
           if ($unformatted) {
             Write-Output "Files need gofmt:`n$($unformatted -join "`n")"
             exit 1
@@ -39,7 +40,8 @@ jobs:
       - name: Check formatting (macOS)
         if: runner.os != 'Windows'
         run: |
-          unformatted=$(gofmt -l .)
+          gofmt="$(go env GOROOT)/bin/gofmt"
+          unformatted=$("$gofmt" -l .)
           if [ -n "$unformatted" ]; then
             echo "Files need gofmt:"
             echo "$unformatted"

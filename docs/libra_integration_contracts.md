@@ -1,6 +1,6 @@
 # Libra 통합 계약 및 사전 합의
 
-> 상태: 초안 v0.4  
+> 상태: 초안 v0.4 (Day 4 구현 현황 동기화 + Node workspace 재결정)
 > 작성일: 2026-07-18  
 > 목적: A·B·C가 독립적으로 구현한 기능을 결합할 때 데이터의 의미와 형태가 달라지는 문제를 방지한다.
 
@@ -177,7 +177,11 @@ type Detector interface {
 }
 ```
 
-현재 adapter별 detector 계약이 서로 다르므로 공용 interface 도입 여부는 B가 검토한다. 다음 원칙은 확정한다.
+현재 Git detector와 MSBuild BuildProject·Workspace parser는 모두 외부 입력으로
+`scanner.Entry`를 받는다. parser 내부에서 파일 내용이 필요할 때만
+`entry.Path`를 사용하며, 수정 시각은 scanner가 수집한 `entry.ModifiedAt`을
+재사용한다. Resource detector는 머신 환경을 탐지하므로 entry 기반 detector와
+별도 interface를 유지한다. 다음 원칙은 확정한다.
 
 - malformed XML/JSON은 해당 후보의 recoverable issue다.
 - 하나의 detector 오류가 전체 scan을 중단하지 않는다.
@@ -254,7 +258,14 @@ recoverable issue를 코드 `0`으로 처리할지 별도 코드를 사용할지
 
 - `ScanRepository`는 scan 실행 요약을 저장한다.
 - migration에는 `projects`, `resources`, `dependencies`, `evidence`가 존재한다.
-- domain 모델과 모든 DB column을 연결하는 repository는 아직 없다.
+- `ResourceRepository`는 Resource 단건 upsert, ID 조회, type 조회를 제공한다.
+- `DependencyRepository`는 Dependency와 Evidence를 하나의 transaction으로
+  upsert하고 프로젝트→리소스 및 리소스→프로젝트 조회를 제공한다.
+- Evidence는 `scan_id`로 수집 scan에 귀속되며 기존 row도 legacy scan으로
+  보존된다.
+- dependency 양방향 조회는 전용 covering index를 사용하며 query-plan 테스트와
+  10,000 edge benchmark가 존재한다.
+- ProjectRepository와 Workspace 저장 repository는 아직 없다.
 - `projects.normalized_path`는 `UNIQUE`지만 domain에는 해당 필드가 없다.
 
 ### 7.2 제안 계약
@@ -307,6 +318,21 @@ type ResourceRepository interface {
 않은 resource를 삭제하거나 `STALE`로 바꾸지 않는다. scan별 snapshot,
 `scan_resources`, 미발견 resource의 상태 전환은 구현 전에 다시 합의한다
 (`DECISION_REQUIRED`).
+
+### 7.4 Dependency repository (`CONFIRMED`)
+
+```go
+type DependencyRepository interface {
+    UpsertGraph(context.Context, string, domain.Dependency, []domain.Evidence) error
+    FindResourcesByProject(context.Context, string) ([]domain.Dependency, error)
+    FindProjectsByResource(context.Context, string) ([]domain.Dependency, error)
+    FindEvidence(context.Context, string) ([]domain.Evidence, error)
+}
+```
+
+첫 번째 `string`은 Evidence가 귀속될 scan ID다. Dependency와 모든 Evidence는
+하나의 DB transaction에서 upsert하며 일부만 저장하지 않는다. 동일 Evidence
+ID를 다시 관측하면 scan ID와 `CollectedAt`을 최신 관측으로 갱신한다.
 
 ## 8. 결과 모델 계층 계약
 
@@ -442,13 +468,13 @@ libra scan --json
 ```text
 [ ] Workspace와 BuildProject 수가 합의한 규칙대로 계산된다.
 [ ] 동일한 Windows 경로 표기가 하나의 identity로 합쳐진다.
-[ ] A는 scanner.Entry만 전달하고 프로젝트 의미를 해석하지 않는다.
+[x] A는 scanner.Entry만 전달하고 프로젝트 의미를 해석하지 않는다.
 [ ] parser 오류가 다른 후보와 전체 scan을 중단하지 않는다.
 [ ] 부분 성공 결과와 issue가 함께 DB에 저장된다.
 [ ] 현재 scan에 없는 project의 상태 전환 규칙이 적용된다.
 [ ] progress phase가 공용 enum만 사용한다.
 [ ] JSON stdout에 진행률이나 로그가 섞이지 않는다.
-[ ] gofmt, go test ./..., go vet ./..., go build ./...가 통과한다.
+[x] gofmt, go test ./..., go vet ./..., go build ./...가 통과한다.
 [ ] Windows와 macOS CI가 통과한다.
 ```
 
@@ -507,14 +533,15 @@ type BuildProject struct {
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`, Resource는 `CONFIRMED`)
+### 15.2 stable ID (`DECISION_REQUIRED`, Resource·Dependency·Evidence는 `CONFIRMED`)
 
-Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
+Resource, Dependency, Evidence ID는 확정되었고 Project ID만 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
 Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
-Dependency ID = hash(source_id + relation + target_id)
+Dependency ID = SHA-256(source_type + NUL + source_id + NUL + relation + NUL + target_type + NUL + target_id)
+Evidence ID   = SHA-256(dependency_id + NUL + kind + NUL + source_path + NUL + property + NUL + raw_value + NUL + resolved_value)
 ```
 
 경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급하고 이전 객체는 `STALE`로 남긴다. hash 알고리즘, prefix, 직렬화 형식은 모든 언어·플랫폼에서 같은 결과가 나오도록 별도 golden test로 고정한다.
@@ -732,6 +759,27 @@ type Resource struct {
 
 병합 과정에서도 각 source Evidence는 버리지 않는다.
 
+### 18.5 Dependency graph (`CONFIRMED`)
+
+Day 4 MVP는 typed endpoint를 가진 `PROJECT -> RESOURCE` 방향의
+`REQUIRES` edge를 저장한다.
+
+```go
+type Dependency struct {
+    ID         string
+    SourceType NodeType
+    SourceID   string
+    TargetType NodeType
+    TargetID   string
+    Relation   RelationType
+    Confidence int
+}
+```
+
+드라이브 문자는 edge 자체에 저장하지 않는다. C·D 드라이브 간 관계도
+각 endpoint ID로 연결하며 프로젝트와 리소스의 표시 경로는 각 repository에서
+조회한다.
+
 ## 19. 분석기별 경계
 
 ### 19.1 MSBuild (`DECISION_REQUIRED`)
@@ -814,31 +862,41 @@ path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
-### 20.1 Evidence (`DECISION_REQUIRED`)
+### 20.1 Evidence (`CONFIRMED`, 만료·redaction은 `DECISION_REQUIRED`)
 
 권장 필드:
 
 ```go
 type Evidence struct {
-    ID         string
-    Kind       EvidenceKind
-    SourcePath string
-    Property   string
-    RawValue   string
-    Detail     string
-    ObservedAt time.Time
+    ID            string
+    DependencyID  string
+    Kind          EvidenceKind
+    SourcePath    string
+    Property      string
+    RawValue      string
+    ResolvedValue string
+    CollectedAt   time.Time
 }
 ```
 
 계약 제안:
 
-- Evidence는 특정 scan에 귀속한다.
-- 현재 dependency는 최신 유효 Evidence만 사용한다.
+- Evidence는 `evidence.scan_id` foreign key로 특정 scan에 귀속한다 (`CONFIRMED`).
+- 현재 repository는 dependency에 연결된 Evidence를 모두 반환한다. 최신 유효
+  Evidence 필터링은 만료 정책을 확정한 뒤 application 계층에 추가한다.
 - 과거 Evidence는 기록으로 유지할 수 있다.
-- 민감한 원문은 저장하지 않는다.
-- source 파일이 바뀌면 기존 Evidence의 유효성을 다시 평가한다.
+- `RawValue` 저장은 지원하지만 민감 값 redaction 정책은 아직 없다. 정책 확정
+  전에는 adapter가 비밀·개인정보 원문을 전달하지 않는다.
+- source 파일이 바뀌었을 때 기존 Evidence의 유효성을 다시 평가하는 기능은
+  아직 구현하지 않았다.
 
-중복 키, 만료 정책, raw value redaction은 구현 전에 확정한다.
+내용 기반 Evidence ID를 중복 키로 사용하고 같은 근거를 다시 발견하면
+`CollectedAt`을 갱신한다 (`CONFIRMED`). 만료 정책과 raw value redaction은
+구현 전에 확정한다.
+
+기존 Evidence는 migration이 생성하는 `migration:003:legacy-evidence` scan에
+귀속하여 삭제 없이 보존한다. Dependency는 최신 관계를 upsert하며 과거 graph
+snapshot과 미발견 관계 삭제는 snapshot 계약을 확정할 때까지 수행하지 않는다.
 
 ### 20.2 Confidence (`DECISION_REQUIRED`)
 
@@ -1215,7 +1273,8 @@ exit code 변경
 
 ```text
 [ ] Project root와 manifest 의미
-[ ] Project·Dependency ID 규칙
+[ ] Project ID 규칙
+[x] Dependency·Evidence ID 규칙
 [x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
@@ -1223,6 +1282,7 @@ exit code 변경
 [ ] Adapter 공통 반환 타입
 [ ] Project repository interface
 [x] Resource repository interface
+[x] Dependency repository interface
 [ ] structured Issue
 [ ] JSON envelope와 exit code
 ```
@@ -1233,7 +1293,8 @@ exit code 변경
 [ ] MSBuild 해석 수준
 [x] Node monorepo 경계 (단일 세그먼트 glob member 해석 + 공유 node_modules 표시까지 지원, 중첩 workspace·재귀 glob·`.pnpm` store는 범위 밖, §19.2)
 [x] Resource 병합 규칙
-[ ] Evidence field와 만료
+[x] Evidence field
+[ ] Evidence 만료와 redaction
 [ ] Confidence 공식
 [x] 중앙 RiskPolicy
 [ ] Impact enum

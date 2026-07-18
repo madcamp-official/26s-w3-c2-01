@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 // xmlProperty captures one child element of a PropertyGroup as a name/value
@@ -35,8 +36,8 @@ type xmlProjectFile struct {
 // declares.
 type XMLBuildProjectParser struct{}
 
-func (XMLBuildProjectParser) CanParse(path string) bool {
-	switch filepath.Ext(path) {
+func (XMLBuildProjectParser) CanParse(entry scanner.Entry) bool {
+	switch filepath.Ext(entry.Path) {
 	case ".vcxproj", ".csproj":
 		return true
 	default:
@@ -44,15 +45,15 @@ func (XMLBuildProjectParser) CanParse(path string) bool {
 	}
 }
 
-func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuildProject, error) {
-	data, err := os.ReadFile(path)
+func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]ParsedBuildProject, error) {
+	data, err := os.ReadFile(entry.Path)
 	if err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	var file xmlProjectFile
 	if err := xml.Unmarshal(data, &file); err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	var declared []DeclaredProperty
@@ -65,29 +66,24 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuil
 		}
 	}
 
-	info, err := os.Stat(path)
+	root, name, drive, err := ProjectRoot(entry.Path)
 	if err != nil {
-		return ParsedBuildProject{}, err
-	}
-
-	root, name, drive, err := ProjectRoot(path)
-	if err != nil {
-		return ParsedBuildProject{}, err
+		return nil, err
 	}
 
 	projectType := domain.ProjectTypeMSBuildCpp
-	if filepath.Ext(path) == ".csproj" {
+	if filepath.Ext(entry.Path) == ".csproj" {
 		projectType = domain.ProjectTypeMSBuildDotNet
 	}
 
-	return ParsedBuildProject{
+	return []ParsedBuildProject{{
 		Project: domain.BuildProject{
 			Name:           name,
 			Path:           root,
 			Type:           projectType,
 			Drive:          drive,
-			LastModifiedAt: info.ModTime(),
+			LastModifiedAt: entry.ModifiedAt,
 		},
 		Declared: declared,
-	}, nil
+	}}, nil
 }

@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // Scanner traverses configured roots. Recoverable path issues are returned in
@@ -134,7 +136,7 @@ func (s *ParallelScanner) prepareRoots(roots []string, matcher excludeMatcher, r
 	tasks := make([]directoryTask, 0, len(roots))
 	seen := make(map[string]struct{}, len(roots))
 	for _, root := range roots {
-		normalized, err := normalizePath(root)
+		normalized, err := pathutil.Normalize(root)
 		if err != nil {
 			result.Issues = append(result.Issues, Issue{Path: root, Operation: "normalize root", Err: err})
 			continue

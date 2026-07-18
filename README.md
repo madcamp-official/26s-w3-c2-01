@@ -21,22 +21,33 @@ go build -o libra .
 ./libra --help
 ```
 
-### 사용 가능한 명령 (Day1 기준)
+### 사용 가능한 명령 (Day 4 기준)
 
-구현 진행 상황은 `docs/libra_cli_commands_and_schedule.md`의 일정을 따릅니다. 아래 명령은 CLI 구조와 옵션은 갖춰져 있지만, 대부분 실제 분석 로직은 아직 연결되지 않았습니다.
+구현 진행 상황은 `docs/libra_cli_commands_and_schedule.md`의 일정을 따릅니다.
 
 | 명령 | 상태 |
 |---|---|
-| `libra init` | 뼈대만 있음 (config/DB 초기화 로직 미연결) |
-| `libra scan` | 뼈대만 있음 |
-| `libra summary` | mock 데이터로 동작 (`--json` 지원) |
-| `libra explain <target>` | 뼈대만 있음 |
-| `libra impact <target>` | 뼈대만 있음 |
+| `libra init` | 구현됨 — 설정 파일과 SQLite DB를 생성합니다 |
+| `libra scan` | 구현됨 — 프로젝트·리소스를 탐지해 SQLite에 저장합니다 (Windows SDK 등 시스템 리소스 탐지는 Windows 환경에서만 동작하고, 다른 플랫폼에서는 명시적인 미지원 경고로 표시됩니다) |
+| `libra summary` | 구현됨 — 실제 스캔 결과로 저장공간 현황을 요약합니다 (`--json` 지원) |
+| `libra projects` | 구현됨 — 발견된 프로젝트 목록과 활동 상태를 보여줍니다 |
+| `libra resources` | 구현됨 — 발견된 SDK·도구·빌드 산출물 목록을 보여줍니다 |
+| `libra explain <target>` | 구현됨 — 프로젝트 또는 리소스 하나를 설명합니다 |
+| `libra impact <target>` | 구현됨 — 리소스를 제거했을 때 영향받는 프로젝트를 보여줍니다 |
+| `libra plan`, `clean`, `restore`, `transactions`, `export`, `daemon` | 아직 구현되지 않음 (Day 5 이후 예정) |
 
 ```bash
+go run . scan --root ./testdata
 go run . summary
 go run . --json summary
+go run . resources --type node-modules
+go run . explain windows-sdk:10.0.22621.0
+go run . explain "D:\Projects\OldWeb\node_modules"
+go run . explain project:"D:\Projects\GameClient"
+go run . impact windows-sdk:10.0.22621.0
 ```
+
+**알려진 한계:** 프로젝트가 어떤 SDK를 요구하는지 판단하는 의존성 분석기(`DependencyAnalyzer`)는 아직 `scan` 파이프라인에 연결되지 않았습니다 ([#22](https://github.com/madcamp-official/26s-w3-c2-01/issues/22)). 따라서 실제 스캔만으로는 `explain`/`impact`의 "Used by"/"Affected projects"가 항상 비어 있습니다. 리소스 자체의 크기·위험도·재생성 가능 여부·`summary` 집계는 정상적으로 동작합니다.
 
 ### 개발 중 검증
 

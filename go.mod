@@ -3,13 +3,13 @@ module github.com/madcamp-official/26s-w3-c2-01
 go 1.25.0
 
 require (
+	github.com/dustin/go-humanize v1.0.1
 	github.com/spf13/cobra v1.10.2
 	go.yaml.in/yaml/v3 v3.0.4
 	modernc.org/sqlite v1.53.0
 )
 
 require (
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

@@ -980,6 +980,10 @@ path/drive/reparse point, vswhere, Windows SDK, 실제 MSBuild, clean/restore
 
 Windows 전용 기능은 비Windows에서 panic·빌드 실패 대신 명확한 unsupported 결과를 반환한다.
 
+Windows SDK, Windows용 .NET SDK, Visual Studio 탐지기는 공통
+`adapter.ErrUnsupportedPlatform`을 반환하여 "설치 없음"과 "현재 플랫폼에서
+지원하지 않음"을 구분한다.
+
 ### 22.3 성능 기준 (`PLANNED`)
 
 ```text

@@ -2,7 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"time"
 
+	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
+	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +37,52 @@ scan.`,
   libra scan --full`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintln(cmd.OutOrStdout(), "scan: not yet implemented")
+		scanOpts, err := resolveScanOptions()
+		if err != nil {
+			return err
+		}
+
+		db, err := openDatabase()
+		if err != nil {
+			return fmt.Errorf("open database: %w", err)
+		}
+		defer db.Close()
+
+		classifier, err := safety.NewSystemPathClassifier()
+		if err != nil {
+			return fmt.Errorf("build path classifier: %w", err)
+		}
+
+		filesystem := scanner.New(4)
+		resources := app.NewResourceService(filesystem, sqlite.NewResourceRepository(db), classifier, app.DefaultRiskPolicy{})
+		orchestrator := app.NewAnalysisOrchestrator(
+			filesystem,
+			sqlite.NewScanRepository(db),
+			sqlite.NewProjectRepository(db),
+			sqlite.NewWorkspaceRepository(db),
+			resources,
+			sqlite.NewDependencyRepository(db),
+		).WithDetectors([]app.ProjectDetector{
+			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
+			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
+			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
+		}, nil, nil)
+
+		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
+			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),
+			Scan:   scanOpts,
+		})
+		if err != nil {
+			return fmt.Errorf("run scan: %w", err)
+		}
+
+		fmt.Fprintln(cmd.OutOrStdout(), "Scan completed")
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintf(cmd.OutOrStdout(), "Roots scanned:   %d\n", result.Filesystem.RootsScanned)
+		fmt.Fprintf(cmd.OutOrStdout(), "Projects found:  %d\n", len(result.Projects))
+		fmt.Fprintf(cmd.OutOrStdout(), "Resources found: %d\n", len(result.Resources))
+		fmt.Fprintf(cmd.OutOrStdout(), "Files inspected: %d\n", result.Filesystem.FilesInspected)
+		fmt.Fprintf(cmd.OutOrStdout(), "Warnings:        %d\n", len(result.Issues))
 		return nil
 	},
 }
@@ -37,4 +92,32 @@ func init() {
 
 	scanCmd.Flags().StringVar(&scanRoot, "root", "", "scan only this project root instead of all configured roots")
 	scanCmd.Flags().BoolVar(&scanFull, "full", false, "force a full rescan instead of an incremental one")
+}
+
+// resolveScanOptions builds scanner options from the config file (if one
+// exists) and the --root override.
+func resolveScanOptions() (scanner.Options, error) {
+	cfg := config.Default()
+	if _, err := os.Stat(configFilePath()); err == nil {
+		loaded, err := config.Load(configFilePath())
+		if err != nil {
+			return scanner.Options{}, fmt.Errorf("load config: %w", err)
+		}
+		cfg = loaded
+	}
+
+	roots := cfg.ProjectRoots
+	if scanRoot != "" {
+		roots = []string{scanRoot}
+	}
+	if len(roots) == 0 {
+		return scanner.Options{}, fmt.Errorf("no project roots configured; run %q or pass --root", "libra init")
+	}
+
+	return scanner.Options{
+		Roots:               roots,
+		Exclude:             cfg.Exclude,
+		MaxDepth:            cfg.Scan.MaxDepth,
+		FollowReparsePoints: cfg.Scan.FollowReparsePoints,
+	}, nil
 }

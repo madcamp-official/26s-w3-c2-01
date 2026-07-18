@@ -308,6 +308,21 @@ type ResourceRepository interface {
 `scan_resources`, 미발견 resource의 상태 전환은 구현 전에 다시 합의한다
 (`DECISION_REQUIRED`).
 
+### 7.4 Dependency repository (`CONFIRMED`)
+
+```go
+type DependencyRepository interface {
+    UpsertGraph(context.Context, string, domain.Dependency, []domain.Evidence) error
+    FindResourcesByProject(context.Context, string) ([]domain.Dependency, error)
+    FindProjectsByResource(context.Context, string) ([]domain.Dependency, error)
+    FindEvidence(context.Context, string) ([]domain.Evidence, error)
+}
+```
+
+첫 번째 `string`은 Evidence가 귀속될 scan ID다. Dependency와 모든 Evidence는
+하나의 DB transaction에서 upsert하며 일부만 저장하지 않는다. 동일 Evidence
+ID를 다시 관측하면 scan ID와 `CollectedAt`을 최신 관측으로 갱신한다.
+
 ## 8. 결과 모델 계층 계약
 
 서로 다른 목적의 결과를 한 타입에 합치지 않는다.
@@ -507,14 +522,15 @@ type BuildProject struct {
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`, Resource는 `CONFIRMED`)
+### 15.2 stable ID (`DECISION_REQUIRED`, Resource·Dependency·Evidence는 `CONFIRMED`)
 
-Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
+Resource, Dependency, Evidence ID는 확정되었고 Project ID만 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
 Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
-Dependency ID = hash(source_id + relation + target_id)
+Dependency ID = SHA-256(source_type + NUL + source_id + NUL + relation + NUL + target_type + NUL + target_id)
+Evidence ID   = SHA-256(dependency_id + NUL + kind + NUL + source_path + NUL + property + NUL + raw_value + NUL + resolved_value)
 ```
 
 경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급하고 이전 객체는 `STALE`로 남긴다. hash 알고리즘, prefix, 직렬화 형식은 모든 언어·플랫폼에서 같은 결과가 나오도록 별도 golden test로 고정한다.
@@ -732,6 +748,27 @@ type Resource struct {
 
 병합 과정에서도 각 source Evidence는 버리지 않는다.
 
+### 18.5 Dependency graph (`CONFIRMED`)
+
+Day 4 MVP는 typed endpoint를 가진 `PROJECT -> RESOURCE` 방향의
+`REQUIRES` edge를 저장한다.
+
+```go
+type Dependency struct {
+    ID         string
+    SourceType NodeType
+    SourceID   string
+    TargetType NodeType
+    TargetID   string
+    Relation   RelationType
+    Confidence int
+}
+```
+
+드라이브 문자는 edge 자체에 저장하지 않는다. C·D 드라이브 간 관계도
+각 endpoint ID로 연결하며 프로젝트와 리소스의 표시 경로는 각 repository에서
+조회한다.
+
 ## 19. 분석기별 경계
 
 ### 19.1 MSBuild (`DECISION_REQUIRED`)
@@ -793,31 +830,38 @@ root node_modules → workspace 소유 Resource
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
-### 20.1 Evidence (`DECISION_REQUIRED`)
+### 20.1 Evidence (`CONFIRMED`, 만료·redaction은 `DECISION_REQUIRED`)
 
 권장 필드:
 
 ```go
 type Evidence struct {
-    ID         string
-    Kind       EvidenceKind
-    SourcePath string
-    Property   string
-    RawValue   string
-    Detail     string
-    ObservedAt time.Time
+    ID            string
+    DependencyID  string
+    Kind          EvidenceKind
+    SourcePath    string
+    Property      string
+    RawValue      string
+    ResolvedValue string
+    CollectedAt   time.Time
 }
 ```
 
 계약 제안:
 
-- Evidence는 특정 scan에 귀속한다.
+- Evidence는 `evidence.scan_id` foreign key로 특정 scan에 귀속한다 (`CONFIRMED`).
 - 현재 dependency는 최신 유효 Evidence만 사용한다.
 - 과거 Evidence는 기록으로 유지할 수 있다.
 - 민감한 원문은 저장하지 않는다.
 - source 파일이 바뀌면 기존 Evidence의 유효성을 다시 평가한다.
 
-중복 키, 만료 정책, raw value redaction은 구현 전에 확정한다.
+내용 기반 Evidence ID를 중복 키로 사용하고 같은 근거를 다시 발견하면
+`CollectedAt`을 갱신한다 (`CONFIRMED`). 만료 정책과 raw value redaction은
+구현 전에 확정한다.
+
+기존 Evidence는 migration이 생성하는 `migration:003:legacy-evidence` scan에
+귀속하여 삭제 없이 보존한다. Dependency는 최신 관계를 upsert하며 과거 graph
+snapshot과 미발견 관계 삭제는 snapshot 계약을 확정할 때까지 수행하지 않는다.
 
 ### 20.2 Confidence (`DECISION_REQUIRED`)
 
@@ -1194,7 +1238,8 @@ exit code 변경
 
 ```text
 [ ] Project root와 manifest 의미
-[ ] Project·Dependency ID 규칙
+[ ] Project ID 규칙
+[x] Dependency·Evidence ID 규칙
 [x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
@@ -1202,6 +1247,7 @@ exit code 변경
 [ ] Adapter 공통 반환 타입
 [ ] Project repository interface
 [x] Resource repository interface
+[x] Dependency repository interface
 [ ] structured Issue
 [ ] JSON envelope와 exit code
 ```
@@ -1212,7 +1258,8 @@ exit code 변경
 [ ] MSBuild 해석 수준
 [ ] Node monorepo 경계
 [x] Resource 병합 규칙
-[ ] Evidence field와 만료
+[x] Evidence field
+[ ] Evidence 만료와 redaction
 [ ] Confidence 공식
 [x] 중앙 RiskPolicy
 [ ] Impact enum

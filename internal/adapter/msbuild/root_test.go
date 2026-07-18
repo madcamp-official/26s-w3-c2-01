@@ -23,7 +23,10 @@ func TestProjectRoot(t *testing.T) {
 				t.Fatalf("filepath.Abs: %v", err)
 			}
 
-			root, name, drive := ProjectRoot(tc.path)
+			root, name, drive, err := ProjectRoot(tc.path)
+			if err != nil {
+				t.Fatalf("ProjectRoot returned error: %v", err)
+			}
 
 			if root != wantRoot {
 				t.Errorf("root = %q, want %q", root, wantRoot)

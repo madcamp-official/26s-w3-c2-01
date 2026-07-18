@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // Detector determines whether a directory is the root of a Git repository
@@ -36,9 +37,9 @@ func (FilesystemDetector) CanDetect(dir string) bool {
 }
 
 func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildProject, error) {
-	abs, err := filepath.Abs(dir)
+	abs, err := pathutil.Absolute(dir)
 	if err != nil {
-		abs = dir
+		return domain.BuildProject{}, err
 	}
 
 	info, err := os.Stat(abs)

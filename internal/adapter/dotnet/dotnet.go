@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // SDKLister finds installed .NET SDKs, typically by parsing the output of
@@ -65,7 +66,7 @@ func (l CLISDKLister) ListSDKs(ctx context.Context) ([]domain.Resource, error) {
 		return nil, err
 	}
 
-	return parseListSDKs(output), nil
+	return parseListSDKs(output)
 }
 
 // parseListSDKs parses lines like:
@@ -73,7 +74,7 @@ func (l CLISDKLister) ListSDKs(ctx context.Context) ([]domain.Resource, error) {
 //	8.0.404 [C:\Program Files\dotnet\sdk]
 //
 // into domain.Resource values.
-func parseListSDKs(output []byte) []domain.Resource {
+func parseListSDKs(output []byte) ([]domain.Resource, error) {
 	var resources []domain.Resource
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
@@ -85,14 +86,35 @@ func parseListSDKs(output []byte) []domain.Resource {
 		if !ok {
 			continue
 		}
-		resources = append(resources, domain.Resource{
-			Name:    ".NET SDK " + version,
-			Type:    domain.ResourceTypeDotNetSDK,
-			Version: version,
-			Path:    filepath.Join(dir, version),
-		})
+		resource, err := newDotNetSDKResource(version, filepath.Join(dir, version))
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
 	}
-	return resources
+	return resources, nil
+}
+
+// newDotNetSDKResource builds a domain.Resource with its ID and both path
+// forms computed through the shared pathutil contract, rather than
+// normalizing paths independently.
+func newDotNetSDKResource(version, path string) (domain.Resource, error) {
+	displayPath, err := pathutil.Absolute(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	normalizedPath, err := pathutil.Normalize(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	return domain.Resource{
+		ID:             domain.ResourceID(domain.ResourceTypeDotNetSDK, version, normalizedPath),
+		Name:           ".NET SDK " + version,
+		Type:           domain.ResourceTypeDotNetSDK,
+		Version:        version,
+		DisplayPath:    displayPath,
+		NormalizedPath: normalizedPath,
+	}, nil
 }
 
 func splitSDKLine(line string) (version, dir string, ok bool) {

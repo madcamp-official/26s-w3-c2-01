@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // Detector finds Windows SDK installations on this machine and reports them
@@ -82,12 +83,11 @@ func (d FilesystemDetector) listVersionedResources(dir string, resourceType doma
 			continue
 		}
 		version := entry.Name()
-		resources = append(resources, domain.Resource{
-			Name:    label + " " + version,
-			Type:    resourceType,
-			Version: version,
-			Path:    filepath.Join(dir, version),
-		})
+		resource, err := newResource(resourceType, version, label+" "+version, filepath.Join(dir, version))
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
 	}
 	return resources, nil
 }
@@ -107,10 +107,32 @@ func (d FilesystemDetector) detect81() ([]domain.Resource, error) {
 	if !info.IsDir() {
 		return nil, nil
 	}
-	return []domain.Resource{{
-		Name:    "Windows SDK 8.1",
-		Type:    domain.ResourceTypeWindowsSDK,
-		Version: "8.1",
-		Path:    dir,
-	}}, nil
+
+	resource, err := newResource(domain.ResourceTypeWindowsSDK, "8.1", "Windows SDK 8.1", dir)
+	if err != nil {
+		return nil, err
+	}
+	return []domain.Resource{resource}, nil
+}
+
+// newResource builds a domain.Resource with its ID and both path forms
+// computed through the shared pathutil contract, rather than each adapter
+// normalizing paths on its own.
+func newResource(resourceType domain.ResourceType, version, name, path string) (domain.Resource, error) {
+	displayPath, err := pathutil.Absolute(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	normalizedPath, err := pathutil.Normalize(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	return domain.Resource{
+		ID:             domain.ResourceID(resourceType, version, normalizedPath),
+		Name:           name,
+		Type:           resourceType,
+		Version:        version,
+		DisplayPath:    displayPath,
+		NormalizedPath: normalizedPath,
+	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // defaultVSWherePath is where the Visual Studio Installer places vswhere.exe.
@@ -71,12 +72,33 @@ func (l VSWhereToolLocator) Locate(ctx context.Context) ([]domain.Resource, erro
 
 	resources := make([]domain.Resource, 0, len(instances))
 	for _, inst := range instances {
-		resources = append(resources, domain.Resource{
-			Name:    inst.DisplayName,
-			Type:    domain.ResourceTypeVisualStudio,
-			Version: inst.InstallationVersion,
-			Path:    inst.InstallationPath,
-		})
+		resource, err := newVSResource(inst.DisplayName, inst.InstallationVersion, inst.InstallationPath)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
 	}
 	return resources, nil
+}
+
+// newVSResource builds a domain.Resource with its ID and both path forms
+// computed through the shared pathutil contract, rather than normalizing
+// paths independently.
+func newVSResource(name, version, path string) (domain.Resource, error) {
+	displayPath, err := pathutil.Absolute(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	normalizedPath, err := pathutil.Normalize(path)
+	if err != nil {
+		return domain.Resource{}, err
+	}
+	return domain.Resource{
+		ID:             domain.ResourceID(domain.ResourceTypeVisualStudio, version, normalizedPath),
+		Name:           name,
+		Type:           domain.ResourceTypeVisualStudio,
+		Version:        version,
+		DisplayPath:    displayPath,
+		NormalizedPath: normalizedPath,
+	}, nil
 }

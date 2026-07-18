@@ -70,7 +70,10 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, path string) (ParsedBuil
 		return ParsedBuildProject{}, err
 	}
 
-	root, name, drive := ProjectRoot(path)
+	root, name, drive, err := ProjectRoot(path)
+	if err != nil {
+		return ParsedBuildProject{}, err
+	}
 
 	projectType := domain.ProjectTypeMSBuildCpp
 	if filepath.Ext(path) == ".csproj" {

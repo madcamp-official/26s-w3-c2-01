@@ -3,22 +3,23 @@ package msbuild
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
-// abs := "D:\testdata\msbuild\GameClient\GameClient.vcxproj"  // filepath.Abs로 절대경로화
-// root  = filepath.Dir(abs)                              // "D:\testdata\msbuild\GameClient"  (파일 뺀 나머지 폴더 경로)
-// base  = filepath.Base(abs)                              // "GameClient.vcxproj"              (경로에서 파일명만)
-// name  = strings.TrimSuffix(base, filepath.Ext(base))    // "GameClient"                       (확장자 뗀 이름)
-// drive = filepath.VolumeName(abs)                         // "D:"                               (드라이브 문자)
-
-func ProjectRoot(markerPath string) (root, name, drive string) {
-	abs, err := filepath.Abs(markerPath)
+// ProjectRoot derives a build project's root directory, display name, and
+// drive from the path of a marker file (a .sln, .vcxproj, or .csproj). The
+// root is simply the marker file's containing directory -- nested marker
+// files (e.g. a .vcxproj referenced by a .sln elsewhere) each get their own
+// root independently of one another.
+func ProjectRoot(markerPath string) (root, name, drive string, err error) {
+	abs, err := pathutil.Absolute(markerPath)
 	if err != nil {
-		abs = markerPath
+		return "", "", "", err
 	}
 	root = filepath.Dir(abs)
 	base := filepath.Base(abs)
 	name = strings.TrimSuffix(base, filepath.Ext(base))
 	drive = filepath.VolumeName(abs)
-	return root, name, drive
+	return root, name, drive, nil
 }

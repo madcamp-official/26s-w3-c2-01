@@ -19,9 +19,18 @@ import (
 )
 
 var (
-	scanRoot string
-	scanFull bool
+	scanRoot          string
+	scanFull          bool
+	resourceDetectors = defaultResourceDetectors
 )
+
+func defaultResourceDetectors() []app.ResourceDetector {
+	return []app.ResourceDetector{
+		app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
+		app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
+		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
+	}
+}
 
 // scanCmd represents the scan command.
 var scanCmd = &cobra.Command{
@@ -68,11 +77,7 @@ not exist yet, so --full has no effect (see --help).`,
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
-		}, []app.ResourceDetector{
-			app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
-			app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
-			app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
-		}, nil)
+		}, resourceDetectors(), nil)
 
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
 			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),

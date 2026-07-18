@@ -2,6 +2,7 @@ package msbuild
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -34,8 +35,14 @@ func TestProjectRoot(t *testing.T) {
 			if name != tc.wantName {
 				t.Errorf("name = %q, want %q", name, tc.wantName)
 			}
-			if drive == "" {
-				t.Errorf("drive is empty for %q", tc.path)
+			// filepath.VolumeName only returns a non-empty value on Windows;
+			// POSIX paths (macOS/Linux) have no drive-letter concept.
+			if runtime.GOOS == "windows" {
+				if drive == "" {
+					t.Errorf("drive is empty for %q", tc.path)
+				}
+			} else if drive != "" {
+				t.Errorf("drive = %q, want empty on %s (no drive-letter concept)", drive, runtime.GOOS)
 			}
 		})
 	}

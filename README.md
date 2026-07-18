@@ -1,6 +1,56 @@
 # 26s-w3-c2-01
 몰입캠프 26s-w3-c2-03 프로젝트 repository
 
+## 실행 방법
+
+### 준비물
+
+- Go 1.25 이상 (`go.mod`의 `go 1.25.0` 기준)
+
+### 빌드 및 실행
+
+```bash
+git clone <repo-url>
+cd 26s-w3-c2-01
+
+# 소스에서 바로 실행
+go run . --help
+
+# 또는 바이너리로 빌드해서 실행
+go build -o libra .
+./libra --help
+```
+
+### 사용 가능한 명령 (Day1 기준)
+
+구현 진행 상황은 `docs/libra_cli_commands_and_schedule.md`의 일정을 따릅니다. 아래 명령은 CLI 구조와 옵션은 갖춰져 있지만, 대부분 실제 분석 로직은 아직 연결되지 않았습니다.
+
+| 명령 | 상태 |
+|---|---|
+| `libra init` | 뼈대만 있음 (config/DB 초기화 로직 미연결) |
+| `libra scan` | 뼈대만 있음 |
+| `libra summary` | mock 데이터로 동작 (`--json` 지원) |
+| `libra explain <target>` | 뼈대만 있음 |
+| `libra impact <target>` | 뼈대만 있음 |
+
+```bash
+go run . summary
+go run . --json summary
+```
+
+### 개발 중 검증
+
+PR을 올리기 전에 아래를 통과시켜야 합니다 (자세한 규칙은 `docs/libra_collaboration_rules.md` 참고).
+
+```bash
+gofmt -l .
+go vet ./...
+go build ./...
+go test ./...
+```
+
+---
+
 # Libra 프로젝트 기획서
 
 ## 1. 프로젝트 개요

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
@@ -56,6 +57,9 @@ func (l CLISDKLister) run(ctx context.Context, path string, args ...string) ([]b
 }
 
 func (l CLISDKLister) ListSDKs(ctx context.Context) ([]domain.Resource, error) {
+	if err := adapter.RequireWindows("Windows .NET SDK detection"); err != nil {
+		return nil, err
+	}
 	dotnetPath := l.path()
 	if _, err := os.Stat(dotnetPath); os.IsNotExist(err) {
 		return nil, nil

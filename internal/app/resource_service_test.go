@@ -44,7 +44,7 @@ func TestResourceServiceObservesClassifiesAndPersists(t *testing.T) {
 	if got.Resource.ID == "" || got.Resource.NormalizedPath == "" {
 		t.Fatalf("Observe() identity = %#v, want populated ID and normalized path", got.Resource)
 	}
-	if got.Resource.LogicalSize != 6 || !got.Resource.SystemManaged || got.Resource.Risk != domain.RiskBlocked {
+	if got.Resource.LogicalSize != 6 || !got.Resource.SizeKnown || !got.Resource.SystemManaged || got.Resource.Risk != domain.RiskBlocked {
 		t.Fatalf("Observe() resource = %#v, want measured BLOCKED system resource", got.Resource)
 	}
 	if !got.Resource.LastObservedAt.Equal(observedAt) || got.Resource.ReclaimableSize != 0 {

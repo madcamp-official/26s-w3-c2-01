@@ -10,6 +10,7 @@ import (
 // path. Issues are recoverable entry-level failures encountered while walking.
 type ResourceSize struct {
 	LogicalSize    int64
+	SizeKnown      bool
 	FilesInspected int64
 	LastModifiedAt *time.Time
 	Issues         []Issue
@@ -34,6 +35,7 @@ func MeasureResource(ctx context.Context, walker Scanner, path string) (Resource
 
 	measured := ResourceSize{
 		LogicalSize:    result.LogicalSize,
+		SizeKnown:      len(result.Issues) == 0 && result.RootsScanned == 1,
 		FilesInspected: result.FilesInspected,
 		Issues:         result.Issues,
 	}

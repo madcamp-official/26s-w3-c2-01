@@ -100,6 +100,7 @@ func testResource(t *testing.T, resourceType domain.ResourceType, version string
 		DisplayPath:     displayPath,
 		NormalizedPath:  normalizedPath,
 		LogicalSize:     1024,
+		SizeKnown:       true,
 		ReclaimableSize: 0,
 		Regenerable:     false,
 		SystemManaged:   true,

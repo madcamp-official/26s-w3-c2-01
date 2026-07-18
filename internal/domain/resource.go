@@ -40,6 +40,7 @@ type Resource struct {
 	DisplayPath     string
 	NormalizedPath  string
 	LogicalSize     int64
+	SizeKnown       bool
 	ReclaimableSize int64
 	Regenerable     bool
 	SystemManaged   bool

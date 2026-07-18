@@ -1,0 +1,82 @@
+package app
+
+import (
+	"context"
+	"errors"
+
+	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
+	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
+)
+
+type GitProjectDetector struct{ Detector gitadapter.Detector }
+
+func (d GitProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if d.Detector == nil || !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	projects, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("git", entry.Path, "detect Git project", err)
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: projects}}}
+}
+
+type NodeProjectDetector struct{ Detector nodeadapter.Detector }
+
+func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if d.Detector == nil || !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	project, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("node", entry.Path, "parse package.json", err)
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{project}}}}
+}
+
+type MSBuildProjectDetector struct{ Parser msbuild.BuildProjectParser }
+
+func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if d.Parser == nil || !d.Parser.CanParse(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	parsed, err := d.Parser.Parse(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("msbuild", entry.Path, "parse MSBuild project", err)
+	}
+	projects := make([]domain.BuildProject, 0, len(parsed))
+	for _, item := range parsed {
+		projects = append(projects, item.Project)
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: projects}}}
+}
+
+type MSBuildWorkspaceDetector struct{ Parser msbuild.WorkspaceParser }
+
+func (d MSBuildWorkspaceDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if d.Parser == nil || !d.Parser.CanParse(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	parsed, err := d.Parser.Parse(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("msbuild", entry.Path, "parse MSBuild workspace", err)
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Workspace: &parsed.Workspace, WorkspaceProjectPaths: parsed.ProjectPaths,
+	}}}
+}
+
+func projectDetectionFailure(adapterName, path, operation string, err error) DetectionResult[ProjectCandidate] {
+	code := IssueMalformedManifest
+	if errors.Is(err, context.Canceled) {
+		code = IssueCancelled
+	}
+	return DetectionResult[ProjectCandidate]{
+		Issues: []Issue{{Code: code, Phase: PhaseDiscoverProjects, Adapter: adapterName,
+			Path: path, Operation: operation, Severity: IssueWarning, Message: err.Error(), Cause: err}},
+		Unverified: []UnverifiedScope{{Path: path, Phase: PhaseDiscoverProjects, Reason: err.Error()}},
+	}
+}

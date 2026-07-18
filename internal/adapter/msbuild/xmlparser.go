@@ -93,8 +93,9 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]
 	return []ParsedBuildProject{{
 		Project: domain.BuildProject{
 			Name:           name,
-			Path:           root,
 			Type:           projectType,
+			RootPath:       root,
+			ManifestPath:   entry.Path,
 			Drive:          drive,
 			LastModifiedAt: entry.ModifiedAt,
 		},

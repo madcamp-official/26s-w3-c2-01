@@ -29,6 +29,8 @@ import (
 	"path/filepath"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 // manifestFile is the marker that identifies a Node BuildProject root.
@@ -68,39 +70,31 @@ const (
 // (contains package.json) and, if so, builds the resulting
 // domain.BuildProject.
 //
-// This only detects the project itself; it does not persist it.
-// domain.BuildProject persistence is still DECISION_REQUIRED
-// (docs/libra_integration_contracts.md §7.2), so callers should not wire
-// Detect's result into a repository yet. DetectArtifacts, below, is
-// independent of this restriction because Resource persistence already has
-// a confirmed pipeline (§7.3, §18.4) via app.ResourceService.
+// This only returns the project fact. The application pipeline prepares its
+// normalized identity and persists it through ProjectRepository. Artifacts
+// follow the separate ResourceService pipeline.
 type Detector interface {
-	// CanDetect reports whether dir contains a package.json entry.
-	CanDetect(dir string) bool
+	// CanDetect reports whether entry's directory contains package.json.
+	CanDetect(entry scanner.Entry) bool
 	// Detect builds the domain.BuildProject for the Node project rooted at
-	// dir. Callers should only call this after CanDetect reports true. A
+	// entry. Callers should only call this after CanDetect reports true. A
 	// malformed package.json is returned as an error, not a panic or a
 	// silently empty project, so orchestration can record it as a
 	// recoverable per-candidate issue.
-	Detect(ctx context.Context, dir string) (domain.BuildProject, error)
+	Detect(ctx context.Context, entry scanner.Entry) (domain.BuildProject, error)
 }
 
 // FilesystemDetector is the real Detector implementation: it checks for a
 // package.json entry directly on disk.
 type FilesystemDetector struct{}
 
-func (FilesystemDetector) CanDetect(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, manifestFile))
+func (FilesystemDetector) CanDetect(entry scanner.Entry) bool {
+	_, err := os.Stat(filepath.Join(entry.Path, manifestFile))
 	return err == nil
 }
 
-func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildProject, error) {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		abs = dir
-	}
-
-	info, err := os.Stat(abs)
+func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (domain.BuildProject, error) {
+	abs, err := pathutil.Absolute(entry.Path)
 	if err != nil {
 		return domain.BuildProject{}, err
 	}
@@ -115,10 +109,11 @@ func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildP
 
 	return domain.BuildProject{
 		Name:           name,
-		Path:           abs,
 		Type:           domain.ProjectTypeNode,
+		RootPath:       abs,
+		ManifestPath:   filepath.Join(abs, manifestFile),
 		Drive:          filepath.VolumeName(abs),
-		LastModifiedAt: info.ModTime(),
+		LastModifiedAt: entry.ModifiedAt,
 	}, nil
 }
 

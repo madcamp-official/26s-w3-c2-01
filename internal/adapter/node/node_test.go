@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 func TestFilesystemDetector_CanDetect(t *testing.T) {
@@ -24,7 +26,7 @@ func TestFilesystemDetector_CanDetect(t *testing.T) {
 	var detector Detector = FilesystemDetector{}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := detector.CanDetect(tc.dir); got != tc.want {
+			if got := detector.CanDetect(scanner.Entry{Path: tc.dir}); got != tc.want {
 				t.Errorf("CanDetect(%q) = %v, want %v", tc.dir, got, tc.want)
 			}
 		})
@@ -33,8 +35,9 @@ func TestFilesystemDetector_CanDetect(t *testing.T) {
 
 func TestFilesystemDetector_Detect(t *testing.T) {
 	var detector Detector = FilesystemDetector{}
+	modifiedAt := time.Date(2026, 7, 18, 3, 4, 5, 0, time.UTC)
 
-	got, err := detector.Detect(context.Background(), "../../../testdata/node/basic")
+	got, err := detector.Detect(context.Background(), scanner.Entry{Path: "../../../testdata/node/basic", ModifiedAt: modifiedAt})
 	if err != nil {
 		t.Fatalf("Detect returned error: %v", err)
 	}
@@ -44,8 +47,8 @@ func TestFilesystemDetector_Detect(t *testing.T) {
 	if got.Type != domain.ProjectTypeNode {
 		t.Errorf("Type = %v, want %v", got.Type, domain.ProjectTypeNode)
 	}
-	if got.LastModifiedAt.IsZero() {
-		t.Errorf("LastModifiedAt is zero, want the directory's mod time")
+	if !got.LastModifiedAt.Equal(modifiedAt) {
+		t.Errorf("LastModifiedAt = %v, want scanner entry time %v", got.LastModifiedAt, modifiedAt)
 	}
 }
 
@@ -56,7 +59,7 @@ func TestFilesystemDetector_Detect_FallsBackToDirectoryNameWhenManifestNameIsEmp
 	}
 
 	var detector Detector = FilesystemDetector{}
-	got, err := detector.Detect(context.Background(), dir)
+	got, err := detector.Detect(context.Background(), scanner.Entry{Path: dir})
 	if err != nil {
 		t.Fatalf("Detect returned error: %v", err)
 	}
@@ -68,7 +71,7 @@ func TestFilesystemDetector_Detect_FallsBackToDirectoryNameWhenManifestNameIsEmp
 func TestFilesystemDetector_Detect_MalformedManifestIsRecoverableError(t *testing.T) {
 	var detector Detector = FilesystemDetector{}
 
-	_, err := detector.Detect(context.Background(), "../../../testdata/node/malformed-package-json")
+	_, err := detector.Detect(context.Background(), scanner.Entry{Path: "../../../testdata/node/malformed-package-json"})
 	if err == nil {
 		t.Fatal("Detect() error = nil, want an error for malformed package.json")
 	}

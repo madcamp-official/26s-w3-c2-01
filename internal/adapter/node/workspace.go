@@ -166,12 +166,9 @@ func ResolveMembers(root string, info WorkspaceInfo) ([]string, error) {
 // plus whether it relies on the workspace root's node_modules instead of
 // having its own.
 //
-// This is deliberately not a domain.Dependency: a REQUIRES edge needs a
-// stable BuildProject ID, which is still DECISION_REQUIRED
-// (docs/libra_integration_contracts.md §7.2/§15.2). Keeping this at adapter
-// level means it is ready to feed a real PROJECT -[REQUIRES]-> RESOURCE
-// edge (§18.5) the moment Project IDs exist, without having guessed at an
-// ID scheme that isn't the team's decision to make from this package.
+// This is deliberately not a domain.Dependency. The adapter reports artifact
+// ownership facts; the application dependency analyzer connects the prepared
+// Project ID to the observed Resource ID.
 type MemberArtifacts struct {
 	MemberRoot            string
 	OwnArtifacts          []domain.Resource

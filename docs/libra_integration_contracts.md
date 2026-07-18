@@ -265,41 +265,48 @@ recoverable issue를 코드 `0`으로 처리할지 별도 코드를 사용할지
   보존된다.
 - dependency 양방향 조회는 전용 covering index를 사용하며 query-plan 테스트와
   10,000 edge benchmark가 존재한다.
-- ProjectRepository와 Workspace 저장 repository는 아직 없다.
-- `projects.normalized_path`는 `UNIQUE`지만 domain에는 해당 필드가 없다.
+- `ProjectRepository`는 관측 성공 project batch upsert와 ID·manifest 조회를
+  제공하며 미발견 project 상태는 변경하지 않는다.
+- `WorkspaceRepository`는 workspace upsert와 membership 원자 교체를 제공한다.
+- `projects`는 root와 manifest 표시·정규화 경로를 분리하고
+  `(project_type, normalized_manifest_path)`를 identity unique key로 사용한다.
 
-### 7.2 제안 계약
+### 7.2 Project·Workspace repository (`CONFIRMED`, snapshot 전환은 `PLANNED`)
 
-단건 upsert:
-
-```go
-type ProjectRepository interface {
-    Upsert(ctx context.Context, project domain.BuildProject, scanID string) error
-}
-```
-
-scan 단위 원자적 교체:
+현재 단계에서는 관측에 성공한 project만 batch upsert하고 자동 `STALE` 전환은
+하지 않는다. scan coverage와 unverified scope 없이 전체 교체하면 접근 실패한
+project를 잘못 `STALE`로 만들 수 있기 때문이다.
 
 ```go
 type ProjectRepository interface {
-    ReplaceScanProjects(
-        ctx context.Context,
-        scanID string,
-        projects []domain.BuildProject,
-    ) error
+    UpsertObserved(context.Context, string, []domain.BuildProject) error
+    FindByID(context.Context, string) (domain.BuildProject, error)
+    FindByManifestPath(context.Context, domain.ProjectType, string) (domain.BuildProject, error)
+}
+
+type WorkspaceRepository interface {
+    Upsert(context.Context, string, domain.Workspace) error
+    ReplaceMembers(context.Context, string, []string) error
 }
 ```
 
-권장 방향은 `ReplaceScanProjects`다. 부분 성공 결과는 저장하되 한 번의 DB transaction 안에서 현재 scan 결과를 반영할 수 있기 때문이다.
+확정된 저장 규칙:
 
-다음 사항을 합의한 뒤 구현한다.
+1. 정상 관측된 project는 `ACTIVE`로 upsert한다.
+2. Project ID는 `project_type + normalized_manifest_path`의 stable hash다.
+3. partial parse 결과는 Project row로 저장하지 않고 structured Issue로 남긴다.
+4. Workspace와 membership은 별도 table/repository로 저장한다.
+5. C·D 드라이브 관계는 경로 문자열이 아니라 ID로 연결한다.
 
-1. BuildProject 필드와 DB column mapping
-2. stable ID 생성 규칙
-3. 기존 project를 ACTIVE로 갱신하는 조건
-4. 이번 scan에서 보이지 않은 project를 STALE로 바꾸는 시점
-5. partial parse 결과를 project로 저장할지 issue만 저장할지
-6. Workspace 및 WorkspaceProject 저장 방식
+추후 결정·구현할 항목:
+
+- `FULL`·`ROOT`·`PROJECT` scan coverage
+- 접근 실패 subtree를 나타내는 `UnverifiedScope`
+- parser 실패한 기존 project의 `UNKNOWN` 전환
+- 확인된 범위에서만 미발견 project를 `STALE`로 전환하는
+  `FinalizeProjectSnapshot`
+- 과거 snapshot용 `scan_projects`와 보존 기간
+- `projects.last_observed_scan_id`가 참조하는 scan 삭제 정책
 
 ### 7.3 Resource repository (`CONFIRMED`)
 
@@ -428,11 +435,11 @@ libra scan --json
 
 ### A: Indexing & Platform
 
-- DB column과 BuildProject 필드 mapping 제안
-- stable project ID 방식 제안
-- `ReplaceScanProjects` transaction 경계 제안
-- STALE 전환 시점 제안
-- structured issue 저장 방식 제안
+- BuildProject root·manifest mapping과 stable ID 구현
+- 관측 성공 project의 batch upsert 구현
+- Workspace와 membership repository 구현
+- structured Issue와 scan orchestration 구현
+- coverage 계약 확정 뒤 `FinalizeProjectSnapshot`과 STALE 전환 구현
 
 ### B: Dependency Analysis
 
@@ -501,7 +508,7 @@ libra scan --json
 
 ## 15. 프로젝트 root, manifest 및 stable ID
 
-### 15.1 root와 manifest (`DECISION_REQUIRED`)
+### 15.1 root와 manifest (`CONFIRMED`)
 
 다음 두 값은 분리한다.
 
@@ -510,41 +517,53 @@ RootPath:      D:\Game\Client
 ManifestPath:  D:\Game\Client\Client.vcxproj
 ```
 
-권장 모델:
+확정 모델:
 
 ```go
 type BuildProject struct {
-    ID             string
-    Name           string
-    RootPath       string
-    NormalizedRoot string
-    ManifestPaths  []string
-    Type           ProjectType
+    ID                     string
+    Name                   string
+    Type                   ProjectType
+    RootPath               string
+    NormalizedRootPath     string
+    ManifestPath           string
+    NormalizedManifestPath string
+    Drive                  string
+    LogicalSize            int64
+    LastModifiedAt         time.Time
+    LastObservedAt         time.Time
+    Status                 ProjectStatus
 }
 ```
 
-권장 의미:
+확정 의미:
 
 - `RootPath`: 프로젝트가 소유하는 디렉터리
-- `ManifestPaths`: 탐지·분석에 사용한 설정 파일
+- `ManifestPath`: identity에 사용하는 대표 marker/config 파일
 - `.vcxproj.filters`: manifest가 아닌 보조 파일
 - `Directory.Build.props`, import된 `.props`·`.targets`: manifest가 아닌 Evidence source
 - 독립 `.vcxproj`: marker 파일의 부모 디렉터리를 root로 사용
+- Node: `package.json`을 manifest로 사용
+- Git fallback: `.git` entry를 manifest로 사용
+- `.sln`: BuildProject가 아니라 Workspace manifest로 사용
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`, Resource·Dependency·Evidence는 `CONFIRMED`)
+### 15.2 stable ID (`CONFIRMED`, Project·Workspace 포함)
 
-Resource, Dependency, Evidence ID는 확정되었고 Project ID만 제안 상태다.
+모든 MVP identity hash는 NUL separator와 SHA-256 hex를 사용한다.
 
 ```text
-Project ID    = hash(project_type + normalized_manifest_path)
+Project ID    = SHA-256(project_type + NUL + normalized_manifest_path)
+Workspace ID  = SHA-256(workspace_type + NUL + normalized_manifest_path)
 Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
 Dependency ID = SHA-256(source_type + NUL + source_id + NUL + relation + NUL + target_type + NUL + target_id)
 Evidence ID   = SHA-256(dependency_id + NUL + kind + NUL + source_path + NUL + property + NUL + raw_value + NUL + resolved_value)
 ```
 
-경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급하고 이전 객체는 `STALE`로 남긴다. hash 알고리즘, prefix, 직렬화 형식은 모든 언어·플랫폼에서 같은 결과가 나오도록 별도 golden test로 고정한다.
+경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급한다. 이전
+객체의 `STALE` 전환은 scan coverage 계약 구현 전까지 자동 수행하지 않는다.
+직렬화 형식은 모든 플랫폼에서 같은 결과가 나오도록 golden test로 고정한다.
 
 `.git`은 장기적으로 ProjectType이 아니라 repository metadata로 분리하는 방향을 권장한다. 사용자 대표 표시 우선순위 제안은 다음과 같다.
 
@@ -673,38 +692,54 @@ Store   → transaction과 저장
 
 adapter가 DB에 직접 쓰거나 Risk를 최종 판정하지 않는다.
 
-### 18.2 공통 분석 결과 (`DECISION_REQUIRED`)
+### 18.2 공통 분석 결과 (`CONFIRMED`)
 
 ```go
-type AnalysisResult struct {
-    Projects   []domain.BuildProject
-    Resources  []domain.Resource
-    Relations  []domain.Relation
-    Evidence   []domain.Evidence
-    Issues     []domain.Issue
-    Unverified []domain.UnverifiedScope
+type DetectionResult[T any] struct {
+    Items      []T
+    Issues     []Issue
+    Unverified []UnverifiedScope
 }
 ```
 
-또는 역할별 interface를 사용한다.
+역할별 interface가 공통 result envelope를 사용한다.
 
 ```go
 type ProjectDetector interface {
-    DetectProject(context.Context, scanner.Entry) DetectionResult
+    Observe(context.Context, scanner.Entry) DetectionResult[ProjectCandidate]
 }
 
 type ResourceDetector interface {
-    DetectResources(context.Context, Environment) DetectionResult
+    Detect(context.Context, Environment) DetectionResult[domain.Resource]
 }
 
 type DependencyAnalyzer interface {
-    Analyze(context.Context, domain.BuildProject) AnalysisResult
+    Analyze(context.Context, domain.BuildProject, ResourceIndex) DetectionResult[DependencyBundle]
 }
 ```
 
-공통 결과와 interface 중 하나를 선택하되 application service가 adapter별 type switch로 가득 차지 않도록 한다.
+기존 adapter는 작은 wrapper로 이 계약에 연결한다. adapter별 세부 반환 타입을
+application service가 type switch로 해석하지 않는다. Node project detector도
+다른 project detector와 동일하게 `scanner.Entry`를 입력으로 받는다.
 
-### 18.3 분석 단계 (`DECISION_REQUIRED`)
+structured Issue의 확정 최소 필드는 다음과 같다.
+
+```go
+type Issue struct {
+    Code      string
+    Phase     AnalysisPhase
+    Adapter   string
+    Path      string
+    Operation string
+    Severity  IssueSeverity
+    Message   string
+    Cause     error // JSON과 DB 원문 저장에서는 제외
+}
+```
+
+partial parse는 candidate row를 만들지 않고 Issue와 UnverifiedScope로 전달한다.
+
+### 18.3 분석 단계 (`CONFIRMED`)
 
 진행률 phase와 분석 orchestration에서 같은 enum을 사용한다.
 
@@ -721,6 +756,10 @@ COMPLETED
 ```
 
 기존 문서의 `SCANNING_FILES` 등 phase 이름은 위 목록과 통합해야 하며 두 종류의 문자열을 동시에 유지하지 않는다.
+
+현재 구현 범위에서는 위 enum과 순서를 고정하되 progress throttling과 callback
+주기는 CLI 연결 전에 C와 결정한다. scan orchestration의 최종 결과는
+`scanner.Result`와 구분되는 `app.ScanResult`로 반환한다.
 
 ### 18.4 Resource 병합 (`CONFIRMED`)
 
@@ -1272,18 +1311,18 @@ exit code 변경
 ### 지금 결정
 
 ```text
-[ ] Project root와 manifest 의미
-[ ] Project ID 규칙
+[x] Project root와 manifest 의미
+[x] Project ID 규칙
 [x] Dependency·Evidence ID 규칙
 [x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
 [ ] 현재 상태와 snapshot 저장
-[ ] Adapter 공통 반환 타입
-[ ] Project repository interface
+[x] Adapter 공통 반환 타입
+[x] Project repository interface
 [x] Resource repository interface
 [x] Dependency repository interface
-[ ] structured Issue
+[x] structured Issue
 [ ] JSON envelope와 exit code
 ```
 
@@ -1329,15 +1368,47 @@ exit code 변경
 
 ## 28. 우선순위
 
-후속 구현 전에 다음 여섯 계약을 우선 고정한다.
+Project identity와 orchestration 기본 계약은 확정되었다. 후속 구현 전에 남은
+계약을 다음 순서로 고정한다.
 
 ```text
-1. Workspace / BuildProject / Repository 모델
-2. ID, root, manifest, 경로 규칙
-3. scan scope와 DB snapshot 갱신
-4. Adapter → App → Store interface
-5. Evidence / Confidence / Risk / Impact
-6. JSON envelope, stderr, exit code
+1. scan scope, UnverifiedScope와 DB snapshot 갱신
+2. Evidence 만료·redaction과 Confidence 공식
+3. Impact enum과 산출물 소유권
+4. JSON envelope, stderr, exit code
+5. cleanup·restore safety 계약
+6. daemon 동시 실행과 event 유실 복구
 ```
 
 이 계약을 먼저 고정하면 A·B·C가 scanner/store, Windows adapter, CLI/Node를 독립적으로 구현하면서도 후반의 대규모 domain·schema·output 재작성을 피할 수 있다.
+
+## 29. Project index 및 orchestration 구현 추적
+
+### 이번 구현에서 완료할 항목
+
+```text
+[x] Node detector scanner.Entry 입력 통일
+[x] BuildProject·Workspace path model과 stable ID
+[x] projects schema migration과 ProjectRepository
+[x] workspaces·workspace_projects migration과 WorkspaceRepository
+[x] structured Issue·DetectionResult·AnalysisPhase
+[x] scan orchestration과 app.ScanResult
+[x] Windows test, macOS cross compile, golden ID test
+```
+
+### 추후 합의 후 구현할 항목
+
+```text
+[ ] FULL·ROOT·PROJECT scope의 정확한 coverage
+[ ] 접근 실패 subtree와 candidate를 표현하는 UnverifiedScope 세부 schema
+[ ] ProjectStatus UNKNOWN·STALE 전환 조건
+[ ] FinalizeProjectSnapshot transaction과 활성 snapshot 전환
+[ ] scan_projects·scan_resources 과거 snapshot
+[ ] scan record 삭제와 last_observed_scan_id foreign key 정책
+[ ] progress callback throttling과 stderr 표현
+[ ] structured Issue DB 보존 기간과 Cause redaction
+[ ] ResourceService의 enrich와 persist 단계 완전 분리
+```
+
+위 추후 항목이 확정되기 전에는 미발견 project를 자동으로 `STALE` 처리하거나
+부분 scan 결과로 다른 root·drive의 상태를 변경하지 않는다.

@@ -57,6 +57,12 @@ func IsSameOrChild(path, parent string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// filepath.Rel returns an error on Windows when the paths are on
+	// different volumes. Different volumes cannot have an ancestor/child
+	// relationship, so treat that case as a normal negative result.
+	if !strings.EqualFold(filepath.VolumeName(normalizedPath), filepath.VolumeName(normalizedParent)) {
+		return false, nil
+	}
 	relative, err := filepath.Rel(normalizedParent, normalizedPath)
 	if err != nil {
 		return false, err

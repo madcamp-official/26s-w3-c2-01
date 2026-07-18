@@ -3,6 +3,7 @@ package pathutil
 import (
 	"errors"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -69,5 +70,19 @@ func TestIsSameOrChildUsesPathBoundaries(t *testing.T) {
 				t.Fatalf("IsSameOrChild() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsSameOrChildReturnsFalseAcrossWindowsVolumes(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows volume semantics")
+	}
+
+	got, err := IsSameOrChild(`D:\Projects\app`, `C:\Windows`)
+	if err != nil {
+		t.Fatalf("IsSameOrChild() error = %v", err)
+	}
+	if got {
+		t.Fatal("IsSameOrChild() = true across different volumes")
 	}
 }

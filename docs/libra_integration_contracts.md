@@ -1014,6 +1014,8 @@ type ImpactLevel string // NONE, LOW, HIGH, UNKNOWN
 
 `likely unaffected`, `expected to fail` 같은 문장은 domain 값이 아니라 output formatter가 enum을 변환해 만든다.
 
+**현재 구현 상태 (`CONFIRMED`, 이 표 자체는 여전히 `DECISION_REQUIRED`):** `internal/domain/impact.go`에 `ImpactScope`(RUN/BUILD/DEBUG/CI)와 `ImpactLevel`(NONE/LOW/HIGH/UNKNOWN)이 이미 있고, `internal/app/impact_service.go`의 `ImpactService.Assess`는 직접 dependency edge가 있으면 BUILD/HIGH만 판정한다(RUN·DEBUG·CI 판정 규칙은 아직 없음 — 해당 함수 주석 참고). `cmd/impact.go`/`cmd/explain.go`는 이 간극을 감추지 않는다: BUILD는 서비스 판정값을 그대로 쓰고 RUN·DEBUG는 항상 `UNKNOWN`으로 렌더링한다(`output.ImpactPhrase`) — "판정 안 함"을 "unknown"으로 정직하게 표시하며, `docs/libra_cli_commands_and_schedule.md` §3.7의 두 번째 예시(`RUN unknown`)와 같은 모양이다. 또한 `dependencyAnalyzers`가 `cmd/scan.go`에 아직 연결되어 있지 않아([#22](https://github.com/madcamp-official/26s-w3-c2-01/issues/22)) 실제 스캔만으로는 dependency edge 자체가 생기지 않는다 — `cmd/impact.go`/`cmd/explain.go`는 그래서 seeded 데이터로 검증했다(`cmd/dependency_fixture_test.go`).
+
 ## 21. CLI와 JSON 확장 계약
 
 ### 21.1 config와 CLI 우선순위 (`DECISION_REQUIRED`)
@@ -1068,7 +1070,7 @@ JSON stdout에는 다른 문자를 절대 섞지 않는다. 비TTY에서는 prog
 
 scan의 개별 접근 오류는 `0`, DB 저장·pipeline 실패는 `1`로 처리하는 방향을 제안한다.
 
-### 21.4 대상 식별 (`DECISION_REQUIRED`)
+### 21.4 대상 식별 (`ADOPTED`, `explain`/`impact`에 구현됨)
 
 ```text
 명시적 prefix → 지정 type
@@ -1077,6 +1079,8 @@ scan의 개별 접근 오류는 `0`, DB 저장·pipeline 실패는 `1`로 처리
 ```
 
 동명 대상이 여러 개면 자동 선택하지 않고 정확한 ID 또는 경로를 요구한다.
+
+`cmd/target.go`의 `resolveTarget`이 이 규칙을 구현한다: `<resource-type>:<version>` prefix(예: `windows-sdk:10.0.22621.0`)와 `project:<path-or-name>` prefix를 먼저 확인하고, 경로 구분자(`/` 또는 `\`)가 있으면 `pathutil.Normalize` 후 리소스와 프로젝트 양쪽에서 경로로 검색하며, 그 외에는 정확한 ID를 먼저 찾고 없으면 이름으로 검색한다. 여러 항목이 일치하면 `ErrTargetAmbiguous`를, 하나도 없으면 `ErrTargetNotFound`를 반환하고 자동으로 하나를 고르지 않는다. `libra explain`과 `libra impact`가 이 resolver를 공유한다.
 
 ## 22. Fixture, 플랫폼 및 성능
 

@@ -53,10 +53,3 @@ func emptyDash(s string) string {
 	}
 	return s
 }
-
-func yesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
-}

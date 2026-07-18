@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 )
 
 func TestScanRepositorySavesAndUpdatesResult(t *testing.T) {
@@ -21,7 +23,7 @@ func TestScanRepositorySavesAndUpdatesResult(t *testing.T) {
 	repository := NewScanRepository(db)
 	startedAt := time.Date(2026, 7, 18, 1, 2, 3, 4, time.FixedZone("KST", 9*60*60))
 	finishedAt := startedAt.Add(time.Minute)
-	record := ScanRecord{
+	record := app.ScanRecord{
 		ID:         "scan-001",
 		StartedAt:  startedAt,
 		Roots:      []string{`C:\Users\user\source`, `D:\Projects`},
@@ -63,7 +65,7 @@ func TestScanRepositoryRejectsInvalidRecord(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	err = NewScanRepository(db).Save(context.Background(), ScanRecord{})
+	err = NewScanRepository(db).Save(context.Background(), app.ScanRecord{})
 	if err == nil {
 		t.Fatal("Save() error = nil, want validation error")
 	}

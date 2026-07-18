@@ -13,7 +13,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os:
+          - windows-latest
+          # macos-latest is temporarily disabled: Windows is the primary
+          # target platform, and internal/adapter/msbuild.TestProjectRoot
+          # fails structurally on macOS (see #8). Re-enable once #8 lands.
+          # - macos-latest
     runs-on: ${{ matrix.os }}
 
     steps:

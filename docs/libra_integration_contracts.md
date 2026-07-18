@@ -254,6 +254,20 @@ recoverable issue를 코드 `0`으로 처리할지 별도 코드를 사용할지
 
 ## 7. DB repository 계약
 
+### 7.0 로컬 파일 위치 (`CONFIRMED`)
+
+`libra init`이 만드는 두 파일의 이름과 위치는 PR #13에서 구현 중 임의로
+정했던 값을 그대로 확정한다.
+
+```text
+.libra.yaml   -- --config로 지정한 경로, 없으면 현재 디렉터리
+.libra.db     -- .libra.yaml과 같은 디렉터리
+```
+
+`cmd/db.go`의 `configFilePath()`/`dbFilePath()`가 이 규칙을 구현한다. 다른
+이름이나 위치가 필요해지면 이 항목을 다시 `DECISION_REQUIRED`로 되돌리고
+갱신한다.
+
 ### 7.1 현재 상태
 
 - `ScanRepository`는 scan 실행 요약을 저장한다.

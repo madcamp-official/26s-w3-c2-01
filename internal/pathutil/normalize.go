@@ -32,3 +32,34 @@ func Absolute(path string) (string, error) {
 	}
 	return filepath.Clean(absolute), nil
 }
+
+// Equal reports whether two paths have the same normalized identity.
+func Equal(a, b string) (bool, error) {
+	normalizedA, err := Normalize(a)
+	if err != nil {
+		return false, err
+	}
+	normalizedB, err := Normalize(b)
+	if err != nil {
+		return false, err
+	}
+	return normalizedA == normalizedB, nil
+}
+
+// IsSameOrChild reports whether path is parent itself or is contained below
+// parent. It compares path components, not raw string prefixes.
+func IsSameOrChild(path, parent string) (bool, error) {
+	normalizedPath, err := Normalize(path)
+	if err != nil {
+		return false, err
+	}
+	normalizedParent, err := Normalize(parent)
+	if err != nil {
+		return false, err
+	}
+	relative, err := filepath.Rel(normalizedParent, normalizedPath)
+	if err != nil {
+		return false, err
+	}
+	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))), nil
+}

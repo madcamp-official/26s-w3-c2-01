@@ -50,6 +50,22 @@ func TestLoadRejectsUnsafeCleanupDefault(t *testing.T) {
 	}
 }
 
+func TestSaveWritesLoadableConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "libra.yaml")
+
+	if err := Save(path, Default()); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Version != Default().Version || cfg.Scan != Default().Scan || cfg.Cleanup != Default().Cleanup {
+		t.Fatalf("Load() after Save() = %#v, want %#v", cfg, Default())
+	}
+}
+
 func writeConfig(t *testing.T, contents string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "libra.yaml")

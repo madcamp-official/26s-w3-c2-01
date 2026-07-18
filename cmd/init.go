@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +23,25 @@ excluded automatically.`,
   libra init --config .libra.yaml`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintln(cmd.OutOrStdout(), "init: not yet implemented")
+		path := configFilePath()
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			if err := config.Save(path, config.Default()); err != nil {
+				return fmt.Errorf("write config: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Created config file: %s\n", path)
+		} else if err != nil {
+			return fmt.Errorf("check config %q: %w", path, err)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "Config file already exists: %s\n", path)
+		}
+
+		db, err := openDatabase()
+		if err != nil {
+			return fmt.Errorf("initialize database: %w", err)
+		}
+		defer db.Close()
+
+		fmt.Fprintf(cmd.OutOrStdout(), "Database ready: %s\n", dbFilePath())
 		return nil
 	},
 }

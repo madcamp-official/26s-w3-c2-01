@@ -1,6 +1,6 @@
 # Libra 통합 계약 및 사전 합의
 
-> 상태: 초안 v0.2  
+> 상태: 초안 v0.3 (Day 4 구현 현황 동기화)
 > 작성일: 2026-07-18  
 > 목적: A·B·C가 독립적으로 구현한 기능을 결합할 때 데이터의 의미와 형태가 달라지는 문제를 방지한다.
 
@@ -177,7 +177,11 @@ type Detector interface {
 }
 ```
 
-현재 adapter별 detector 계약이 서로 다르므로 공용 interface 도입 여부는 B가 검토한다. 다음 원칙은 확정한다.
+현재 Git detector와 MSBuild BuildProject·Workspace parser는 모두 외부 입력으로
+`scanner.Entry`를 받는다. parser 내부에서 파일 내용이 필요할 때만
+`entry.Path`를 사용하며, 수정 시각은 scanner가 수집한 `entry.ModifiedAt`을
+재사용한다. Resource detector는 머신 환경을 탐지하므로 entry 기반 detector와
+별도 interface를 유지한다. 다음 원칙은 확정한다.
 
 - malformed XML/JSON은 해당 후보의 recoverable issue다.
 - 하나의 detector 오류가 전체 scan을 중단하지 않는다.
@@ -254,7 +258,14 @@ recoverable issue를 코드 `0`으로 처리할지 별도 코드를 사용할지
 
 - `ScanRepository`는 scan 실행 요약을 저장한다.
 - migration에는 `projects`, `resources`, `dependencies`, `evidence`가 존재한다.
-- domain 모델과 모든 DB column을 연결하는 repository는 아직 없다.
+- `ResourceRepository`는 Resource 단건 upsert, ID 조회, type 조회를 제공한다.
+- `DependencyRepository`는 Dependency와 Evidence를 하나의 transaction으로
+  upsert하고 프로젝트→리소스 및 리소스→프로젝트 조회를 제공한다.
+- Evidence는 `scan_id`로 수집 scan에 귀속되며 기존 row도 legacy scan으로
+  보존된다.
+- dependency 양방향 조회는 전용 covering index를 사용하며 query-plan 테스트와
+  10,000 edge benchmark가 존재한다.
+- ProjectRepository와 Workspace 저장 repository는 아직 없다.
 - `projects.normalized_path`는 `UNIQUE`지만 domain에는 해당 필드가 없다.
 
 ### 7.2 제안 계약
@@ -457,13 +468,13 @@ libra scan --json
 ```text
 [ ] Workspace와 BuildProject 수가 합의한 규칙대로 계산된다.
 [ ] 동일한 Windows 경로 표기가 하나의 identity로 합쳐진다.
-[ ] A는 scanner.Entry만 전달하고 프로젝트 의미를 해석하지 않는다.
+[x] A는 scanner.Entry만 전달하고 프로젝트 의미를 해석하지 않는다.
 [ ] parser 오류가 다른 후보와 전체 scan을 중단하지 않는다.
 [ ] 부분 성공 결과와 issue가 함께 DB에 저장된다.
 [ ] 현재 scan에 없는 project의 상태 전환 규칙이 적용된다.
 [ ] progress phase가 공용 enum만 사용한다.
 [ ] JSON stdout에 진행률이나 로그가 섞이지 않는다.
-[ ] gofmt, go test ./..., go vet ./..., go build ./...가 통과한다.
+[x] gofmt, go test ./..., go vet ./..., go build ./...가 통과한다.
 [ ] Windows와 macOS CI가 통과한다.
 ```
 
@@ -850,10 +861,13 @@ type Evidence struct {
 계약 제안:
 
 - Evidence는 `evidence.scan_id` foreign key로 특정 scan에 귀속한다 (`CONFIRMED`).
-- 현재 dependency는 최신 유효 Evidence만 사용한다.
+- 현재 repository는 dependency에 연결된 Evidence를 모두 반환한다. 최신 유효
+  Evidence 필터링은 만료 정책을 확정한 뒤 application 계층에 추가한다.
 - 과거 Evidence는 기록으로 유지할 수 있다.
-- 민감한 원문은 저장하지 않는다.
-- source 파일이 바뀌면 기존 Evidence의 유효성을 다시 평가한다.
+- `RawValue` 저장은 지원하지만 민감 값 redaction 정책은 아직 없다. 정책 확정
+  전에는 adapter가 비밀·개인정보 원문을 전달하지 않는다.
+- source 파일이 바뀌었을 때 기존 Evidence의 유효성을 다시 평가하는 기능은
+  아직 구현하지 않았다.
 
 내용 기반 Evidence ID를 중복 키로 사용하고 같은 근거를 다시 발견하면
 `CollectedAt`을 갱신한다 (`CONFIRMED`). 만료 정책과 raw value redaction은

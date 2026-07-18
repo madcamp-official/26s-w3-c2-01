@@ -1,0 +1,1208 @@
+# Libra 통합 계약 및 사전 합의
+
+> 상태: 초안 v0.2  
+> 작성일: 2026-07-18  
+> 목적: A·B·C가 독립적으로 구현한 기능을 결합할 때 데이터의 의미와 형태가 달라지는 문제를 방지한다.
+
+## 1. 문서의 역할
+
+사전 합의는 코드 소유권을 정하는 일이 아니라 계층과 팀 사이에서 주고받는 데이터의 의미와 형태를 정하는 일이다.
+
+```text
+A: 파일시스템을 탐색하고 사실을 전달한다.
+B: 파일과 설정을 해석해 프로젝트·리소스·관계를 만든다.
+C: application 결과를 CLI와 JSON으로 표현한다.
+```
+
+모든 계약은 다음 상태 중 하나를 가진다.
+
+| 상태 | 의미 |
+|---|---|
+| `CONFIRMED` | 현재 코드와 문서가 이미 일치하며 그대로 사용한다. |
+| `ADOPTED` | 이번 합의에서 채택했고 코드에도 반영했다. |
+| `DECISION_REQUIRED` | 공용 domain, DB schema, CLI 계약 변경이 필요해 팀 합의 전에는 구현하지 않는다. |
+| `PLANNED` | 방향은 합의 가능하지만 구현 순서상 후속 작업으로 남아 있다. |
+
+## 2. 계약 현황 요약
+
+| 번호 | 계약 | 상태 | 현재 결론 |
+|---:|---|---|---|
+| 1 | 프로젝트 단위 | `CONFIRMED` | `.sln`은 Workspace, `.vcxproj`·`.csproj` 등은 BuildProject다. |
+| 2 | 독립 BuildProject | `CONFIRMED` | Workspace에 속하지 않은 BuildProject도 저장한다. |
+| 3 | 프로젝트 고유성 | `DECISION_REQUIRED` | `normalized path + project type`을 후보 키로 사용한다. |
+| 4 | 경로 정규화 | `ADOPTED` | 모든 계층이 `internal/pathutil.Normalize`를 사용한다. |
+| 5 | A→B 전달 값 | `CONFIRMED` | A는 의미를 해석하지 않은 `scanner.Entry`를 전달한다. |
+| 6 | 오류 분류 | `PLANNED` | recoverable/terminal 원칙은 확정, 공용 `ScanIssue` 형태는 추가 합의가 필요하다. |
+| 7 | 프로젝트 DB 저장 | `DECISION_REQUIRED` | normalized path 기반 upsert/scan 단위 교체 중 하나를 결정해야 한다. |
+| 8 | 최종 ScanResult | `DECISION_REQUIRED` | `scanner.Result`, `app.ScanResult`, `output.ScanView`를 분리한다. |
+| 9 | 진행률 | `DECISION_REQUIRED` | application 계층의 `ProgressEvent` callback을 사용한다. |
+| 10 | CLI·JSON | `DECISION_REQUIRED` | 결과는 stdout, 진행률·경고는 stderr로 분리한다. |
+
+## 3. 프로젝트와 Workspace 계약
+
+### 3.1 의미
+
+```text
+Workspace
+└─ Game.sln
+   ├─ Client.vcxproj (BuildProject)
+   └─ Server.vcxproj (BuildProject)
+```
+
+- `.sln`은 사용자가 보는 작업공간이며 직접 SDK 의존성을 갖지 않는다.
+- `.vcxproj`, `.csproj`, Node 프로젝트, 독립 Git 프로젝트는 직접 분석 가능한 BuildProject다.
+- SDK와 도구 의존성은 Workspace가 아니라 BuildProject에 연결한다.
+- 하나의 BuildProject가 여러 Workspace에 포함될 수 있다.
+- Workspace에 포함되지 않은 BuildProject도 독립 프로젝트로 등록한다.
+- 디렉터리 논리 크기는 실제 디렉터리를 기준으로 한 번만 계산한다.
+
+### 3.2 현재 구현
+
+`internal/domain/project.go`에는 다음 모델이 이미 존재한다.
+
+```go
+type Workspace struct { ... }
+type BuildProject struct { ... }
+type WorkspaceProject struct {
+    WorkspaceID    string
+    BuildProjectID string
+}
+```
+
+`internal/adapter/msbuild`도 Workspace parser와 BuildProject parser를 분리한다.
+
+### 3.3 남은 간극
+
+현재 DB에는 Workspace 및 WorkspaceProject 전용 테이블이 없다. `dependencies` 테이블을 재사용할지 전용 테이블을 추가할지는 schema 변경이므로 팀 합의와 migration review가 필요하다.
+
+권장 관계 이름은 다음과 같다.
+
+```text
+SOLUTION_CONTAINS_PROJECT
+```
+
+## 4. 경로와 프로젝트 ID 계약
+
+### 4.1 표시 경로와 비교 경로
+
+사용자에게 보여줄 경로와 DB 중복 제거에 사용할 경로는 목적이 다르다.
+
+```text
+DisplayPath:    D:\Game\Client
+NormalizedPath: d:\game\client
+```
+
+권장 모델은 다음과 같다.
+
+```go
+type BuildProject struct {
+    // 기존 필드 생략
+    DisplayPath    string
+    NormalizedPath string
+}
+```
+
+이 필드 변경은 domain과 DB mapping에 영향을 주므로 아직 적용하지 않는다.
+
+### 4.2 공용 정규화 함수
+
+모든 팀은 독자적인 경로 정규화 함수를 만들지 않고 다음 함수만 사용한다.
+
+```go
+normalized, err := pathutil.Normalize(path)
+```
+
+표시용 절대 경로가 필요하면 대소문자를 보존하는 다음 함수를 사용한다.
+
+```go
+displayPath, err := pathutil.Absolute(path)
+```
+
+계약:
+
+- 빈 경로는 오류다.
+- 상대 경로는 절대 경로로 바꾼다.
+- `.`과 `..`을 정리한다.
+- 현재 OS의 기본 구분자로 정리한다.
+- Windows에서는 비교 키를 소문자로 만든다.
+- macOS 등 비 Windows 환경에서는 대소문자를 보존한다.
+- symlink와 junction은 해석하지 않는다.
+- 표시용 원본 경로를 대체하는 용도로 사용하지 않는다.
+
+### 4.3 프로젝트 고유성
+
+제안하는 프로젝트 고유성 키는 다음과 같다.
+
+```text
+normalized path + project type
+```
+
+동일 경로라도 서로 다른 project type을 별도 프로젝트로 볼 것인지 최종 합의가 필요하다. 합의 전에는 ID 생성 알고리즘을 추가하지 않는다.
+
+결정할 항목:
+
+1. ID를 hash로 만들지 UUID로 만들지
+2. marker 파일 경로와 project root 중 무엇을 identity path로 쓸지
+3. Git fallback project와 언어별 project가 같은 root에 있을 때 하나로 합칠지
+
+## 5. A→B 파일 전달 계약
+
+A의 scanner는 파일시스템의 사실만 전달한다.
+
+```go
+type Entry struct {
+    Path       string
+    Kind       EntryKind
+    Size       int64
+    Mode       fs.FileMode
+    ModifiedAt time.Time
+}
+```
+
+A가 판단하지 않는 항목:
+
+- 프로젝트 여부
+- 프로젝트 종류
+- SDK 버전
+- 재생성 가능성
+- cleanup 위험도
+
+B는 `scanner.Entry`를 받아 marker와 파일 내용을 해석한다. 디렉터리 entry도 `.git`, `node_modules`, `bin`, `obj`, `build` 탐지에 필요하므로 전달한다.
+
+권장 detector 계약:
+
+```go
+type Detector interface {
+    Observe(ctx context.Context, entry scanner.Entry) ([]domain.BuildProject, error)
+}
+```
+
+현재 adapter별 detector 계약이 서로 다르므로 공용 interface 도입 여부는 B가 검토한다. 다음 원칙은 확정한다.
+
+- malformed XML/JSON은 해당 후보의 recoverable issue다.
+- 하나의 detector 오류가 전체 scan을 중단하지 않는다.
+- 파일 내용은 parser/detector가 읽는다.
+- 하나의 marker에서 여러 결과가 나올 가능성을 막지 않는다.
+
+## 6. 오류 계약
+
+### 6.1 확정된 분류 원칙
+
+Recoverable issue 예시:
+
+- 접근 권한 오류
+- 손상된 project manifest
+- 해석하지 못한 MSBuild 변수
+- 존재하지 않는 Workspace 참조
+- 개별 adapter 실패
+
+Terminal error 예시:
+
+- config 자체가 유효하지 않음
+- DB를 열거나 migration할 수 없음
+- repository 저장 실패
+- context 취소
+- 결과 구조가 손상되어 신뢰할 수 없음
+
+결과 상태:
+
+| 조건 | 상태 |
+|---|---|
+| 오류 없음 | `COMPLETED` |
+| recoverable issue가 하나 이상 존재 | `COMPLETED_WITH_ERRORS` |
+| terminal error 발생 | `FAILED` |
+
+### 6.2 현재 구현과 후속 계약
+
+현재 `scanner.Issue`는 Go error wrapping에 적합하다.
+
+```go
+type Issue struct {
+    Path      string
+    Operation string
+    Err       error
+}
+```
+
+하지만 CLI·JSON·DB를 통과할 공용 issue는 구조화된 code와 stage가 필요하다.
+
+```go
+type ScanIssue struct {
+    Path        string `json:"path"`
+    Stage       string `json:"stage"`
+    Code        string `json:"code"`
+    Message     string `json:"message"`
+    Recoverable bool   `json:"recoverable"`
+}
+```
+
+`Stage`, `Code`, JSON schema는 공용 계약이므로 합의 전에는 기존 `scanner.Issue`를 변경하지 않는다.
+
+CLI 종료 코드 제안:
+
+| 상황 | 제안 코드 |
+|---|---:|
+| 정상 또는 recoverable issue와 함께 완료 | `0` |
+| config·DB·repository 등 terminal error | `1` |
+| 사용자 취소 | `130` |
+
+recoverable issue를 코드 `0`으로 처리할지 별도 코드를 사용할지는 C가 자동화 사용 사례와 함께 확정해야 한다.
+
+## 7. DB repository 계약
+
+### 7.1 현재 상태
+
+- `ScanRepository`는 scan 실행 요약을 저장한다.
+- migration에는 `projects`, `resources`, `dependencies`, `evidence`가 존재한다.
+- domain 모델과 모든 DB column을 연결하는 repository는 아직 없다.
+- `projects.normalized_path`는 `UNIQUE`지만 domain에는 해당 필드가 없다.
+
+### 7.2 제안 계약
+
+단건 upsert:
+
+```go
+type ProjectRepository interface {
+    Upsert(ctx context.Context, project domain.BuildProject, scanID string) error
+}
+```
+
+scan 단위 원자적 교체:
+
+```go
+type ProjectRepository interface {
+    ReplaceScanProjects(
+        ctx context.Context,
+        scanID string,
+        projects []domain.BuildProject,
+    ) error
+}
+```
+
+권장 방향은 `ReplaceScanProjects`다. 부분 성공 결과는 저장하되 한 번의 DB transaction 안에서 현재 scan 결과를 반영할 수 있기 때문이다.
+
+다음 사항을 합의한 뒤 구현한다.
+
+1. BuildProject 필드와 DB column mapping
+2. stable ID 생성 규칙
+3. 기존 project를 ACTIVE로 갱신하는 조건
+4. 이번 scan에서 보이지 않은 project를 STALE로 바꾸는 시점
+5. partial parse 결과를 project로 저장할지 issue만 저장할지
+6. Workspace 및 WorkspaceProject 저장 방식
+
+## 8. 결과 모델 계층 계약
+
+서로 다른 목적의 결과를 한 타입에 합치지 않는다.
+
+```text
+scanner.Result
+└─ A의 파일시스템 탐색 통계
+
+app.ScanResult
+└─ A+B 분석과 DB 반영을 합친 application 결과
+
+output.ScanView
+└─ C가 text/JSON으로 출력하는 화면 모델
+```
+
+제안하는 application 결과:
+
+```go
+type ScanResult struct {
+    ScanID              string
+    RootsScanned        int
+    FilesInspected      int64
+    Directories         int64
+    ProjectsDiscovered  int
+    ResourcesDiscovered int
+    DependenciesFound   int
+    LogicalSize         int64
+    Issues              []ScanIssue
+    Status              string
+}
+```
+
+필드명과 JSON tag는 CLI 공개 계약이 되므로 A·B·C 합의 후 추가한다.
+
+## 9. 진행률 계약
+
+C가 scanner 내부 상태를 직접 읽지 않는다. application service가 callback으로 진행률을 전달한다.
+
+```go
+type ProgressEvent struct {
+    Phase       ProgressPhase
+    CurrentPath string
+    Files       int64
+    Projects    int64
+    Resources   int64
+}
+```
+
+제안 phase:
+
+```text
+SCANNING_FILES
+DETECTING_PROJECTS
+DETECTING_RESOURCES
+ANALYZING_DEPENDENCIES
+SAVING_RESULTS
+COMPLETED
+```
+
+전달 빈도 제안:
+
+- phase가 바뀔 때 즉시 전달
+- 같은 phase에서는 100개 파일 또는 200ms 중 먼저 도달한 조건으로 제한
+- JSON 모드에서는 진행률을 stderr로 보내거나 비활성화
+
+throttling 위치와 callback 오류 처리 규칙을 합의한 뒤 구현한다.
+
+## 10. CLI 및 JSON 계약
+
+제안 명령:
+
+```text
+libra scan
+libra scan --root D:\Projects
+libra scan --root C:\Source --root D:\Projects
+libra scan --full
+libra scan --json
+```
+
+제안 의미:
+
+- `--root`는 반복 가능하다.
+- `--root`가 하나라도 있으면 config의 project roots를 대체한다.
+- `--full`이 없으면 변경된 경로만 증분 scan한다. 증분 구현 전에는 명시적인 미지원 동작이 필요하다.
+- stdout에는 최종 text 또는 JSON 결과만 쓴다.
+- stderr에는 진행률과 경고만 쓴다.
+- JSON stdout 앞뒤에 일반 문자열을 섞지 않는다.
+
+현재 `cmd/scan.go`는 단일 string `--root`와 placeholder 실행을 사용한다. 이 계약은 C 소유 영역이며 공개 CLI 변경이므로 이 문서만으로 즉시 수정하지 않는다.
+
+## 11. 팀별 다음 결정
+
+### A: Indexing & Platform
+
+- DB column과 BuildProject 필드 mapping 제안
+- stable project ID 방식 제안
+- `ReplaceScanProjects` transaction 경계 제안
+- STALE 전환 시점 제안
+- structured issue 저장 방식 제안
+
+### B: Dependency Analysis
+
+- Workspace와 BuildProject 탐지 규칙 확정
+- 공용 detector interface 채택 여부
+- WorkspaceProject relation 저장 방식 제안
+- parser 오류 code와 stage 목록 제안
+- project root와 marker path의 구분 확정
+
+### C: CLI & Output
+
+- `app.ScanResult` 필드 및 JSON tag 확정
+- `ProgressEvent` phase와 throttling 확정
+- `--root` 반복·대체 규칙 확정
+- recoverable issue 종료 코드 확정
+- stdout/stderr 분리 테스트 추가
+
+## 12. 적용 순서
+
+1. 이 문서를 A·B·C가 검토한다.
+2. project identity와 path 필드를 확정한다.
+3. 필요한 domain 변경을 별도 PR로 만든다.
+4. DB migration과 ProjectRepository를 별도 PR로 만든다.
+5. detector orchestration과 structured issue를 구현한다.
+6. `app.ScanResult`와 progress callback을 구현한다.
+7. C가 CLI·JSON에 연결한다.
+8. Windows/macOS fixture 통합 테스트를 추가한다.
+
+각 단계는 빌드 가능한 작은 PR로 나누며 공용 schema/domain/CLI 변경은 최소 2명의 승인을 받는다.
+
+## 13. 통합 완료 체크리스트
+
+```text
+[ ] Workspace와 BuildProject 수가 합의한 규칙대로 계산된다.
+[ ] 동일한 Windows 경로 표기가 하나의 identity로 합쳐진다.
+[ ] A는 scanner.Entry만 전달하고 프로젝트 의미를 해석하지 않는다.
+[ ] parser 오류가 다른 후보와 전체 scan을 중단하지 않는다.
+[ ] 부분 성공 결과와 issue가 함께 DB에 저장된다.
+[ ] 현재 scan에 없는 project의 상태 전환 규칙이 적용된다.
+[ ] progress phase가 공용 enum만 사용한다.
+[ ] JSON stdout에 진행률이나 로그가 섞이지 않는다.
+[ ] gofmt, go test ./..., go vet ./..., go build ./...가 통과한다.
+[ ] Windows와 macOS CI가 통과한다.
+```
+
+---
+
+# Part II. 후속 단계 계약
+
+> 이 파트는 `summary → explain → impact → plan → clean → restore → daemon` 구현 전에 확정할 계약을 단계별로 정리한다. 아래 제안은 팀 합의 전까지 공개 domain, DB schema, JSON, CLI 또는 safety 동작으로 구현하지 않는다.
+
+## 14. 후속 계약 지도
+
+| 영역 | 결정 항목 | 결정 시점 |
+|---|---|---|
+| 프로젝트 모델 | root·manifest, ID, repository·workspace 관계 | 분석기 통합 전 |
+| 스캔 상태 | snapshot, scope, staging·transaction | DB repository 확장 전 |
+| 분석기 | 공통 결과, 실행 순서, resource 병합 | adapter orchestration 전 |
+| 근거·정책 | Evidence, Confidence, Risk, Impact | explain·impact 전 |
+| 사용자 계약 | config 우선순위, JSON, stderr, 종료 코드 | 실제 CLI 연결 전 |
+| 테스트 | fixture, 플랫폼 책임, 성능 기준 | 통합 PR 전 |
+| 계획 | 후보 선택, 실행 전 재검증 | plan 전 |
+| 정리·복구 | allowlist, denylist, 격리, transaction | clean·restore 전 |
+| 증분 처리 | event 병합, 유실 복구, 동시 실행 | daemon 전 |
+| 협업 | 공동 소유 파일, 합의 대상, 변경 절차 | 모든 계약 변경 시 |
+
+## 15. 프로젝트 root, manifest 및 stable ID
+
+### 15.1 root와 manifest (`DECISION_REQUIRED`)
+
+다음 두 값은 분리한다.
+
+```text
+RootPath:      D:\Game\Client
+ManifestPath:  D:\Game\Client\Client.vcxproj
+```
+
+권장 모델:
+
+```go
+type BuildProject struct {
+    ID             string
+    Name           string
+    RootPath       string
+    NormalizedRoot string
+    ManifestPaths  []string
+    Type           ProjectType
+}
+```
+
+권장 의미:
+
+- `RootPath`: 프로젝트가 소유하는 디렉터리
+- `ManifestPaths`: 탐지·분석에 사용한 설정 파일
+- `.vcxproj.filters`: manifest가 아닌 보조 파일
+- `Directory.Build.props`, import된 `.props`·`.targets`: manifest가 아닌 Evidence source
+- 독립 `.vcxproj`: marker 파일의 부모 디렉터리를 root로 사용
+
+manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
+
+### 15.2 stable ID (`DECISION_REQUIRED`)
+
+MVP 제안:
+
+```text
+Project ID    = hash(project_type + normalized_manifest_path)
+Resource ID   = hash(resource_type + version + normalized_path)
+Dependency ID = hash(source_id + relation + target_id)
+```
+
+경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급하고 이전 객체는 `STALE`로 남긴다. hash 알고리즘, prefix, 직렬화 형식은 모든 언어·플랫폼에서 같은 결과가 나오도록 별도 golden test로 고정한다.
+
+`.git`은 장기적으로 ProjectType이 아니라 repository metadata로 분리하는 방향을 권장한다. 사용자 대표 표시 우선순위 제안은 다음과 같다.
+
+```text
+.sln > .vcxproj/.csproj > package.json > .git
+```
+
+관계 이름 제안:
+
+```text
+WORKSPACE_CONTAINS_BUILD_PROJECT
+REPOSITORY_CONTAINS_WORKSPACE
+REPOSITORY_CONTAINS_BUILD_PROJECT
+```
+
+## 16. 경로 API 확장과 크기 의미
+
+### 16.1 pathutil 후속 API (`PLANNED`)
+
+현재 채택된 `Normalize`, `Absolute` 외에 다음 API가 필요하다.
+
+```go
+Equal(a, b string) (bool, error)
+IsSameOrChild(path, parent string) (bool, error)
+Volume(path string) (string, error)
+Display(path string) string
+```
+
+추가로 결정하고 테스트할 경계:
+
+- UNC 경로
+- `\\?\` long path
+- 드라이브 문자가 없는 network path
+- 존재하지 않는 경로의 정규화
+- junction·symlink의 identity와 실제 target
+
+용도는 다음처럼 분리한다.
+
+```text
+DB 비교      → NormalizedPath
+사용자 출력  → DisplayPath
+파일 작업    → 실행 직전 검증한 AbsolutePath
+```
+
+### 16.2 크기 계약 (`CONFIRMED` / 확장 `PLANNED`)
+
+MVP의 모든 크기는 `LogicalSize`이며 출력에도 “논리 크기”라고 표시한다.
+
+```go
+LogicalSize   int64
+AllocatedSize *int64 // 향후 Windows 실제 할당 크기 지원 시
+SizeKnown     bool
+```
+
+반드시 `0 bytes`와 `unknown`을 구분한다. hard link, sparse file, 압축 파일, 여러 프로젝트가 공유하는 산출물의 물리 크기 중복 제거는 MVP 이후 항목이다.
+
+## 17. 현재 상태, snapshot 및 scan scope
+
+### 17.1 현재 상태와 과거 snapshot (`DECISION_REQUIRED`)
+
+권장 구조:
+
+```text
+projects / resources
+└─ 현재 알려진 최신 상태
+
+scan_projects / scan_resources
+└─ 특정 scan에서 관찰된 snapshot
+
+scans
+└─ scan 실행과 범위
+```
+
+전체 scan에서 다시 발견되지 않은 객체를 즉시 삭제하지 않는다.
+
+```text
+LastObservedAt 유지
+Status = STALE 또는 UNKNOWN
+```
+
+과거 scan과 Evidence는 감사·설명용 기록으로 유지할 수 있지만 기본 조회는 마지막으로 성공한 활성 snapshot만 사용한다.
+
+### 17.2 scan scope (`DECISION_REQUIRED`)
+
+```go
+type ScanScope string
+
+const (
+    ScanScopeFull    ScanScope = "FULL"
+    ScanScopeRoot    ScanScope = "ROOT"
+    ScanScopeProject ScanScope = "PROJECT"
+)
+```
+
+| Scope | 갱신 범위 | 미발견 객체 처리 |
+|---|---|---|
+| `FULL` | 설정된 전체 범위 | 범위 전체에서 STALE 전환 가능 |
+| `ROOT` | 지정 root 내부 | root 밖은 변경 금지 |
+| `PROJECT` | 지정 project와 연결 resource | 다른 project 변경 금지 |
+
+부분 scan 결과로 다른 drive 또는 root의 객체를 STALE 처리하지 않는다. scan record에는 scope와 대상 root/project를 저장한다.
+
+### 17.3 staging과 transaction (`DECISION_REQUIRED`)
+
+권장 흐름:
+
+```text
+1. scans = RUNNING
+2. 수집 결과를 scan_id와 함께 batch 저장
+3. 분석 완료
+4. 하나의 commit 단계에서 활성 snapshot 전환
+5. scans = COMPLETED 또는 COMPLETED_WITH_ERRORS
+```
+
+실패한 scan은 `FAILED`로 남기되 불완전한 결과를 기본 조회에 사용하지 않는다. 수집 batch와 최종 활성 snapshot 전환을 분리하고, 최종 전환만 원자적으로 처리한다.
+
+## 18. Adapter → App → Store 계약
+
+### 18.1 계층 책임 (`CONFIRMED`)
+
+```text
+Adapter → 사실과 분석 결과 생성
+App     → 결과 병합, 실행 순서, 정책 적용
+Store   → transaction과 저장
+```
+
+adapter가 DB에 직접 쓰거나 Risk를 최종 판정하지 않는다.
+
+### 18.2 공통 분석 결과 (`DECISION_REQUIRED`)
+
+```go
+type AnalysisResult struct {
+    Projects   []domain.BuildProject
+    Resources  []domain.Resource
+    Relations  []domain.Relation
+    Evidence   []domain.Evidence
+    Issues     []domain.Issue
+    Unverified []domain.UnverifiedScope
+}
+```
+
+또는 역할별 interface를 사용한다.
+
+```go
+type ProjectDetector interface {
+    DetectProject(context.Context, scanner.Entry) DetectionResult
+}
+
+type ResourceDetector interface {
+    DetectResources(context.Context, Environment) DetectionResult
+}
+
+type DependencyAnalyzer interface {
+    Analyze(context.Context, domain.BuildProject) AnalysisResult
+}
+```
+
+공통 결과와 interface 중 하나를 선택하되 application service가 adapter별 type switch로 가득 차지 않도록 한다.
+
+### 18.3 분석 단계 (`DECISION_REQUIRED`)
+
+진행률 phase와 분석 orchestration에서 같은 enum을 사용한다.
+
+```text
+DISCOVER_FILES
+DISCOVER_PROJECTS
+DISCOVER_SYSTEM_RESOURCES
+ANALYZE_PROJECT_SETTINGS
+RESOLVE_DEPENDENCIES
+CLASSIFY_ARTIFACTS
+CALCULATE_RISK
+PERSIST_RESULTS
+COMPLETED
+```
+
+기존 문서의 `SCANNING_FILES` 등 phase 이름은 위 목록과 통합해야 하며 두 종류의 문자열을 동시에 유지하지 않는다.
+
+### 18.4 Resource 병합 (`DECISION_REQUIRED`)
+
+```text
+ResourceKey = Type + Version + NormalizedPath
+```
+
+필드 충돌 시 근거 우선순위:
+
+```text
+공식 명령 결과 > 설치 metadata > 디렉터리 추론
+```
+
+병합 과정에서도 각 source Evidence는 버리지 않는다.
+
+## 19. 분석기별 경계
+
+### 19.1 MSBuild (`DECISION_REQUIRED`)
+
+MVP Evidence mapping:
+
+```text
+직접 literal 값           → DECLARED
+단순 property 치환 성공   → RESOLVED
+조건부 속성 중 하나       → INFERRED
+해석하지 못한 변수        → UNKNOWN
+MSBuild preprocess 결과   → RESOLVED
+```
+
+권장 requirement:
+
+```go
+type Requirement struct {
+    RawValue      string
+    ResolvedValue string
+    Configuration string
+    Platform      string
+}
+```
+
+Configuration·Platform을 분석하지 않았으면 반드시 `UnverifiedScope`를 남긴다. `Latest`, `10.0`, 미설치 SDK, Debug/Release 차이 및 조건별 dependency 표현은 B가 구현 전에 확정한다.
+
+### 19.2 Node workspace (`DECISION_REQUIRED`)
+
+```text
+각 package.json  → BuildProject 후보
+workspace root   → Workspace
+root node_modules → workspace 소유 Resource
+하위 node_modules → 해당 package 소유 Resource
+```
+
+다음 항목을 Node adapter 구현 전에 결정한다.
+
+- npm/pnpm/Yarn workspace 지원 범위
+- 여러 lockfile의 우선순위
+- lockfile 없는 node_modules의 재생성 가능성
+- malformed package.json 저장 방식
+- nested node_modules 탐색
+- `.pnpm` store 크기 소유권
+
+### 19.3 산출물 판정 (`DECISION_REQUIRED`)
+
+이름이 `build`, `bin`, `out`이라는 이유만으로 SAFE가 될 수 없다. SAFE 후보 최소 조건:
+
+```text
+1. 발견된 project root 내부
+2. 알려진 이름 또는 설정의 output path
+3. reparse point 아님
+4. Git tracked 원본 파일 없음
+5. 재생성 Evidence 존재
+```
+
+이름만 일치하면 `build-output + REVIEW + INFERRED`, 설정에서 확인되면 `SAFE 후보 + DECLARED/RESOLVED`로 처리한다.
+
+## 20. Evidence, Confidence, Risk 및 Impact
+
+### 20.1 Evidence (`DECISION_REQUIRED`)
+
+권장 필드:
+
+```go
+type Evidence struct {
+    ID         string
+    Kind       EvidenceKind
+    SourcePath string
+    Property   string
+    RawValue   string
+    Detail     string
+    ObservedAt time.Time
+}
+```
+
+계약 제안:
+
+- Evidence는 특정 scan에 귀속한다.
+- 현재 dependency는 최신 유효 Evidence만 사용한다.
+- 과거 Evidence는 기록으로 유지할 수 있다.
+- 민감한 원문은 저장하지 않는다.
+- source 파일이 바뀌면 기존 Evidence의 유효성을 다시 평가한다.
+
+중복 키, 만료 정책, raw value redaction은 구현 전에 확정한다.
+
+### 20.2 Confidence (`DECISION_REQUIRED`)
+
+MVP 기본 점수 제안:
+
+```text
+RESOLVED  90
+OBSERVED  85
+DECLARED  75
+INFERRED  40
+UNKNOWN   10
+```
+
+복수 Evidence를 단순 합산하지 않는다.
+
+```text
+기본 점수       = 가장 강한 Evidence
+서로 다른 보조 근거 = 제한된 가산
+UnverifiedScope = 항목별 감점
+최종 범위       = 0..100
+```
+
+Confidence가 높다는 사실은 Risk가 SAFE라는 의미가 아니다.
+
+### 20.3 Risk 중앙 정책 (`DECISION_REQUIRED`)
+
+adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판정한다.
+
+```go
+type RiskPolicy interface {
+    Classify(ResourceContext) RiskAssessment
+}
+```
+
+MVP 결정표 제안:
+
+| 조건 | Risk |
+|---|---|
+| 보호 경로 내부 | `BLOCKED` |
+| 현재 project가 요구하는 SDK | `BLOCKED` |
+| 사용자 데이터 가능성 | `BLOCKED` |
+| Git tracked 원본 포함 | `BLOCKED` |
+| 재생성 가능하지만 Evidence가 약함 | `REVIEW` |
+| project 내부 산출물이고 재생성 Evidence가 명확함 | `SAFE` |
+| 분석 실패·불명확 | 최소 `REVIEW` |
+| 경로가 사라짐·변경됨 | 실행 대상 제외 |
+
+### 20.4 Impact (`DECISION_REQUIRED`)
+
+```go
+type ImpactScope string // RUN, BUILD, DEBUG, RESTORE, CI
+type ImpactLevel string // NONE, LOW, HIGH, UNKNOWN
+```
+
+`likely unaffected`, `expected to fail` 같은 문장은 domain 값이 아니라 output formatter가 enum을 변환해 만든다.
+
+## 21. CLI와 JSON 확장 계약
+
+### 21.1 config와 CLI 우선순위 (`DECISION_REQUIRED`)
+
+```text
+CLI option > 명시한 config > 기본 config > 코드 default
+```
+
+- `--root`가 하나라도 있으면 config roots 대체
+- `--exclude`는 config exclude에 추가
+
+### 21.2 공통 JSON envelope (`DECISION_REQUIRED`)
+
+```json
+{
+  "schema_version": 1,
+  "command": "scan",
+  "status": "completed_with_errors",
+  "data": {},
+  "warnings": [],
+  "generated_at": "2026-07-18T07:00:00Z"
+}
+```
+
+공통 규칙 제안:
+
+- bytes: `int64`
+- time: RFC3339 UTC
+- enum: domain의 고정 문자열
+- 사람이 읽는 단위 변환: text formatter에서만 수행
+- 배열 정렬 기준을 command별로 고정
+- field 생략과 `null` 의미를 schema에 명시
+
+### 21.3 stdout·stderr와 종료 코드 (`DECISION_REQUIRED`)
+
+```text
+stdout → 최종 결과
+stderr → progress, warning, verbose log
+```
+
+JSON stdout에는 다른 문자를 절대 섞지 않는다. 비TTY에서는 progress를 자동 비활성화하는 방향을 권장한다.
+
+| 코드 | 의미 |
+|---:|---|
+| `0` | 정상 또는 recoverable warning과 함께 완료 |
+| `1` | 일반 실행 실패 |
+| `2` | 잘못된 option·config |
+| `3` | 대상 없음 |
+| `4` | safety policy 차단 |
+| `5` | 부분 clean·restore 실패 |
+| `130` | 사용자 취소 |
+
+scan의 개별 접근 오류는 `0`, DB 저장·pipeline 실패는 `1`로 처리하는 방향을 제안한다.
+
+### 21.4 대상 식별 (`DECISION_REQUIRED`)
+
+```text
+명시적 prefix → 지정 type
+절대 경로     → path 검색
+그 외         → ID 또는 이름 검색
+```
+
+동명 대상이 여러 개면 자동 선택하지 않고 정확한 ID 또는 경로를 요구한다.
+
+## 22. Fixture, 플랫폼 및 성능
+
+### 22.1 공용 fixture (`PLANNED`)
+
+```text
+testdata/
+├─ filesystem/
+├─ solutions/
+├─ msbuild/
+├─ dotnet/
+├─ node/
+├─ safety/
+└─ golden/
+```
+
+각 fixture는 project/resource/dependency/issue 기대 결과를 machine-readable 파일로 포함한다. A·B·C가 같은 fixture를 사용한다.
+
+필수 사례:
+
+- 경로: 대소문자, 상대 경로, 중복·없는 root, UNC, long path, junction, symlink, 접근 거부
+- project: solution+복수 project, 독립 project, broken solution, 없는 참조, shared project, Git 내부 복수 project
+- MSBuild: 직접·빈·property SDK, Directory.Build.props, 조건부 group, Debug/Release 차이, custom OutputPath
+- Node: manifest만 존재, lockfile, node_modules, monorepo, malformed manifest, 복수 lockfile
+- DB: 재실행, 부분 scan, 중간 실패, migration 재실행, dependency 중복, STALE 전환
+
+### 22.2 플랫폼 책임 (`CONFIRMED`)
+
+```text
+macOS/비Windows:
+domain, output, config, parser, repository
+
+Windows:
+path/drive/reparse point, vswhere, Windows SDK, 실제 MSBuild, clean/restore
+```
+
+Windows 전용 기능은 비Windows에서 panic·빌드 실패 대신 명확한 unsupported 결과를 반환한다.
+
+### 22.3 성능 기준 (`PLANNED`)
+
+```text
+100,000 파일에서 memory 300MB 이하
+모든 file path를 한꺼번에 보관하지 않음
+DB insert 100~1,000개 batch
+취소 후 빠르게 종료
+```
+
+scanner visitor는 후보 수집·가벼운 분류만 수행하고 XML/JSON parser와 DB writer는 별도 bounded worker/batch로 운영한다. 정확한 시간보다 memory 상한과 무한 대기 방지를 우선한다.
+
+## 23. Plan 계약
+
+### 23.1 후보 선택 (`DECISION_REQUIRED`)
+
+MVP greedy 순서:
+
+```text
+1. BLOCKED 제외
+2. 요청한 Risk 범위만 유지
+3. Risk가 낮은 순
+4. Confidence가 높은 순
+5. 큰 Resource 순
+6. target bytes 이상이면 중단
+```
+
+최적 부분집합은 풀지 않는다. 실행 단위는 Resource이며 text 출력에서 project별로 묶는다.
+
+### 23.2 계획 이후 변경 재검증 (`DECISION_REQUIRED`)
+
+```go
+type PlanItem struct {
+    ResourceID       string
+    Path             string
+    ExpectedSize     int64
+    ExpectedModified time.Time
+    ExpectedType     ResourceType
+    RiskAtPlanning   RiskLevel
+}
+```
+
+실행 직전에 path, type, size, modified time, Risk와 safety 조건을 다시 검사한다. 불일치하면 항목을 차단하고 새 plan 생성을 요구한다.
+
+## 24. Clean과 Restore 안전 계약
+
+### 24.1 allowlist (`DECISION_REQUIRED`, safety review 필수)
+
+MVP 후보 이름:
+
+```text
+node_modules, bin, obj, build, dist, .next, out, Debug, Release
+```
+
+이름만으로 허용하지 않는다. 모든 조건이 필요하다.
+
+```text
+project root 내부
+Risk == SAFE
+Regenerable == true
+reparse point 아님
+보호 경로 아님
+실행 직전 재검증 성공
+```
+
+### 24.2 denylist (`DECISION_REQUIRED`, safety review 필수)
+
+```text
+C:\Windows
+C:\Program Files
+C:\Program Files (x86)
+사용자 문서
+.git과 .git\objects
+.env, 인증서, key
+DB 파일
+quarantine 자체
+알 수 없는 대용량 경로
+```
+
+denylist path와 그 하위 path 모두 차단한다.
+
+### 24.3 link 정책 (`DECISION_REQUIRED`)
+
+MVP에서는 `FollowReparsePoints` 설정과 관계없이 다음으로 고정하는 방향을 권장한다.
+
+```text
+scan    → link 자체만 기록, target 미추적
+clean   → symlink/junction/reparse point BLOCKED
+restore → manifest에 기록된 일반 directory만 처리
+```
+
+현재 실질적으로 지원하지 않는 `FollowReparsePoints=true`는 제거하거나 명시적인 unsupported 오류를 반환해야 한다.
+
+### 24.4 quarantine (`DECISION_REQUIRED`)
+
+동일 volume의 전용 디렉터리를 사용한다.
+
+```text
+D:\.libra-quarantine\tx-...\
+├─ manifest.json
+└─ items\
+```
+
+volume별 위치, hidden attribute, ACL 상속, 공간 부족, 기존 quarantine 충돌을 구현 전에 확정한다.
+
+### 24.5 transaction과 부분 실패 (`DECISION_REQUIRED`)
+
+transaction 상태 제안:
+
+```text
+PLANNED, RUNNING, QUARANTINED, PARTIALLY_QUARANTINED,
+RESTORED, PARTIALLY_RESTORED, PURGED, FAILED
+```
+
+item 상태 제안:
+
+```text
+PENDING, MOVED, SKIPPED, FAILED, RESTORED
+```
+
+MVP는 item을 독립 처리하고 실패해도 나머지를 계속하며 최종 상태를 `PARTIALLY_QUARANTINED`로 기록한다. 파일 이동 전에 disk manifest를 쓰고 각 이동 후 갱신해 DB 기록 실패에서도 복구 근거를 남긴다.
+
+### 24.6 restore 충돌과 purge (`DECISION_REQUIRED`)
+
+- 원래 위치가 존재하면 자동 overwrite·merge 금지
+- 해당 item 복구 차단
+- 향후 `--restore-to` 고려
+- `quarantine_days`는 자동 삭제가 아니라 purge 가능 표시 기준
+- 자동 영구 삭제 없음
+- purge는 별도 명시적 명령과 dry-run 필요
+
+## 25. Incremental Scan과 Daemon
+
+### 25.1 event 병합 (`PLANNED`)
+
+```text
+path별 500ms~2s debounce
+중복 CREATE/WRITE/RENAME 병합
+project root 단위 재분석
+```
+
+file 하나의 dependency만 직접 고치지 않고 project 단위로 안전하게 재분석한다.
+
+### 25.2 event 유실 복구 (`PLANNED`)
+
+```text
+daemon event   → 빠른 갱신
+주기적 full scan → 정확성 복구
+```
+
+파일 변경을 관찰한 것과 SDK 실제 사용을 관찰한 것은 서로 다른 Evidence다.
+
+### 25.3 동시 실행 (`DECISION_REQUIRED`)
+
+```text
+DB writer는 한 번에 하나
+read command는 허용
+full scan 중 새 full scan 차단
+daemon은 full scan 중 event queue 유지
+```
+
+application lock 또는 DB lock 방식을 구현 전에 결정한다.
+
+## 26. 공동 소유와 계약 변경 절차
+
+### 26.1 공동 소유 파일
+
+```text
+internal/domain/*
+internal/app/*
+internal/store/sqlite/migrations/*
+internal/output의 JSON view
+cmd의 공통 option
+docs의 command 계약
+testdata의 기대 결과
+```
+
+### 26.2 반드시 팀 합의가 필요한 변경
+
+```text
+enum 추가·이름 변경
+domain field 추가·삭제
+DB migration
+JSON field 변경
+CLI option 이름·default 변경
+Risk·Confidence 공식 변경
+project 중복 기준 변경
+clean allowlist·denylist 변경
+exit code 변경
+```
+
+외부 동작이 바뀌지 않는 private refactor, 성능 최적화, test 추가, 작은 내부 오류 문구 개선은 담당자 판단으로 진행할 수 있다.
+
+### 26.3 계약 변경 절차
+
+```text
+1. PR에 "Contract change" 표시
+2. 변경 전후 예시 작성
+3. domain + migration + output + docs 동시 변경
+4. fixture와 golden 결과 수정
+5. 다른 팀원 최소 1명 승인
+6. safety 변경은 나머지 두 명 모두 승인
+```
+
+## 27. 단계별 결정 체크리스트
+
+### 지금 결정
+
+```text
+[ ] Project root와 manifest 의미
+[ ] Project·Resource·Dependency ID 규칙
+[x] 공용 경로 정규화
+[ ] FULL·ROOT·PROJECT scan 의미
+[ ] 현재 상태와 snapshot 저장
+[ ] Adapter 공통 반환 타입
+[ ] Project/Resource repository interface
+[ ] structured Issue
+[ ] JSON envelope와 exit code
+```
+
+### 분석기 연결 전
+
+```text
+[ ] MSBuild 해석 수준
+[ ] Node monorepo 경계
+[ ] Resource 병합 규칙
+[ ] Evidence field와 만료
+[ ] Confidence 공식
+[ ] 중앙 RiskPolicy
+[ ] Impact enum
+[ ] 산출물 소유권 판정
+```
+
+### 정리 기능 전
+
+```text
+[ ] SAFE allowlist
+[ ] 절대 금지 denylist
+[ ] link/reparse point 정책
+[ ] plan 실행 전 재검증
+[ ] quarantine와 manifest
+[ ] transaction/item 상태
+[ ] 부분 실패 정책
+[ ] restore 충돌
+[ ] purge 정책
+```
+
+### daemon·배포 전
+
+```text
+[ ] event 병합과 유실 복구
+[ ] 동시 실행 lock
+[ ] export schema version
+[ ] Windows CI 필수 범위
+[ ] 성능 기준
+[ ] log 개인정보 redaction
+[ ] schema 호환성과 migration 정책
+```
+
+## 28. 우선순위
+
+후속 구현 전에 다음 여섯 계약을 우선 고정한다.
+
+```text
+1. Workspace / BuildProject / Repository 모델
+2. ID, root, manifest, 경로 규칙
+3. scan scope와 DB snapshot 갱신
+4. Adapter → App → Store interface
+5. Evidence / Confidence / Risk / Impact
+6. JSON envelope, stderr, exit code
+```
+
+이 계약을 먼저 고정하면 A·B·C가 scanner/store, Windows adapter, CLI/Node를 독립적으로 구현하면서도 후반의 대규모 domain·schema·output 재작성을 피할 수 있다.

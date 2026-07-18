@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 type excludeMatcher struct {
@@ -15,7 +17,7 @@ type excludeMatcher struct {
 func newExcludeMatcher(roots, excludes []string) (excludeMatcher, error) {
 	matcher := excludeMatcher{roots: make([]string, 0, len(roots))}
 	for _, root := range roots {
-		normalized, err := normalizePath(root)
+		normalized, err := pathutil.Normalize(root)
 		if err != nil {
 			return excludeMatcher{}, err
 		}
@@ -27,7 +29,7 @@ func newExcludeMatcher(roots, excludes []string) (excludeMatcher, error) {
 			continue
 		}
 		if filepath.IsAbs(exclude) {
-			normalized, err := normalizePath(exclude)
+			normalized, err := pathutil.Normalize(exclude)
 			if err != nil {
 				return excludeMatcher{}, err
 			}
@@ -41,7 +43,7 @@ func newExcludeMatcher(roots, excludes []string) (excludeMatcher, error) {
 }
 
 func (m excludeMatcher) Matches(path string) bool {
-	normalized, err := normalizePath(path)
+	normalized, err := pathutil.Normalize(path)
 	if err != nil {
 		return false
 	}
@@ -63,14 +65,6 @@ func (m excludeMatcher) Matches(path string) bool {
 		}
 	}
 	return false
-}
-
-func normalizePath(path string) (string, error) {
-	absolute, err := filepath.Abs(filepath.Clean(path))
-	if err != nil {
-		return "", err
-	}
-	return canonical(absolute), nil
 }
 
 func canonical(path string) string {

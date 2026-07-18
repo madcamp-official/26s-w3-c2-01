@@ -1,17 +1,23 @@
-// Package node detects Node.js projects (package.json) and the build
-// artifacts they own (node_modules, dist, .next, build, out).
+// Package node detects Node.js projects (package.json), the build
+// artifacts they own (node_modules, dist, .next, build, out), and
+// npm/Yarn/pnpm workspace relationships between them.
 //
 // Scope for this iteration (see docs/libra_integration_contracts.md §19.2,
 // §19.3 -- resolved to CONFIRMED at MVP scope alongside this package):
 //
-//   - One package.json per project root; npm/pnpm/Yarn workspaces are not
-//     traversed.
-//   - Only artifact directories directly under the project root are
-//     detected; nested node_modules (workspace packages, monorepos) are out
-//     of scope.
-//   - node_modules is treated as regenerable only when a recognized
-//     lockfile sits next to package.json; no lockfile priority is needed
-//     for that yes/no evidence check.
+//   - A workspace root is detected via package.json's "workspaces" field
+//     (npm/Yarn) or a pnpm-workspace.yaml (pnpm); members are resolved with
+//     single-segment glob patterns only (see workspace.go for the exact
+//     limits -- no recursive "**", no negated patterns).
+//   - Nested workspaces (a member that is itself a workspace root) are not
+//     supported; only one level of root -> members is resolved.
+//   - A member without its own node_modules is understood to share the
+//     workspace root's node_modules (hoisting) rather than being reported
+//     as missing one -- see DetectWorkspaceArtifacts.
+//   - node_modules is treated as regenerable when a recognized lockfile
+//     sits next to package.json, or -- for a workspace member -- at the
+//     workspace root; no lockfile priority is needed for that yes/no
+//     evidence check.
 //   - A malformed package.json is a recoverable, per-candidate failure: it
 //     does not stop detection of other projects or artifacts (§5).
 package node
@@ -146,11 +152,32 @@ func readManifestName(path string) (string, error) {
 // classification, and risk, and persists the result -- see
 // docs/libra_integration_contracts.md §7.3 and §18.4.
 func DetectArtifacts(root string) ([]domain.Resource, error) {
+	return detectArtifacts(root, root)
+}
+
+// DetectMemberArtifacts is DetectArtifacts for a workspace member: it also
+// accepts a lockfile at workspaceRoot as regenerability evidence for
+// memberRoot's own node_modules, since npm/Yarn/pnpm workspaces normally
+// keep a single lockfile at the workspace root even when a member has its
+// own node_modules directory. See DetectWorkspaceArtifacts.
+func DetectMemberArtifacts(memberRoot, workspaceRoot string) ([]domain.Resource, error) {
+	return detectArtifacts(memberRoot, memberRoot, workspaceRoot)
+}
+
+// detectArtifacts is the shared implementation. lockfileDirs are checked, in
+// order, for any recognized lockfile; the first hit is enough evidence.
+func detectArtifacts(root string, lockfileDirs ...string) ([]domain.Resource, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
-	lockfilePresent := hasAnyLockfile(root)
+	lockfilePresent := false
+	for _, dir := range lockfileDirs {
+		if hasAnyLockfile(dir) {
+			lockfilePresent = true
+			break
+		}
+	}
 
 	var resources []domain.Resource
 	for _, entry := range entries {

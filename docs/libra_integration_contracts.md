@@ -1,6 +1,6 @@
 # Libra 통합 계약 및 사전 합의
 
-> 상태: 초안 v0.3  
+> 상태: 초안 v0.4  
 > 작성일: 2026-07-18  
 > 목적: A·B·C가 독립적으로 구현한 기능을 결합할 때 데이터의 의미와 형태가 달라지는 문제를 방지한다.
 
@@ -759,7 +759,7 @@ type Requirement struct {
 
 Configuration·Platform을 분석하지 않았으면 반드시 `UnverifiedScope`를 남긴다. `Latest`, `10.0`, 미설치 SDK, Debug/Release 차이 및 조건별 dependency 표현은 B가 구현 전에 확정한다.
 
-### 19.2 Node workspace (`CONFIRMED`, MVP 범위)
+### 19.2 Node workspace (`CONFIRMED`, MVP 범위 — 2026-07-18 재결정)
 
 ```text
 각 package.json  → BuildProject 후보
@@ -769,21 +769,26 @@ root node_modules → workspace 소유 Resource
 ```
 
 Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapter/node`
-(Mac C 소유 영역)에서 다음과 같이 MVP 범위로 확정하고 구현했다. workspace
-지원 자체는 범위 밖으로 명시적으로 미루고, 단일 package.json 케이스만
-다룬다.
+(Mac C 소유 영역)에서 MVP 범위로 확정하고 구현했다. 처음에는 workspace
+지원 자체를 범위 밖으로 미뤘었는데("관계/공용 자원 연결을 지원해야 하지
+않냐"는 지적으로) 이번에 다시 열어서 아래처럼 재결정했다.
 
 | 항목 | MVP 결론 |
 |---|---|
-| npm/pnpm/Yarn workspace 지원 범위 | 미지원. workspace root나 monorepo 탐색을 하지 않는다. |
-| 여러 lockfile의 우선순위 | 불필요. `package-lock.json`/`npm-shrinkwrap.json`/`pnpm-lock.yaml`/`yarn.lock` 중 하나라도 있으면 재생성 근거로 충분하다고 본다(존재 여부만 확인, 어떤 패키지 매니저인지는 판단하지 않음). |
+| npm/pnpm/Yarn workspace 지원 범위 | **지원(재결정).** `package.json`의 `workspaces` 필드(npm/Yarn, 배열 또는 `{packages:[...]}` 객체 형태 모두 인정)와 `pnpm-workspace.yaml`(pnpm)을 읽어 workspace root를 탐지한다(`DetectWorkspace`). member는 `filepath.Glob` 기반 단일 세그먼트 glob만 지원한다 — `packages/*`는 되지만 재귀 `**`는 세그먼트 하나로만 매칭되고, `!` 부정 패턴은 적용되지 않고 그냥 건너뛴다(제외 안 됨, 안전한 쪽으로 미지원). 중첩 workspace(member가 또 다른 workspace root인 경우)는 한 단계만 풀고 재귀하지 않는다. |
+| 여러 lockfile의 우선순위 | 불필요. `package-lock.json`/`npm-shrinkwrap.json`/`pnpm-lock.yaml`/`yarn.lock` 중 하나라도 있으면 재생성 근거로 충분하다고 본다(존재 여부만 확인, 어떤 패키지 매니저인지는 판단하지 않음). workspace member는 자기 디렉터리뿐 아니라 workspace root의 lockfile도 근거로 인정한다(`DetectMemberArtifacts`) — 실제로 npm/Yarn/pnpm workspace는 보통 lockfile을 root에 하나만 둔다. |
 | lockfile 없는 node_modules의 재생성 가능성 | `Regenerable=false`. `Confidence`도 낮춰서(§20.2 확정 전 임시값) INFERRED 수준으로 취급한다. |
 | malformed package.json 저장 방식 | `Detector.Detect`가 error를 반환한다. 다른 후보나 전체 scan을 막지 않는 recoverable 실패로 간주하되(§5), orchestration이 아직 없어 실제 issue 수집·저장은 후속 작업이다. |
-| nested node_modules 탐색 | 미지원. project root 바로 아래에 있는 `node_modules`/`dist`/`.next`/`build`/`out`만 candidate로 본다. |
+| nested node_modules 탐색 | **부분 지원(재결정).** project root 바로 아래는 그대로 보고, workspace member는 `ResolveMembers`로 찾은 각 member 디렉터리 바로 아래만 추가로 본다 — member 안에 또 nested node_modules(예: 3단계 이상 깊이)가 있으면 여전히 안 본다. root의 `node_modules`는 한 번만 Resource로 만들고, 자기 것이 없는 member는 root 것을 공유(`SharesRootNodeModules=true`)한다고만 표시한다 — 같은 디렉터리를 member 수만큼 중복 Resource로 만들지 않는다(§3.1 "디렉터리 논리 크기는 한 번만 계산"). |
 | `.pnpm` store 크기 소유권 | 범위 밖. 전역 pnpm store 분석은 원래 일정에서도 P1(`pnpm 전역 저장소`)이라 이번 결정에 포함하지 않는다. |
 
-workspace/monorepo 지원이 실제로 필요해지면 이 절을 다시 `DECISION_REQUIRED`로
-되돌리고 별도 PR로 재논의한다.
+**중요한 제약**: member가 workspace root의 공유 자원을 쓴다는 관계
+(`MemberArtifacts.SharesRootNodeModules`)는 `domain.Dependency`
+그래프(§18.5, 이제 `CONFIRMED`)에 아직 저장하지 않는다. `PROJECT ->
+RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요한데
+그건 여전히 `DECISION_REQUIRED`다(§7.2, §15.2, Windows A 담당). 그래서 이
+관계는 지금 `internal/adapter/node` 안에서만 값으로 존재하고, Project ID가
+정해지면 바로 Dependency edge로 옮겨 담을 수 있게 모양만 맞춰뒀다.
 
 ### 19.3 산출물 판정 (`DECISION_REQUIRED`)
 
@@ -1226,7 +1231,7 @@ exit code 변경
 
 ```text
 [ ] MSBuild 해석 수준
-[x] Node monorepo 경계 (미지원으로 확정, §19.2)
+[x] Node monorepo 경계 (단일 세그먼트 glob member 해석 + 공유 node_modules 표시까지 지원, 중첩 workspace·재귀 glob·`.pnpm` store는 범위 밖, §19.2)
 [x] Resource 병합 규칙
 [ ] Evidence field와 만료
 [ ] Confidence 공식

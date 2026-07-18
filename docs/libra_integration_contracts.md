@@ -507,14 +507,15 @@ type BuildProject struct {
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`, Resource는 `CONFIRMED`)
+### 15.2 stable ID (`DECISION_REQUIRED`, Resource·Dependency·Evidence는 `CONFIRMED`)
 
 Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
 Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
-Dependency ID = hash(source_id + relation + target_id)
+Dependency ID = SHA-256(source_type + NUL + source_id + NUL + relation + NUL + target_type + NUL + target_id)
+Evidence ID   = SHA-256(dependency_id + NUL + kind + NUL + source_path + NUL + property + NUL + raw_value + NUL + resolved_value)
 ```
 
 경로 기반 ID를 사용하면 이동·manifest 이름 변경은 새 객체로 취급하고 이전 객체는 `STALE`로 남긴다. hash 알고리즘, prefix, 직렬화 형식은 모든 언어·플랫폼에서 같은 결과가 나오도록 별도 golden test로 고정한다.
@@ -732,6 +733,27 @@ type Resource struct {
 
 병합 과정에서도 각 source Evidence는 버리지 않는다.
 
+### 18.5 Dependency graph (`CONFIRMED`)
+
+Day 4 MVP는 typed endpoint를 가진 `PROJECT -> RESOURCE` 방향의
+`REQUIRES` edge를 저장한다.
+
+```go
+type Dependency struct {
+    ID         string
+    SourceType NodeType
+    SourceID   string
+    TargetType NodeType
+    TargetID   string
+    Relation   RelationType
+    Confidence int
+}
+```
+
+드라이브 문자는 edge 자체에 저장하지 않는다. C·D 드라이브 간 관계도
+각 endpoint ID로 연결하며 프로젝트와 리소스의 표시 경로는 각 repository에서
+조회한다.
+
 ## 19. 분석기별 경계
 
 ### 19.1 MSBuild (`DECISION_REQUIRED`)
@@ -793,19 +815,20 @@ root node_modules → workspace 소유 Resource
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
-### 20.1 Evidence (`DECISION_REQUIRED`)
+### 20.1 Evidence (`CONFIRMED`, 만료·redaction은 `DECISION_REQUIRED`)
 
 권장 필드:
 
 ```go
 type Evidence struct {
-    ID         string
-    Kind       EvidenceKind
-    SourcePath string
-    Property   string
-    RawValue   string
-    Detail     string
-    ObservedAt time.Time
+    ID            string
+    DependencyID  string
+    Kind          EvidenceKind
+    SourcePath    string
+    Property      string
+    RawValue      string
+    ResolvedValue string
+    CollectedAt   time.Time
 }
 ```
 
@@ -1194,7 +1217,8 @@ exit code 변경
 
 ```text
 [ ] Project root와 manifest 의미
-[ ] Project·Dependency ID 규칙
+[ ] Project ID 규칙
+[x] Dependency·Evidence ID 규칙
 [x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
@@ -1212,7 +1236,8 @@ exit code 변경
 [ ] MSBuild 해석 수준
 [ ] Node monorepo 경계
 [x] Resource 병합 규칙
-[ ] Evidence field와 만료
+[x] Evidence field
+[ ] Evidence 만료와 redaction
 [ ] Confidence 공식
 [x] 중앙 RiskPolicy
 [ ] Impact enum

@@ -290,6 +290,24 @@ type ProjectRepository interface {
 5. partial parse 결과를 project로 저장할지 issue만 저장할지
 6. Workspace 및 WorkspaceProject 저장 방식
 
+### 7.3 Resource repository (`CONFIRMED`)
+
+Day 3 MVP는 현재 `resources` 테이블에 최신 관측 값을 단건 upsert하고 C가
+필요한 ID·type 조회를 제공한다.
+
+```go
+type ResourceRepository interface {
+    Upsert(context.Context, domain.Resource) error
+    FindByID(context.Context, string) (domain.Resource, error)
+    ListByType(context.Context, domain.ResourceType) ([]domain.Resource, error)
+}
+```
+
+현재 schema에는 `scan_id`와 resource status가 없으므로 이번 scan에서 보이지
+않은 resource를 삭제하거나 `STALE`로 바꾸지 않는다. scan별 snapshot,
+`scan_resources`, 미발견 resource의 상태 전환은 구현 전에 다시 합의한다
+(`DECISION_REQUIRED`).
+
 ## 8. 결과 모델 계층 계약
 
 서로 다른 목적의 결과를 한 타입에 합치지 않는다.
@@ -1177,7 +1195,8 @@ exit code 변경
 [ ] FULL·ROOT·PROJECT scan 의미
 [ ] 현재 상태와 snapshot 저장
 [ ] Adapter 공통 반환 타입
-[ ] Project/Resource repository interface
+[ ] Project repository interface
+[x] Resource repository interface
 [ ] structured Issue
 [ ] JSON envelope와 exit code
 ```

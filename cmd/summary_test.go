@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -32,7 +33,9 @@ func TestSummaryCommandReflectsScannedProjects(t *testing.T) {
 
 	run("scan", "--root", fixture)
 	out := run("summary")
-	if !bytes.Contains(out.Bytes(), []byte("Projects            7")) {
+	// Match tolerant of tabwriter column width, which shifts as resource
+	// rows widen the label column.
+	if !regexp.MustCompile(`Projects\s+7\b`).Match(out.Bytes()) {
 		t.Fatalf("summary output missing project count:\n%s", out)
 	}
 }
@@ -57,7 +60,7 @@ func TestSummaryCommandBeforeScanIsAllZero(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute(summary) error = %v", err)
 	}
-	if !bytes.Contains(out.Bytes(), []byte("Projects            0")) {
+	if !regexp.MustCompile(`Projects\s+0\b`).Match(out.Bytes()) {
 		t.Fatalf("summary output = %s, want zero projects", out)
 	}
 }

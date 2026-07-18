@@ -13,6 +13,8 @@ import (
 // docs/libra_cli_commands_and_schedule.md.
 type SummaryView struct {
 	Drive           string        `json:"drive,omitempty"`
+	ProjectCount    int           `json:"project_count"`
+	ResourceCount   int           `json:"resource_count"`
 	ResourcesByType []SummaryLine `json:"resources_by_type"`
 	SafeReclaimable int64         `json:"safe_reclaimable_bytes"`
 	NeedsReview     int64         `json:"needs_review_bytes"`
@@ -34,6 +36,9 @@ func (s SummaryView) RenderText(w io.Writer) error {
 		title = fmt.Sprintf("%s drive developer storage", s.Drive)
 	}
 	fmt.Fprintf(tw, "%s\n\n", title)
+	fmt.Fprintf(tw, "Projects\t%d\n", s.ProjectCount)
+	fmt.Fprintf(tw, "Resources\t%d\n", s.ResourceCount)
+	fmt.Fprintf(tw, "\t\n")
 
 	for _, line := range s.ResourcesByType {
 		fmt.Fprintf(tw, "%s\t%s\n", line.Label, humanize.Bytes(uint64(line.Bytes)))

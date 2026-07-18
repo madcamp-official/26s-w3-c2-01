@@ -1,7 +1,14 @@
 package cmd
 
 import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 	"github.com/spf13/cobra"
 )
 
@@ -9,6 +16,27 @@ var (
 	summaryDrive string
 	summaryType  string
 )
+
+// resourceTypeLabels maps domain.ResourceType to the display label used in
+// `libra summary` (F-06 in docs/libra_cli_commands_and_schedule.md).
+var resourceTypeLabels = map[domain.ResourceType]string{
+	domain.ResourceTypeWindowsSDK:   "Windows SDKs",
+	domain.ResourceTypeNetFXSDK:     ".NET Framework SDKs",
+	domain.ResourceTypeVisualStudio: "Visual Studio tools",
+	domain.ResourceTypeMSBuild:      "MSBuild",
+	domain.ResourceTypeDotNetSDK:    ".NET SDKs",
+	domain.ResourceTypeNodeModules:  "Node project artifacts",
+	domain.ResourceTypeBuildOutput:  "Build outputs",
+	domain.ResourceTypeGlobalCache:  "Global package caches",
+	domain.ResourceTypeDockerCache:  "Docker cache",
+}
+
+func resourceTypeLabel(t domain.ResourceType) string {
+	if label, ok := resourceTypeLabels[t]; ok {
+		return label
+	}
+	return string(t)
+}
 
 // summaryCmd represents the summary command.
 var summaryCmd = &cobra.Command{
@@ -19,23 +47,42 @@ down by resource type and drive, and how much space is safely reclaimable,
 needs review, or is blocked from cleanup.`,
 	Example: `  libra summary
   libra summary --drive C:
-  libra summary --type sdk`,
+  libra summary --type node-modules`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Mock numbers until scan/store wiring lands (Day2); shape matches
-		// the F-06 example in docs/libra_cli_commands_and_schedule.md.
+		db, err := openDatabase()
+		if err != nil {
+			return fmt.Errorf("open database: %w", err)
+		}
+		defer db.Close()
+
+		service := app.NewSummaryService(sqlite.NewProjectRepository(db), sqlite.NewResourceRepository(db))
+		summary, err := service.Summarize(cmd.Context(), func(resource domain.Resource) bool {
+			if summaryType != "" && string(resource.Type) != summaryType {
+				return false
+			}
+			if summaryDrive != "" && !strings.EqualFold(filepath.VolumeName(resource.DisplayPath), summaryDrive) {
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return fmt.Errorf("summarize: %w", err)
+		}
+
 		view := output.SummaryView{
-			Drive: summaryDrive,
-			ResourcesByType: []output.SummaryLine{
-				{Label: "Windows SDKs", Bytes: 12459999232},
-				{Label: "Visual Studio tools", Bytes: 25986469478},
-				{Label: ".NET SDKs", Bytes: 5798727680},
-				{Label: "Node project artifacts", Bytes: 19434323968},
-				{Label: "MSBuild outputs", Bytes: 8162838528},
-			},
-			SafeReclaimable: 10416967680,
-			NeedsReview:     13316730880,
-			Blocked:         63146360832,
+			Drive:           summaryDrive,
+			ProjectCount:    summary.ProjectCount,
+			ResourceCount:   summary.ResourceCount,
+			SafeReclaimable: summary.SafeReclaimable,
+			NeedsReview:     summary.NeedsReview,
+			Blocked:         summary.Blocked,
+		}
+		for _, line := range summary.ResourcesByType {
+			view.ResourcesByType = append(view.ResourcesByType, output.SummaryLine{
+				Label: resourceTypeLabel(line.Type),
+				Bytes: line.Bytes,
+			})
 		}
 		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
 	},
@@ -45,5 +92,5 @@ func init() {
 	rootCmd.AddCommand(summaryCmd)
 
 	summaryCmd.Flags().StringVar(&summaryDrive, "drive", "", "limit the summary to this drive (e.g. C:)")
-	summaryCmd.Flags().StringVar(&summaryType, "type", "", "limit the summary to this resource type (e.g. sdk)")
+	summaryCmd.Flags().StringVar(&summaryType, "type", "", "limit the summary to this resource type (e.g. node-modules)")
 }

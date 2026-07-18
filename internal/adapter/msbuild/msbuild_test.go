@@ -5,24 +5,26 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 // fakeWorkspaceParser is a placeholder WorkspaceParser used to validate this
 // test harness before the real .sln-parsing implementation lands.
 type fakeWorkspaceParser struct{}
 
-func (fakeWorkspaceParser) CanParse(path string) bool {
-	return filepath.Ext(path) == ".sln"
+func (fakeWorkspaceParser) CanParse(entry scanner.Entry) bool {
+	return filepath.Ext(entry.Path) == ".sln"
 }
 
-func (fakeWorkspaceParser) Parse(ctx context.Context, path string) (ParsedWorkspace, error) {
-	switch filepath.Base(path) {
+func (fakeWorkspaceParser) Parse(ctx context.Context, entry scanner.Entry) (ParsedWorkspace, error) {
+	switch filepath.Base(entry.Path) {
 	case "GameClient.sln":
 		return ParsedWorkspace{
-			Workspace:    domain.Workspace{Name: "GameClient", Path: path, Type: domain.WorkspaceTypeVSSolution},
-			ProjectPaths: []string{filepath.Join(filepath.Dir(path), "GameClient.vcxproj")},
+			Workspace:    domain.Workspace{Name: "GameClient", Path: entry.Path, Type: domain.WorkspaceTypeVSSolution},
+			ProjectPaths: []string{filepath.Join(filepath.Dir(entry.Path), "GameClient.vcxproj")},
 		}, nil
 	default:
 		return ParsedWorkspace{}, nil
@@ -45,7 +47,7 @@ func TestXMLBuildProjectParser_CanParse(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := parser.CanParse(tc.path); got != tc.want {
+			if got := parser.CanParse(scanner.Entry{Path: tc.path}); got != tc.want {
 				t.Errorf("CanParse(%q) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
@@ -54,6 +56,9 @@ func TestXMLBuildProjectParser_CanParse(t *testing.T) {
 
 func TestXMLBuildProjectParser_Parse(t *testing.T) {
 	var parser BuildProjectParser = XMLBuildProjectParser{}
+	// Deliberately not the fixture's real mtime: proves Parse reuses the
+	// entry's ModifiedAt instead of re-stat'ing the filesystem.
+	modTime := time.Date(2026, 7, 18, 3, 4, 5, 0, time.UTC)
 
 	cases := []struct {
 		name         string
@@ -89,7 +94,7 @@ func TestXMLBuildProjectParser_Parse(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parser.Parse(context.Background(), tc.path)
+			got, err := parser.Parse(context.Background(), scanner.Entry{Path: tc.path, ModifiedAt: modTime})
 			if err != nil {
 				t.Fatalf("Parse(%q) returned error: %v", tc.path, err)
 			}
@@ -105,8 +110,8 @@ func TestXMLBuildProjectParser_Parse(t *testing.T) {
 			if !reflect.DeepEqual(got[0].Declared, tc.wantDeclared) {
 				t.Errorf("Declared = %+v, want %+v", got[0].Declared, tc.wantDeclared)
 			}
-			if got[0].Project.LastModifiedAt.IsZero() {
-				t.Errorf("Project.LastModifiedAt is zero, want the fixture file's mod time")
+			if !got[0].Project.LastModifiedAt.Equal(modTime) {
+				t.Errorf("Project.LastModifiedAt = %v, want %v (reused from scanner.Entry)", got[0].Project.LastModifiedAt, modTime)
 			}
 		})
 	}
@@ -128,7 +133,7 @@ func TestWorkspaceParser_CanParse(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := parser.CanParse(tc.path); got != tc.want {
+			if got := parser.CanParse(scanner.Entry{Path: tc.path}); got != tc.want {
 				t.Errorf("CanParse(%q) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
@@ -139,7 +144,7 @@ func TestWorkspaceParser_Parse(t *testing.T) {
 	var parser WorkspaceParser = fakeWorkspaceParser{}
 
 	path := "../../../testdata/msbuild/GameClient/GameClient.sln"
-	got, err := parser.Parse(context.Background(), path)
+	got, err := parser.Parse(context.Background(), scanner.Entry{Path: path})
 	if err != nil {
 		t.Fatalf("Parse(%q) returned error: %v", path, err)
 	}

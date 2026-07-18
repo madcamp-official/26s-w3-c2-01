@@ -5,9 +5,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
@@ -31,10 +33,10 @@ resources and build artifacts, computes their logical size, runs dependency
 analysis, and stores the results in the local SQLite database.
 
 Permission errors on individual paths are recorded but do not abort the
-scan.`,
+scan. Every scan is currently a full scan -- incremental scanning does
+not exist yet, so --full has no effect (see --help).`,
 	Example: `  libra scan
-  libra scan --root D:\Projects
-  libra scan --full`,
+  libra scan --root D:\Projects`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		scanOpts, err := resolveScanOptions()
@@ -66,7 +68,11 @@ scan.`,
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
-		}, nil, nil)
+		}, []app.ResourceDetector{
+			app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
+			app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
+			app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
+		}, nil)
 
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
 			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),
@@ -91,7 +97,8 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 
 	scanCmd.Flags().StringVar(&scanRoot, "root", "", "scan only this project root instead of all configured roots")
-	scanCmd.Flags().BoolVar(&scanFull, "full", false, "force a full rescan instead of an incremental one")
+	scanCmd.Flags().BoolVar(&scanFull, "full", false, "no-op: every scan is currently a full scan")
+	_ = scanCmd.Flags().MarkDeprecated("full", "every scan is currently a full scan; incremental scanning does not exist yet")
 }
 
 // resolveScanOptions builds scanner options from the config file (if one

@@ -666,6 +666,8 @@ const (
 
 부분 scan 결과로 다른 drive 또는 root의 객체를 STALE 처리하지 않는다. scan record에는 scope와 대상 root/project를 저장한다.
 
+**현재 임시 동작 (`CONFIRMED`, 위 표 자체는 여전히 `DECISION_REQUIRED`):** `cmd/scan.go`는 `ScanScope`를 구현하지 않았고 `--full`은 매 실행에서 아무 효과가 없다. 이 표가 결정되기 전까지 모든 scan은 사실상 `FULL`이며, `--full` 플래그는 `cobra`의 `MarkDeprecated`로 표시해 사용할 때마다 "현재 모든 scan은 full scan" 안내를 출력한다. 플래그 자체를 지우지 않은 이유는 위 표가 확정되면 다시 의미 있는 옵션이 되기 때문이다.
+
 ### 17.3 staging과 transaction (`DECISION_REQUIRED`)
 
 권장 흐름:

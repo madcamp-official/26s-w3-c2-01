@@ -46,6 +46,31 @@ func TestScanCommandDetectsAndPersistsNodeProjects(t *testing.T) {
 	}
 }
 
+func TestScanCommandFullFlagIsDeprecatedButHarmless(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+
+	fixture, err := filepath.Abs("../testdata/node/basic")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	out := &bytes.Buffer{}
+	rootCmd.SetOut(out)
+	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"scan", "--root", fixture, "--full"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v; output=%s", err, out)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("deprecated")) {
+		t.Fatalf("output missing deprecation notice:\n%s", out)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("Scan completed")) {
+		t.Fatalf("--full should not prevent the scan from completing:\n%s", out)
+	}
+}
+
 func TestScanCommandRequiresRootsWithoutConfig(t *testing.T) {
 	scanRoot = ""
 	cfgPath = ""

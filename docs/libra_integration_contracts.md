@@ -489,13 +489,13 @@ type BuildProject struct {
 
 manifest가 여러 개인 경우와 Git repository 안에 여러 BuildProject가 있는 경우를 허용한다.
 
-### 15.2 stable ID (`DECISION_REQUIRED`)
+### 15.2 stable ID (`DECISION_REQUIRED`, Resource는 `CONFIRMED`)
 
-MVP 제안:
+Resource ID는 확정되었고 Project와 Dependency ID는 제안 상태다.
 
 ```text
 Project ID    = hash(project_type + normalized_manifest_path)
-Resource ID   = hash(resource_type + version + normalized_path)
+Resource ID   = SHA-256(resource_type + NUL + version + NUL + normalized_path)
 Dependency ID = hash(source_id + relation + target_id)
 ```
 
@@ -677,10 +677,32 @@ COMPLETED
 
 기존 문서의 `SCANNING_FILES` 등 phase 이름은 위 목록과 통합해야 하며 두 종류의 문자열을 동시에 유지하지 않는다.
 
-### 18.4 Resource 병합 (`DECISION_REQUIRED`)
+### 18.4 Resource 병합 (`CONFIRMED`)
 
 ```text
 ResourceKey = Type + Version + NormalizedPath
+```
+
+Resource의 사용자 표시 경로와 비교용 경로는 별도 필드로 유지한다. 기존
+`Path` 필드는 `DisplayPath`로 이름을 변경한다.
+
+```go
+type Resource struct {
+    ID              string
+    Name            string
+    Type            ResourceType
+    Version         string
+    DisplayPath     string
+    NormalizedPath  string
+    LogicalSize     int64
+    ReclaimableSize int64
+    Regenerable     bool
+    SystemManaged   bool
+    LastModifiedAt  *time.Time
+    LastObservedAt  time.Time
+    Risk            RiskLevel
+    Confidence      int
+}
 ```
 
 필드 충돌 시 근거 우선순위:
@@ -801,7 +823,7 @@ UnverifiedScope = 항목별 감점
 
 Confidence가 높다는 사실은 Risk가 SAFE라는 의미가 아니다.
 
-### 20.3 Risk 중앙 정책 (`DECISION_REQUIRED`)
+### 20.3 Risk 중앙 정책 (`CONFIRMED`)
 
 adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판정한다.
 
@@ -811,7 +833,7 @@ type RiskPolicy interface {
 }
 ```
 
-MVP 결정표 제안:
+MVP 결정표:
 
 | 조건 | Risk |
 |---|---|
@@ -1143,7 +1165,8 @@ exit code 변경
 
 ```text
 [ ] Project root와 manifest 의미
-[ ] Project·Resource·Dependency ID 규칙
+[ ] Project·Dependency ID 규칙
+[x] Resource ID 규칙
 [x] 공용 경로 정규화
 [ ] FULL·ROOT·PROJECT scan 의미
 [ ] 현재 상태와 snapshot 저장
@@ -1158,10 +1181,10 @@ exit code 변경
 ```text
 [ ] MSBuild 해석 수준
 [ ] Node monorepo 경계
-[ ] Resource 병합 규칙
+[x] Resource 병합 규칙
 [ ] Evidence field와 만료
 [ ] Confidence 공식
-[ ] 중앙 RiskPolicy
+[x] 중앙 RiskPolicy
 [ ] Impact enum
 [ ] 산출물 소유권 판정
 ```

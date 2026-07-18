@@ -25,3 +25,13 @@ func TestNormalizeRejectsEmptyPath(t *testing.T) {
 		t.Fatalf("Normalize() error = %v, want ErrEmptyPath", err)
 	}
 }
+
+func TestAbsolutePreservesDisplayCase(t *testing.T) {
+	got, err := Absolute(filepath.Join("Relative", "MixedCase"))
+	if err != nil {
+		t.Fatalf("Absolute() error = %v", err)
+	}
+	if filepath.Base(got) != "MixedCase" {
+		t.Fatalf("Absolute() = %q, want display case preserved", got)
+	}
+}

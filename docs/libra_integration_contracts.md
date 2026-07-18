@@ -112,6 +112,12 @@ type BuildProject struct {
 normalized, err := pathutil.Normalize(path)
 ```
 
+표시용 절대 경로가 필요하면 대소문자를 보존하는 다음 함수를 사용한다.
+
+```go
+displayPath, err := pathutil.Absolute(path)
+```
+
 계약:
 
 - 빈 경로는 오류다.

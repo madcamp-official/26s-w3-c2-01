@@ -34,7 +34,26 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 	if err != nil {
 		return projectDetectionFailure("node", entry.Path, "parse package.json", err)
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{project}}}}
+
+	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	// DetectArtifacts, not DetectWorkspaceArtifacts: Observe runs once per
+	// project-root entry the scanner walks into, including every workspace
+	// member independently, so scoping to entry.Path's own directory avoids
+	// reporting a member's artifacts twice (once here, once from its own
+	// Observe call).
+	artifacts, err := nodeadapter.DetectArtifacts(entry.Path)
+	if err != nil {
+		return DetectionResult[ProjectCandidate]{
+			Items: []ProjectCandidate{candidate},
+			Issues: []Issue{{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "node",
+				Path: entry.Path, Operation: "detect node artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err}},
+		}
+	}
+	for _, resource := range artifacts {
+		candidate.ProjectResources = append(candidate.ProjectResources,
+			ProjectResourceCandidate{OwnerManifestPath: project.ManifestPath, Resource: resource})
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}}
 }
 
 type MSBuildProjectDetector struct{ Parser msbuild.BuildProjectParser }

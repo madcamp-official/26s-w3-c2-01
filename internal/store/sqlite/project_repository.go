@@ -87,24 +87,48 @@ func (r *ProjectRepository) FindByManifestPath(ctx context.Context, projectType 
 	return findProject(r.db.QueryRowContext(ctx, projectSelect+" WHERE project_type = ? AND normalized_manifest_path = ?", projectType, normalized), normalized)
 }
 
+// List returns every observed project, ordered by root path.
+func (r *ProjectRepository) List(ctx context.Context) ([]domain.BuildProject, error) {
+	rows, err := r.db.QueryContext(ctx, projectSelect+" ORDER BY root_path")
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []domain.BuildProject
+	for rows.Next() {
+		project, err := scanProject(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list projects: %w", err)
+		}
+		projects = append(projects, project)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	return projects, nil
+}
+
 const projectSelect = `
 	SELECT id, name, project_type, root_path, normalized_root_path,
 		manifest_path, normalized_manifest_path, drive, logical_size,
 		last_modified_at, last_observed_at, status
 	FROM projects`
 
-func findProject(row *sql.Row, key string) (domain.BuildProject, error) {
+// projectRow is satisfied by both *sql.Row and *sql.Rows.
+type projectRow interface {
+	Scan(dest ...any) error
+}
+
+func scanProject(row projectRow) (domain.BuildProject, error) {
 	var project domain.BuildProject
 	var lastModified sql.NullString
 	var lastObserved string
 	err := row.Scan(&project.ID, &project.Name, &project.Type, &project.RootPath,
 		&project.NormalizedRootPath, &project.ManifestPath, &project.NormalizedManifestPath,
 		&project.Drive, &project.LogicalSize, &lastModified, &lastObserved, &project.Status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return domain.BuildProject{}, fmt.Errorf("%w: %s", ErrProjectNotFound, key)
-	}
 	if err != nil {
-		return domain.BuildProject{}, fmt.Errorf("find project %q: %w", key, err)
+		return domain.BuildProject{}, err
 	}
 	if lastModified.Valid {
 		project.LastModifiedAt, err = time.Parse(time.RFC3339Nano, lastModified.String)
@@ -115,6 +139,17 @@ func findProject(row *sql.Row, key string) (domain.BuildProject, error) {
 	project.LastObservedAt, err = time.Parse(time.RFC3339Nano, lastObserved)
 	if err != nil {
 		return domain.BuildProject{}, fmt.Errorf("decode project last observed time: %w", err)
+	}
+	return project, nil
+}
+
+func findProject(row *sql.Row, key string) (domain.BuildProject, error) {
+	project, err := scanProject(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.BuildProject{}, fmt.Errorf("%w: %s", ErrProjectNotFound, key)
+	}
+	if err != nil {
+		return domain.BuildProject{}, fmt.Errorf("find project %q: %w", key, err)
 	}
 	return project, nil
 }

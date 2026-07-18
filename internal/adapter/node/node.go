@@ -29,6 +29,8 @@ import (
 	"path/filepath"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
 // manifestFile is the marker that identifies a Node BuildProject root.
@@ -75,32 +77,27 @@ const (
 // independent of this restriction because Resource persistence already has
 // a confirmed pipeline (§7.3, §18.4) via app.ResourceService.
 type Detector interface {
-	// CanDetect reports whether dir contains a package.json entry.
-	CanDetect(dir string) bool
+	// CanDetect reports whether entry's directory contains package.json.
+	CanDetect(entry scanner.Entry) bool
 	// Detect builds the domain.BuildProject for the Node project rooted at
 	// dir. Callers should only call this after CanDetect reports true. A
 	// malformed package.json is returned as an error, not a panic or a
 	// silently empty project, so orchestration can record it as a
 	// recoverable per-candidate issue.
-	Detect(ctx context.Context, dir string) (domain.BuildProject, error)
+	Detect(ctx context.Context, entry scanner.Entry) (domain.BuildProject, error)
 }
 
 // FilesystemDetector is the real Detector implementation: it checks for a
 // package.json entry directly on disk.
 type FilesystemDetector struct{}
 
-func (FilesystemDetector) CanDetect(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, manifestFile))
+func (FilesystemDetector) CanDetect(entry scanner.Entry) bool {
+	_, err := os.Stat(filepath.Join(entry.Path, manifestFile))
 	return err == nil
 }
 
-func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildProject, error) {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		abs = dir
-	}
-
-	info, err := os.Stat(abs)
+func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (domain.BuildProject, error) {
+	abs, err := pathutil.Absolute(entry.Path)
 	if err != nil {
 		return domain.BuildProject{}, err
 	}
@@ -118,7 +115,7 @@ func (FilesystemDetector) Detect(ctx context.Context, dir string) (domain.BuildP
 		Path:           abs,
 		Type:           domain.ProjectTypeNode,
 		Drive:          filepath.VolumeName(abs),
-		LastModifiedAt: info.ModTime(),
+		LastModifiedAt: entry.ModifiedAt,
 	}, nil
 }
 

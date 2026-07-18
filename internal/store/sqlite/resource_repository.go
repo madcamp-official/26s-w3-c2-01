@@ -100,6 +100,28 @@ func (r *ResourceRepository) ListByType(ctx context.Context, resourceType domain
 	return resources, nil
 }
 
+// List returns every observed resource, ordered by type, name, and version.
+func (r *ResourceRepository) List(ctx context.Context) ([]domain.Resource, error) {
+	rows, err := r.db.QueryContext(ctx, resourceSelect+` ORDER BY resource_type, name, version, normalized_path`)
+	if err != nil {
+		return nil, fmt.Errorf("list resources: %w", err)
+	}
+	defer rows.Close()
+
+	resources := make([]domain.Resource, 0)
+	for rows.Next() {
+		resource, err := scanResource(rows)
+		if err != nil {
+			return nil, fmt.Errorf("decode resource: %w", err)
+		}
+		resources = append(resources, resource)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list resources: %w", err)
+	}
+	return resources, nil
+}
+
 const resourceSelect = `
 	SELECT id, resource_type, name, version, path, normalized_path,
 		logical_size, size_known, reclaimable_size, regenerable, system_managed,

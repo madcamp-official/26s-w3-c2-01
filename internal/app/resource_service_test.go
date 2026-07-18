@@ -74,3 +74,7 @@ func (*resourceRepositoryStub) FindByID(context.Context, string) (domain.Resourc
 func (*resourceRepositoryStub) ListByType(context.Context, domain.ResourceType) ([]domain.Resource, error) {
 	return nil, errors.New("not implemented")
 }
+
+func (*resourceRepositoryStub) List(context.Context) ([]domain.Resource, error) {
+	return nil, errors.New("not implemented")
+}

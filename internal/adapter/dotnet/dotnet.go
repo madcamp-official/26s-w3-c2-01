@@ -95,25 +95,21 @@ func parseListSDKs(output []byte) ([]domain.Resource, error) {
 	return resources, nil
 }
 
-// newDotNetSDKResource builds a domain.Resource with its ID and both path
-// forms computed through the shared pathutil contract, rather than
-// normalizing paths independently.
+// newDotNetSDKResource builds a detected domain.Resource with its display
+// path computed through the shared pathutil contract. ID and NormalizedPath
+// are left for app.ResourceService to derive -- it recomputes both from
+// DisplayPath unconditionally, so computing them here would only be
+// discarded.
 func newDotNetSDKResource(version, path string) (domain.Resource, error) {
 	displayPath, err := pathutil.Absolute(path)
 	if err != nil {
 		return domain.Resource{}, err
 	}
-	normalizedPath, err := pathutil.Normalize(path)
-	if err != nil {
-		return domain.Resource{}, err
-	}
 	return domain.Resource{
-		ID:             domain.ResourceID(domain.ResourceTypeDotNetSDK, version, normalizedPath),
-		Name:           ".NET SDK " + version,
-		Type:           domain.ResourceTypeDotNetSDK,
-		Version:        version,
-		DisplayPath:    displayPath,
-		NormalizedPath: normalizedPath,
+		Name:        ".NET SDK " + version,
+		Type:        domain.ResourceTypeDotNetSDK,
+		Version:     version,
+		DisplayPath: displayPath,
 	}, nil
 }
 

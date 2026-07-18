@@ -4,8 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-
-	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
 // sampleListSDKsOutput mirrors real `dotnet --list-sdks` output.
@@ -39,13 +37,6 @@ func TestCLISDKLister_ListSDKs(t *testing.T) {
 	}
 	if got[1].DisplayPath != wantPath {
 		t.Errorf("got[1].DisplayPath = %q, want %q", got[1].DisplayPath, wantPath)
-	}
-	if got[1].ID == "" {
-		t.Error("got[1].ID is empty, want a stable ResourceID")
-	}
-	wantID := domain.ResourceID(domain.ResourceTypeDotNetSDK, got[1].Version, got[1].NormalizedPath)
-	if got[1].ID != wantID {
-		t.Errorf("got[1].ID = %q, want %q", got[1].ID, wantID)
 	}
 }
 

@@ -115,24 +115,20 @@ func (d FilesystemDetector) detect81() ([]domain.Resource, error) {
 	return []domain.Resource{resource}, nil
 }
 
-// newResource builds a domain.Resource with its ID and both path forms
-// computed through the shared pathutil contract, rather than each adapter
-// normalizing paths on its own.
+// newResource builds a detected domain.Resource with its display path
+// computed through the shared pathutil contract. ID and NormalizedPath are
+// left for app.ResourceService to derive -- it recomputes both from
+// DisplayPath unconditionally, so computing them here would only be
+// discarded.
 func newResource(resourceType domain.ResourceType, version, name, path string) (domain.Resource, error) {
 	displayPath, err := pathutil.Absolute(path)
 	if err != nil {
 		return domain.Resource{}, err
 	}
-	normalizedPath, err := pathutil.Normalize(path)
-	if err != nil {
-		return domain.Resource{}, err
-	}
 	return domain.Resource{
-		ID:             domain.ResourceID(resourceType, version, normalizedPath),
-		Name:           name,
-		Type:           resourceType,
-		Version:        version,
-		DisplayPath:    displayPath,
-		NormalizedPath: normalizedPath,
+		Name:        name,
+		Type:        resourceType,
+		Version:     version,
+		DisplayPath: displayPath,
 	}, nil
 }

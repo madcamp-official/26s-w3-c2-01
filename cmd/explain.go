@@ -72,6 +72,11 @@ func init() {
 	rootCmd.AddCommand(explainCmd)
 }
 
+// renderResourceExplanation builds the resource-shaped half of ExplainView.
+// It walks the fixed impactScopes list (shared with cmd/impact.go) rather
+// than explanation.Impact directly, so every scope always renders a line --
+// a scope app.ImpactService didn't judge (RUN/DEBUG today) still shows up
+// as UNKNOWN instead of silently disappearing from the output.
 func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, resourceID string) (output.ExplainView, error) {
 	explanation, err := service.ExplainResource(cmd.Context(), resourceID)
 	if err != nil {
@@ -114,6 +119,10 @@ func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, 
 	return view, nil
 }
 
+// renderProjectExplanation builds the project-shaped half of ExplainView.
+// Unlike the resource case, there's no fixed set of scopes to render here --
+// a project's "Requires" list is just whatever dependency edges exist for
+// it, in whatever order ExplainProject's own query returns them.
 func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, projectID string) (output.ExplainView, error) {
 	explanation, err := service.ExplainProject(cmd.Context(), projectID)
 	if err != nil {
@@ -139,6 +148,10 @@ func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, p
 	return view, nil
 }
 
+// toEvidenceLines drops Evidence fields explain has no use for (ID,
+// DependencyID, CollectedAt, ResolvedValue) rather than reusing
+// domain.Evidence directly as the JSON shape, so the CLI's public
+// output schema doesn't silently change if that struct grows a field.
 func toEvidenceLines(evidence []domain.Evidence) []output.ExplainEvidenceLine {
 	lines := make([]output.ExplainEvidenceLine, 0, len(evidence))
 	for _, e := range evidence {

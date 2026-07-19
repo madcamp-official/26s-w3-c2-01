@@ -91,10 +91,18 @@ func resolveTarget(ctx context.Context, resources app.ResourceRepository, projec
 	return resolveByIDOrName(ctx, resources, projects, trimmed)
 }
 
+// looksLikePath treats the presence of a path separator as the signal that
+// an argument is a filesystem path rather than an ID or a bare name -- both
+// name and hex-ID forms just so happen to never contain one on any platform.
 func looksLikePath(s string) bool {
 	return strings.ContainsAny(s, `/\`)
 }
 
+// resolveResourceByTypeVersion handles the "<type>:<version>" form, e.g.
+// "windows-sdk:10.0.22621.0". There is no stable-ID shortcut here (unlike
+// resolveByIDOrName): the ID also folds in NormalizedPath (see
+// domain.ResourceID), which the CLI argument doesn't carry, so every call
+// scans the full resource list for a type+version match.
 func resolveResourceByTypeVersion(ctx context.Context, resources app.ResourceRepository, resourceType domain.ResourceType, version string) (target, error) {
 	all, err := resources.List(ctx)
 	if err != nil {
@@ -109,6 +117,13 @@ func resolveResourceByTypeVersion(ctx context.Context, resources app.ResourceRep
 	return pickOneResource(matches, fmt.Sprintf("%s:%s", resourceType, version))
 }
 
+// resolveProjectTarget handles the "project:<value>" form. A path-looking
+// value is matched by normalized root/manifest path; otherwise it's matched
+// by ID (returned immediately, no ambiguity possible), then by exact
+// case-insensitive name, then by substring -- exact name matches are
+// preferred over partial ones even though both are collected in the same
+// pass, so "GameClient" doesn't turn ambiguous just because
+// "GameClientTests" also exists.
 func resolveProjectTarget(ctx context.Context, projects app.ProjectRepository, raw string) (target, error) {
 	all, err := projects.List(ctx)
 	if err != nil {
@@ -146,6 +161,12 @@ func resolveProjectTarget(ctx context.Context, projects app.ProjectRepository, r
 	return pickOneProject(partial, raw)
 }
 
+// resolvePathTarget handles a bare path with no prefix, e.g.
+// `libra explain "D:\Projects\OldWeb\node_modules"`. Resources are checked
+// before projects: a path can't identify both (a resource's NormalizedPath
+// and a project's NormalizedRootPath/NormalizedManifestPath are disjoint by
+// construction), so this is a short-circuit for the common case (explaining
+// a resource by its on-disk path) rather than a real precedence rule.
 func resolvePathTarget(ctx context.Context, resources app.ResourceRepository, projects app.ProjectRepository, raw string) (target, error) {
 	normalized, err := pathutil.Normalize(raw)
 	if err != nil {
@@ -179,6 +200,13 @@ func resolvePathTarget(ctx context.Context, resources app.ResourceRepository, pr
 	return pickOneProject(projectMatches, raw)
 }
 
+// resolveByIDOrName is the fallback for an argument with no prefix and no
+// path separator -- most often a stable ID copied from another command's
+// output. FindByID is tried directly first (O(1) repository lookup) before
+// falling back to a full List()+name scan across both resources and
+// projects, so a same-named resource and project (e.g. two things both
+// literally named "node_modules") is reported as ambiguous rather than one
+// silently shadowing the other.
 func resolveByIDOrName(ctx context.Context, resources app.ResourceRepository, projects app.ProjectRepository, raw string) (target, error) {
 	if resource, err := resources.FindByID(ctx, raw); err == nil {
 		return target{Kind: targetKindResource, Resource: resource}, nil
@@ -222,6 +250,8 @@ func resolveByIDOrName(ctx context.Context, resources app.ResourceRepository, pr
 	return target{Kind: targetKindProject, Project: projectMatches[0]}, nil
 }
 
+// pickOneResource turns a candidate slice into the shared not-found/
+// ambiguous/found result every resource-matching branch above needs.
 func pickOneResource(matches []domain.Resource, raw string) (target, error) {
 	switch len(matches) {
 	case 0:
@@ -233,6 +263,7 @@ func pickOneResource(matches []domain.Resource, raw string) (target, error) {
 	}
 }
 
+// pickOneProject is pickOneResource's project-typed counterpart.
 func pickOneProject(matches []domain.BuildProject, raw string) (target, error) {
 	switch len(matches) {
 	case 0:

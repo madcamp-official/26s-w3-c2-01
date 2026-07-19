@@ -143,6 +143,9 @@ func (v ExplainView) renderProject(w io.Writer) error {
 	return v.renderUnverified(w)
 }
 
+// renderEvidence is shared by renderResource ("Used by") and renderProject
+// ("Requires"): both sections list dependency edges with the same
+// Evidence/Source/Property sub-lines, just under a different heading.
 func renderEvidence(w io.Writer, evidence []ExplainEvidenceLine) {
 	for _, e := range evidence {
 		fmt.Fprintf(w, "  Evidence: %s\n", e.Kind)
@@ -155,6 +158,11 @@ func renderEvidence(w io.Writer, evidence []ExplainEvidenceLine) {
 	}
 }
 
+// renderUnverified is a no-op when there's nothing to say -- ExplainView
+// currently never actually populates Unverified (no caller wires
+// UnverifiedScope data into it yet), so this only ever prints the "no
+// output" branch today. Kept as a real field/method pair, not deleted,
+// since F-07 requires a "분석하지 못한 범위" section once that data exists.
 func (v ExplainView) renderUnverified(w io.Writer) error {
 	if len(v.Unverified) == 0 {
 		return nil

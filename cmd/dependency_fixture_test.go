@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -45,7 +46,7 @@ func seedWindowsSDKDependency(t *testing.T, projectName string) (domain.Resource
 		t.Fatalf("project %q not found among scanned projects", projectName)
 	}
 
-	displayPath := t.TempDir() + "/WindowsKits10"
+	displayPath := filepath.Join(t.TempDir(), "WindowsKits10")
 	normalizedPath, err := pathutil.Normalize(displayPath)
 	if err != nil {
 		t.Fatalf("normalize resource path: %v", err)

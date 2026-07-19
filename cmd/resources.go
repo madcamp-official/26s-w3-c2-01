@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// resourcesType/resourcesRisk are bound to --type/--risk by init() below and
+// read directly by resourcesCmd.RunE, the same package-level-flag-variable
+// pattern every other cmd/*.go command in this package uses (see
+// cmd/root.go's jsonOutput etc.).
 var (
 	resourcesType string
 	resourcesRisk string
@@ -34,6 +38,11 @@ the confidence of the analysis.`,
 		}
 		defer db.Close()
 
+		// List() returns every resource; filtering happens here in cmd rather
+		// than as a repository query, matching cmd/projects.go's --type/
+		// --drive/--status filters -- keeps ResourceRepository's contract
+		// small (internal/app/resource_repository.go) and filter logic in one
+		// place (this file) instead of one query variant per flag.
 		resources, err := sqlite.NewResourceRepository(db).List(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("list resources: %w", err)
@@ -49,6 +58,10 @@ the confidence of the analysis.`,
 				continue
 			}
 
+			// One dependency-graph query per surviving resource (not one
+			// query total) so unfiltered-out resources never pay for a count
+			// the user didn't ask to see. Same N+1-by-design tradeoff
+			// cmd/projects.go makes for its own resource-count column.
 			projects, err := dependencies.FindProjectsByResource(cmd.Context(), resource.ID)
 			if err != nil {
 				return fmt.Errorf("count projects for resource %q: %w", resource.ID, err)

@@ -47,6 +47,10 @@ func (v ResourcesView) RenderText(w io.Writer) error {
 	return tw.Flush()
 }
 
+// emptyDash renders "-" for an empty version string instead of a blank
+// table cell, since not every resource type is versioned (e.g.
+// node_modules/build-output have no meaningful Version) and a blank cell
+// reads as a rendering bug rather than "not applicable."
 func emptyDash(s string) string {
 	if s == "" {
 		return "-"

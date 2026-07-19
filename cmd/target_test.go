@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
 // fakeResourceRepository and fakeProjectRepository are minimal in-memory
@@ -71,27 +72,44 @@ func (f *fakeProjectRepository) List(context.Context) ([]domain.BuildProject, er
 	return f.byID, nil
 }
 
-func testResources() *fakeResourceRepository {
+// mustNormalize runs path through the same pathutil.Normalize used by
+// resolveTarget itself, so fixture data matches whatever form a query
+// string normalizes to on the current platform (Windows rewrites
+// "/proj/game" to a drive-rooted, backslash path; macOS/Linux leave it
+// alone). Hardcoding a Unix-style literal as if it were already normalized
+// broke path-based lookups on Windows CI.
+func mustNormalize(t *testing.T, path string) string {
+	t.Helper()
+	normalized, err := pathutil.Normalize(path)
+	if err != nil {
+		t.Fatalf("normalize %q: %v", path, err)
+	}
+	return normalized
+}
+
+func testResources(t *testing.T) *fakeResourceRepository {
+	t.Helper()
 	return &fakeResourceRepository{byID: []domain.Resource{
 		{ID: "res-sdk-1", Name: "Windows SDK", Type: domain.ResourceTypeWindowsSDK, Version: "10.0.22621.0",
-			DisplayPath: "/kits/10.0.22621.0", NormalizedPath: "/kits/10.0.22621.0"},
+			DisplayPath: "/kits/10.0.22621.0", NormalizedPath: mustNormalize(t, "/kits/10.0.22621.0")},
 		{ID: "res-nm-1", Name: "node_modules", Type: domain.ResourceTypeNodeModules, Version: "",
-			DisplayPath: "/proj/a/node_modules", NormalizedPath: "/proj/a/node_modules"},
+			DisplayPath: "/proj/a/node_modules", NormalizedPath: mustNormalize(t, "/proj/a/node_modules")},
 		{ID: "res-nm-2", Name: "node_modules", Type: domain.ResourceTypeNodeModules, Version: "",
-			DisplayPath: "/proj/b/node_modules", NormalizedPath: "/proj/b/node_modules"},
+			DisplayPath: "/proj/b/node_modules", NormalizedPath: mustNormalize(t, "/proj/b/node_modules")},
 	}}
 }
 
-func testProjects() *fakeProjectRepository {
+func testProjects(t *testing.T) *fakeProjectRepository {
+	t.Helper()
 	return &fakeProjectRepository{byID: []domain.BuildProject{
 		{ID: "proj-game", Name: "GameClient", Type: domain.ProjectTypeMSBuildCpp,
-			RootPath: "/proj/game", NormalizedRootPath: "/proj/game",
-			ManifestPath: "/proj/game/GameClient.vcxproj", NormalizedManifestPath: "/proj/game/GameClient.vcxproj"},
+			RootPath: "/proj/game", NormalizedRootPath: mustNormalize(t, "/proj/game"),
+			ManifestPath: "/proj/game/GameClient.vcxproj", NormalizedManifestPath: mustNormalize(t, "/proj/game/GameClient.vcxproj")},
 	}}
 }
 
 func TestResolveTargetByResourceTypeAndVersion(t *testing.T) {
-	got, err := resolveTarget(context.Background(), testResources(), testProjects(), "windows-sdk:10.0.22621.0")
+	got, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "windows-sdk:10.0.22621.0")
 	if err != nil {
 		t.Fatalf("resolveTarget() error = %v", err)
 	}
@@ -101,14 +119,14 @@ func TestResolveTargetByResourceTypeAndVersion(t *testing.T) {
 }
 
 func TestResolveTargetByResourceTypeAndVersionNotFound(t *testing.T) {
-	_, err := resolveTarget(context.Background(), testResources(), testProjects(), "windows-sdk:9.9.9.9")
+	_, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "windows-sdk:9.9.9.9")
 	if !errors.Is(err, ErrTargetNotFound) {
 		t.Fatalf("resolveTarget() error = %v, want ErrTargetNotFound", err)
 	}
 }
 
 func TestResolveTargetByProjectPrefixPath(t *testing.T) {
-	got, err := resolveTarget(context.Background(), testResources(), testProjects(), `project:/proj/game`)
+	got, err := resolveTarget(context.Background(), testResources(t), testProjects(t), `project:/proj/game`)
 	if err != nil {
 		t.Fatalf("resolveTarget() error = %v", err)
 	}
@@ -118,7 +136,7 @@ func TestResolveTargetByProjectPrefixPath(t *testing.T) {
 }
 
 func TestResolveTargetByAbsolutePath(t *testing.T) {
-	got, err := resolveTarget(context.Background(), testResources(), testProjects(), "/proj/a/node_modules")
+	got, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "/proj/a/node_modules")
 	if err != nil {
 		t.Fatalf("resolveTarget() error = %v", err)
 	}
@@ -128,7 +146,7 @@ func TestResolveTargetByAbsolutePath(t *testing.T) {
 }
 
 func TestResolveTargetByID(t *testing.T) {
-	got, err := resolveTarget(context.Background(), testResources(), testProjects(), "res-nm-2")
+	got, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "res-nm-2")
 	if err != nil {
 		t.Fatalf("resolveTarget() error = %v", err)
 	}
@@ -138,14 +156,14 @@ func TestResolveTargetByID(t *testing.T) {
 }
 
 func TestResolveTargetByNameIsAmbiguous(t *testing.T) {
-	_, err := resolveTarget(context.Background(), testResources(), testProjects(), "node_modules")
+	_, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "node_modules")
 	if !errors.Is(err, ErrTargetAmbiguous) {
 		t.Fatalf("resolveTarget() error = %v, want ErrTargetAmbiguous", err)
 	}
 }
 
 func TestResolveTargetUnknownIsNotFound(t *testing.T) {
-	_, err := resolveTarget(context.Background(), testResources(), testProjects(), "nope-does-not-exist")
+	_, err := resolveTarget(context.Background(), testResources(t), testProjects(t), "nope-does-not-exist")
 	if !errors.Is(err, ErrTargetNotFound) {
 		t.Fatalf("resolveTarget() error = %v, want ErrTargetNotFound", err)
 	}

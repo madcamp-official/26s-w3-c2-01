@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"path/filepath"
 	"testing"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 )
 
 func TestResourcesCommandListsAndFiltersScannedResources(t *testing.T) {
@@ -11,6 +13,15 @@ func TestResourcesCommandListsAndFiltersScannedResources(t *testing.T) {
 	cfgPath = ""
 	resourcesType = ""
 	resourcesRisk = ""
+	// System resource detectors (windows-sdk, dotnet-sdk, visual-studio) read
+	// the actual host machine, so a "--type windows-sdk finds nothing" style
+	// assertion is only true on hosts without one installed -- it failed on
+	// Windows CI runners, which do have real SDKs. Disable them so this test
+	// only sees the deterministic resources the Node fixture itself produces,
+	// same guard as TestSummaryGoldenNodeFixture.
+	previousResourceDetectors := resourceDetectors
+	resourceDetectors = func() []app.ResourceDetector { return nil }
+	t.Cleanup(func() { resourceDetectors = previousResourceDetectors })
 
 	fixture, err := filepath.Abs("../testdata/node")
 	if err != nil {

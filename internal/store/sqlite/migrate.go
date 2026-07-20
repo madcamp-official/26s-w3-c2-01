@@ -12,6 +12,10 @@ import (
 var migrationFiles embed.FS
 
 // Migrate applies every pending schema migration in filename order.
+// Ordering is plain lexicographic sort.Strings, not numeric -- migration
+// filenames (001_initial.sql, 002_..., see internal/store/sqlite/
+// migrations/) must keep the same zero-padded digit width for every future
+// migration, or a migration numbered 010+ would sort before 002.
 func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (

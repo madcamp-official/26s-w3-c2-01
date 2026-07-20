@@ -21,8 +21,9 @@
 | 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 중간 (계약 위배) | Windows A |
 | 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 이미 issue #22로 추적 중 | Windows B |
+| 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 낮음 (정리) | Windows A |
 
-1~3은 "어떻게 협업하는가"의 문제, 4~6은 "코드가 우리가 합의한 문서와 실제로 일치하는가"의 문제로 나눴다.
+1~3은 "어떻게 협업하는가"의 문제, 4~7은 "코드가 우리가 합의한 문서와 실제로 일치하는가 / 정리가 필요한가"의 문제로 나눴다.
 
 ---
 
@@ -225,6 +226,37 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 - 위치: `cmd/scan.go`의 `WithDetectors(..., resourceDetectors(), nil)` — 세 번째 인자가 항상 `nil`.
 - `internal/app/project_detector_adapters.go`의 `MSBuildProjectDetector.Observe`가 `parsed[i].Declared`를 버림.
 - 담당: Windows B (`internal/adapter/msbuild` + 공동 소유 `internal/app` 계약 변경 필요).
+
+---
+
+## 7. `ScanService`가 죽은 코드로 보임 (2026-07-20 파일별 주석 작업 중 발견)
+
+### 위치
+
+`internal/app/scan_service.go` — `ScanRecord`, `ScanRepository`, `ScanService`, `ScanService.Run`.
+
+### 증거
+
+```
+$ grep -rn "ScanService\b" --include="*.go" .
+internal/app/scan_service.go:51:type ScanService struct {
+internal/app/scan_service.go:57:func NewScanService(...)
+internal/app/scan_service.go:64:func (s *ScanService) Run(...)
+internal/app/scan_service_test.go:...       (자기 자신 테스트만)
+internal/app/scan_service_integration_test.go:...  (자기 자신 테스트만)
+```
+
+`cmd/scan.go`는 `NewScanService`가 아니라 `app.NewAnalysisOrchestrator`를 생성해서 쓴다. `ScanService.Run`을 실제로 호출하는 프로덕션 코드가 레포 전체에 하나도 없다 — 자기 자신의 테스트 파일 2개만 이 타입을 쓴다.
+
+다만 `ScanRecord`/`ScanRepository`/`ScanStatus*` 상수는 죽은 게 아니다 — `AnalysisOrchestrator`가 그대로 재사용한다(`analysis_orchestrator.go`의 `scans ScanRepository` 필드).
+
+### 추정 원인
+
+Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2), 이후 `AnalysisOrchestrator`(PR #12, 프로젝트/리소스/의존성 탐지를 한 파이프라인으로 통합)로 옮겨가면서 `ScanService.Run`은 안 지우고 남겨둔 것으로 보인다. `ScanRecord`/`ScanRepository`는 새 코드도 계속 써서 자연스럽게 안 지워진 듯하다.
+
+### 제안
+
+`ScanService`/`ScanService.Run`과 그 전용 테스트 2개 파일만 삭제하는 걸 제안한다 (`ScanRecord`/`ScanRepository`/`ScanStatus*`는 유지). 다만 이건 A가 만든 영역이니 A 확인 후 진행하는 게 맞다고 봐서 여기 기록만 하고 직접 지우지 않았다.
 
 ---
 

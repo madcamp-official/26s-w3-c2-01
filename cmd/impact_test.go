@@ -38,10 +38,11 @@ func TestImpactCommandReportsAffectedProject(t *testing.T) {
 	for _, want := range []string{
 		project.RootPath,
 		"RUN",
-		"unknown",
+		"likely unaffected",
 		"BUILD",
 		"expected to fail",
 		"DEBUG",
+		"expected to fail if build runs",
 		"RESTORE",
 		"reinstall via the Visual Studio Installer",
 	} {

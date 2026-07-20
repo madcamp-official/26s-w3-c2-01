@@ -123,3 +123,34 @@ func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testin
 		}
 	}
 }
+
+func TestMSBuildProjectDetectorPreservesDeclaredProperties(t *testing.T) {
+	manifest := filepath.Join(t.TempDir(), "app.csproj")
+	parser := buildProjectParserFake{parsed: []msbuild.ParsedBuildProject{{
+		Project: domain.BuildProject{ManifestPath: manifest},
+		Declared: []msbuild.DeclaredProperty{{
+			Name: "TargetFramework", Value: "net8.0", Condition: "'$(Configuration)' == 'Debug'",
+		}},
+	}}}
+
+	got := (MSBuildProjectDetector{Parser: parser}).Observe(context.Background(), scanner.Entry{Path: manifest})
+	if len(got.Items) != 1 || len(got.Items[0].ProjectProperties) != 1 {
+		t.Fatalf("Observe() = %#v, want one project property", got)
+	}
+	property := got.Items[0].ProjectProperties[0]
+	if property.OwnerManifestPath != manifest || property.SourcePath != manifest ||
+		property.Name != "TargetFramework" || property.Value != "net8.0" ||
+		property.Condition != "'$(Configuration)' == 'Debug'" {
+		t.Fatalf("property = %#v", property)
+	}
+}
+
+type buildProjectParserFake struct {
+	parsed []msbuild.ParsedBuildProject
+}
+
+func (buildProjectParserFake) CanParse(scanner.Entry) bool { return true }
+
+func (p buildProjectParserFake) Parse(context.Context, scanner.Entry) ([]msbuild.ParsedBuildProject, error) {
+	return p.parsed, nil
+}

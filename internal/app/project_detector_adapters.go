@@ -82,11 +82,23 @@ func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry
 	if err != nil {
 		return projectDetectionFailure("msbuild", entry.Path, "parse MSBuild project", err)
 	}
-
 	var candidate ProjectCandidate
 	var issues []Issue
 	for _, item := range parsed {
 		candidate.Projects = append(candidate.Projects, item.Project)
+		for _, declared := range item.Declared {
+			sourcePath := declared.SourcePath
+			if sourcePath == "" {
+				sourcePath = item.Project.ManifestPath
+			}
+			candidate.ProjectProperties = append(candidate.ProjectProperties, ProjectProperty{
+				OwnerManifestPath: item.Project.ManifestPath,
+				SourcePath:        sourcePath,
+				Name:              declared.Name,
+				Value:             declared.Value,
+				Condition:         declared.Condition,
+			})
+		}
 
 		artifacts, err := msbuild.DetectArtifacts(item.Project.RootPath)
 		if err != nil {

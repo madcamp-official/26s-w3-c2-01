@@ -84,7 +84,9 @@ not exist yet, so --full has no effect (see --help).`,
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
-		}, resourceDetectors(), nil)
+		}, resourceDetectors(), []app.DependencyAnalyzer{
+			app.MSBuildDependencyAnalyzer{},
+		})
 
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
 			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),

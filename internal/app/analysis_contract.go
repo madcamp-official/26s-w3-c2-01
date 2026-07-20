@@ -96,11 +96,30 @@ type ProjectResourceCandidate struct {
 	Cleanup           CleanupEvidence
 }
 
+// ProjectProperty is an adapter-neutral declared build property associated
+// with the project identified by OwnerManifestPath.
+type ProjectProperty struct {
+	OwnerManifestPath string
+	SourcePath        string
+	Name              string
+	Value             string
+	Condition         string
+}
+
 type ProjectCandidate struct {
 	Projects              []domain.BuildProject
 	ProjectResources      []ProjectResourceCandidate
+	ProjectProperties     []ProjectProperty
 	Workspace             *domain.Workspace
 	WorkspaceProjectPaths []string
+}
+
+// ProjectAnalysisInput contains a prepared project and the declared build
+// properties that belong to it. Adapter-specific property types must be
+// converted at the ProjectDetector boundary.
+type ProjectAnalysisInput struct {
+	Project    domain.BuildProject
+	Properties []ProjectProperty
 }
 
 type DependencyBundle struct {
@@ -112,6 +131,7 @@ type Environment struct{}
 
 type ResourceIndex interface {
 	Find(domain.ResourceType, string) []domain.Resource
+	ListByType(domain.ResourceType) []domain.Resource
 }
 
 type ProjectDetector interface {
@@ -123,5 +143,5 @@ type ResourceDetector interface {
 }
 
 type DependencyAnalyzer interface {
-	Analyze(context.Context, domain.BuildProject, ResourceIndex) DetectionResult[DependencyBundle]
+	Analyze(context.Context, ProjectAnalysisInput, ResourceIndex) DetectionResult[DependencyBundle]
 }

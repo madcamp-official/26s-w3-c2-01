@@ -31,7 +31,7 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	resourceObserver := resourceObserverFake{observedAt: time.Date(2026, 7, 18, 10, 0, 0, 0, time.UTC)}
 	projectDetector := projectDetectorFake{root: root}
 	resourceDetector := resourceDetectorFake{path: resourceRoot}
-	analyzer := dependencyAnalyzerFake{}
+	analyzer := &dependencyAnalyzerFake{}
 	orchestrator := NewAnalysisOrchestrator(scanner.New(2), scans, projects, workspaces, resourceObserver, dependencies).
 		WithDetectors([]ProjectDetector{projectDetector}, []ResourceDetector{resourceDetector}, []DependencyAnalyzer{analyzer})
 	orchestrator.now = func() time.Time { return time.Date(2026, 7, 18, 11, 0, 0, 0, time.UTC) }
@@ -52,6 +52,10 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	}
 	if len(projects.saved) != 1 || len(dependencies.saved) != 1 {
 		t.Fatalf("persisted projects/dependencies = %d/%d", len(projects.saved), len(dependencies.saved))
+	}
+	if len(analyzer.inputs) != 1 || len(analyzer.inputs[0].Properties) != 1 ||
+		analyzer.inputs[0].Properties[0].Name != "TargetFramework" {
+		t.Fatalf("analyzer inputs = %#v, want the detected project's property", analyzer.inputs)
 	}
 	wantPhases := []AnalysisPhase{
 		PhaseDiscoverFiles, PhaseDiscoverProjects, PhaseDiscoverSystemResources,
@@ -155,10 +159,16 @@ func (d projectDetectorFake) Observe(_ context.Context, entry scanner.Entry) Det
 	if filepath.Base(entry.Path) != "package.json" {
 		return DetectionResult[ProjectCandidate]{}
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{{
-		Name: "app", Type: domain.ProjectTypeNode, RootPath: d.root,
-		ManifestPath: entry.Path, LastModifiedAt: entry.ModifiedAt,
-	}}}}}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Projects: []domain.BuildProject{{
+			Name: "app", Type: domain.ProjectTypeNode, RootPath: d.root,
+			ManifestPath: entry.Path, LastModifiedAt: entry.ModifiedAt,
+		}},
+		ProjectProperties: []ProjectProperty{{
+			OwnerManifestPath: entry.Path, SourcePath: entry.Path,
+			Name: "TargetFramework", Value: "net8.0",
+		}},
+	}}}
 }
 
 type resourceDetectorFake struct{ path string }
@@ -190,9 +200,11 @@ func (f resourceObserverFake) Observe(_ context.Context, input ResourceObservati
 	return ResourceObservation{Resource: resource}, nil
 }
 
-type dependencyAnalyzerFake struct{}
+type dependencyAnalyzerFake struct{ inputs []ProjectAnalysisInput }
 
-func (dependencyAnalyzerFake) Analyze(_ context.Context, project domain.BuildProject, resources ResourceIndex) DetectionResult[DependencyBundle] {
+func (d *dependencyAnalyzerFake) Analyze(_ context.Context, input ProjectAnalysisInput, resources ResourceIndex) DetectionResult[DependencyBundle] {
+	d.inputs = append(d.inputs, input)
+	project := input.Project
 	resource := resources.Find(domain.ResourceTypeNodeModules, "")[0]
 	dependency := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID,
 		TargetType: domain.NodeResource, TargetID: resource.ID, Relation: domain.RelationRequires, Confidence: 60}
@@ -201,6 +213,34 @@ func (dependencyAnalyzerFake) Analyze(_ context.Context, project domain.BuildPro
 		SourcePath: project.ManifestPath, CollectedAt: project.LastObservedAt}
 	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, "", "", "")
 	return DetectionResult[DependencyBundle]{Items: []DependencyBundle{{Dependency: dependency, Evidence: []domain.Evidence{evidence}}}}
+}
+
+func TestMemoryResourceIndexListsEveryVersionOfType(t *testing.T) {
+	windowsA := domain.Resource{ID: "win-a", Type: domain.ResourceTypeWindowsSDK, Version: "10.0.1"}
+	windowsB := domain.Resource{ID: "win-b", Type: domain.ResourceTypeWindowsSDK, Version: "10.0.2"}
+	dotnet := domain.Resource{ID: "dotnet", Type: domain.ResourceTypeDotNetSDK, Version: "8.0.1"}
+	index := newMemoryResourceIndex([]domain.Resource{windowsA, dotnet, windowsB})
+
+	got := index.ListByType(domain.ResourceTypeWindowsSDK)
+	if len(got) != 2 {
+		t.Fatalf("ListByType() = %#v, want two Windows SDK resources", got)
+	}
+	seen := map[string]bool{}
+	for _, resource := range got {
+		seen[resource.ID] = true
+	}
+	if !seen[windowsA.ID] || !seen[windowsB.ID] || seen[dotnet.ID] {
+		t.Fatalf("ListByType() IDs = %#v", seen)
+	}
+
+	for i := range got {
+		got[i].ID = "mutated"
+	}
+	for _, resource := range index.ListByType(domain.ResourceTypeWindowsSDK) {
+		if resource.ID == "mutated" {
+			t.Fatal("ListByType() returned storage owned by the index")
+		}
+	}
 }
 
 type scanRepositoryCapture struct{ records []ScanRecord }

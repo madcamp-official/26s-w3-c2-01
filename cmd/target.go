@@ -36,12 +36,13 @@ var ErrTargetNotFound = errors.New("no matching project or resource")
 var ErrTargetAmbiguous = errors.New("multiple matches; give an exact ID or path")
 
 // impactScopes is the fixed set of scopes shown for every affected project
-// by both `explain` and `impact`. Only BUILD is currently judged by
-// app.ImpactService (direct dependency edge -> rebuild fails); RUN and
-// DEBUG are rendered as UNKNOWN rather than guessed, since evaluating them
-// needs more than a declared/resolved SDK edge (see
-// internal/app/impact_service.go's doc comment and the note this adds to
-// docs/libra_integration_contracts.md §20.4).
+// by both `explain` and `impact`. app.ImpactService.Assess judges RUN,
+// BUILD, and DEBUG from a direct dependency edge alone (see
+// internal/app/impact_service.go's doc comment); a scope it doesn't return
+// an assessment for still renders as UNKNOWN rather than disappearing. CI is
+// deliberately excluded here -- per F-08 in
+// docs/libra_cli_commands_and_schedule.md, a discovered CI reference belongs
+// in the Unverified listing, not this fixed scope table.
 var impactScopes = []domain.ImpactScope{domain.ImpactScopeRun, domain.ImpactScopeBuild, domain.ImpactScopeDebug}
 
 type targetKind int

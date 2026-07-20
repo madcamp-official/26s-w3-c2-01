@@ -47,12 +47,11 @@ dependency, and any CI configuration that references it.`,
 		// Two queries against the same graph, deliberately not one:
 		// FindProjectsByResource gives the raw edges (which projects, so we
 		// can look up their name/path to render), while ImpactService.Assess
-		// gives the *judged* level per project+scope (currently BUILD only --
-		// it's app-layer policy, not something this command re-derives from
-		// the edges itself). Keeping cmd a thin renderer over both, rather
-		// than reimplementing Assess's judgment inline, is what let this
-		// command pick up ImpactService's logic without needing to change
-		// when RUN/DEBUG rules are eventually added there.
+		// gives the *judged* level per project+scope -- it's app-layer
+		// policy, not something this command re-derives from the edges
+		// itself. Keeping cmd a thin renderer over both, rather than
+		// reimplementing Assess's judgment inline, is what lets this command
+		// pick up ImpactService's logic unchanged as it grows more scopes.
 		dependencies := sqlite.NewDependencyRepository(db)
 		edges, err := dependencies.FindProjectsByResource(cmd.Context(), resource.ID)
 		if err != nil {
@@ -63,11 +62,14 @@ dependency, and any CI configuration that references it.`,
 		if err != nil {
 			return fmt.Errorf("assess impact of %q: %w", resource.ID, err)
 		}
-		buildLevel := make(map[string]domain.ImpactLevel, len(assessments))
+		levelByProjectScope := make(map[string]map[domain.ImpactScope]domain.ImpactLevel, len(assessments))
 		for _, a := range assessments {
-			if a.Scope == domain.ImpactScopeBuild {
-				buildLevel[a.ProjectID] = a.Level
+			byScope := levelByProjectScope[a.ProjectID]
+			if byScope == nil {
+				byScope = make(map[domain.ImpactScope]domain.ImpactLevel)
+				levelByProjectScope[a.ProjectID] = byScope
 			}
+			byScope[a.Scope] = a.Level
 		}
 
 		view := output.ImpactView{}
@@ -84,14 +86,12 @@ dependency, and any CI configuration that references it.`,
 			}
 			// Every scope in impactScopes always renders a line (see that
 			// var's doc comment in cmd/target.go): default to UNKNOWN, and
-			// only overwrite it for the one scope (BUILD) this session's
-			// ImpactService actually judges.
+			// only overwrite it for a scope ImpactService actually returned
+			// an assessment for.
 			for _, scope := range impactScopes {
 				level := domain.ImpactLevelUnknown
-				if scope == domain.ImpactScopeBuild {
-					if l, ok := buildLevel[project.ID]; ok {
-						level = l
-					}
+				if l, ok := levelByProjectScope[project.ID][scope]; ok {
+					level = l
 				}
 				projectView.Scopes = append(projectView.Scopes, output.ImpactScopeLine{
 					Scope:  scope,

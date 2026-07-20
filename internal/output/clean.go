@@ -12,8 +12,8 @@ import (
 type CleanItemStatus string
 
 const (
-	// CleanItemWouldMove means the resource still matches the plan
-	// snapshot exactly and would be quarantined if --execute existed.
+	// CleanItemWouldMove means the resource still matches the database
+	// snapshot in dry-run; --execute performs the stronger filesystem checks.
 	CleanItemWouldMove CleanItemStatus = "WOULD_MOVE"
 	// CleanItemChanged means the resource still exists but its size or
 	// risk has drifted since planning, so it would be skipped rather
@@ -24,10 +24,7 @@ const (
 	CleanItemMissing CleanItemStatus = "MISSING"
 )
 
-// CleanView is the rendered result of `libra clean --plan <id>`: a preview
-// of what each planned item would do, without moving anything. Real
-// quarantine execution (--execute) is not implemented yet -- see
-// docs/libra_cli_commands_and_schedule.md Day 5 status.
+// CleanView is the dry-run result of `libra clean --plan <id>`.
 type CleanView struct {
 	PlanID string          `json:"plan_id"`
 	DryRun bool            `json:"dry_run"`

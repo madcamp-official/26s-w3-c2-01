@@ -154,7 +154,7 @@ func TestCleanCommandFlagsDriftSincePlanning(t *testing.T) {
 	}
 }
 
-func TestCleanCommandExecuteReturnsNotImplementedError(t *testing.T) {
+func TestCleanCommandExecuteRejectsUnknownPlan(t *testing.T) {
 	scanRoot = ""
 	jsonOutput = false
 	cfgPath = ""
@@ -175,8 +175,8 @@ func TestCleanCommandExecuteReturnsNotImplementedError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute(clean --execute) error = nil, want not-implemented error")
 	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Fatalf("error = %v, want mention of not implemented", err)
+	if !strings.Contains(err.Error(), "cleanup plan not found") {
+		t.Fatalf("error = %v, want cleanup plan not found", err)
 	}
 	cleanExecute = false
 }

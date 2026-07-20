@@ -1087,16 +1087,15 @@ CLI option > 명시한 config > 기본 config > 코드 default
 - `--root`가 하나라도 있으면 config roots 대체
 - `--exclude`는 config exclude에 추가
 
-### 21.2 공통 JSON envelope (`DECISION_REQUIRED`)
+### 21.2 공통 JSON envelope (`CONFIRMED`, 2026-07-20)
 
 ```json
 {
-  "schema_version": 1,
-  "command": "scan",
-  "status": "completed_with_errors",
+  "command": "clean",
+  "status": "PARTIAL",
   "data": {},
-  "warnings": [],
-  "generated_at": "2026-07-18T07:00:00Z"
+  "issues": [],
+  "unverified": []
 }
 ```
 
@@ -1109,7 +1108,7 @@ CLI option > 명시한 config > 기본 config > 코드 default
 - 배열 정렬 기준을 command별로 고정
 - field 생략과 `null` 의미를 schema에 명시
 
-### 21.3 stdout·stderr와 종료 코드 (`DECISION_REQUIRED`)
+### 21.3 stdout·stderr와 종료 코드 (`CONFIRMED`, 2026-07-20)
 
 ```text
 stdout → 최종 결과
@@ -1121,9 +1120,9 @@ JSON stdout에는 다른 문자를 절대 섞지 않는다. 비TTY에서는 prog
 | 코드 | 의미 |
 |---:|---|
 | `0` | 정상 또는 recoverable warning과 함께 완료 |
-| `1` | 일반 실행 실패 |
-| `2` | 잘못된 option·config |
-| `3` | 대상 없음 |
+| `1` | 잘못된 인자·config 또는 일반 명령 오류 |
+| `2` | 대상·plan·transaction 없음 |
+| `3` | DB·파일시스템 내부 오류 |
 | `4` | safety policy 차단 |
 | `5` | 부분 clean·restore 실패 |
 | `130` | 사용자 취소 |
@@ -1196,39 +1195,54 @@ scanner visitor는 후보 수집·가벼운 분류만 수행하고 XML/JSON pars
 
 ## 23. Plan 계약
 
-### 23.1 후보 선택 (`DECISION_REQUIRED`)
+### 23.1 후보 선택 (`CONFIRMED`, 2026-07-20)
 
 MVP greedy 순서:
 
 ```text
 1. BLOCKED 제외
-2. 요청한 Risk 범위만 유지
-3. Risk가 낮은 순
-4. Confidence가 높은 순
-5. 큰 Resource 순
+2. 기본적으로 SAFE만 유지하며 REVIEW를 자동 포함하지 않음
+3. Confidence가 높은 순
+4. ReclaimableSize가 큰 순
+5. stable Resource ID 순
 6. target bytes 이상이면 중단
 ```
 
 최적 부분집합은 풀지 않는다. 실행 단위는 Resource이며 text 출력에서 project별로 묶는다.
+목표를 채우지 못해도 plan은 `INSUFFICIENT_CANDIDATES`로 저장하고 선택 용량과
+부족 용량을 표시한다.
 
-### 23.2 계획 이후 변경 재검증 (`DECISION_REQUIRED`)
+산출물 소유 관계는 dependency graph의 `PROJECT --OWNS--> RESOURCE`로 저장하고
+소유 Evidence를 기존 evidence 구조로 연결한다. 재생성 명령은 plan/recovery
+snapshot에 둔다. 관계에는 소유 프로젝트, resource, 판단 근거, 재생성 가능 여부,
+마지막 검증 scan을 추적할 수 있어야 한다.
+
+### 23.2 계획 snapshot (`CONFIRMED`, 2026-07-20)
 
 ```go
 type PlanItem struct {
-    ResourceID       string
-    Path             string
-    ExpectedSize     int64
-    ExpectedModified time.Time
-    ExpectedType     ResourceType
-    RiskAtPlanning   RiskLevel
+    ResourceID           string
+    NormalizedPath       string
+    ExpectedType         ResourceType
+    ExpectedSize         int64
+    ExpectedModifiedTime time.Time
+    RiskAtPlanning       RiskLevel
+    ConfidenceAtPlanning int
+    OwnerProjectID       string
+    ScanID               string
+    RegenerationCommand  string
 }
 ```
 
-실행 직전에 path, type, size, modified time, Risk와 safety 조건을 다시 검사한다. 불일치하면 항목을 차단하고 새 plan 생성을 요구한다.
+실행 직전에 path 정규화 결과, type, size, modified time, project ownership,
+SAFE 판정, Git tracked 원본, reparse point, 보호 경로를 다시 검사한다. 불일치한
+항목만 `SKIPPED`로 두고 안전한 나머지는 계속 처리하며 새 plan 필요 이유를
+기록한다. 보호 경로나 link로 바뀐 경우 exit code 4, 일부만 처리된 경우
+transaction은 `PARTIALLY_QUARANTINED`와 exit code 5를 사용한다.
 
 ## 24. Clean과 Restore 안전 계약
 
-### 24.1 allowlist (`DECISION_REQUIRED`, safety review 필수)
+### 24.1 CleanupEligible과 allowlist (`CONFIRMED`, 2026-07-20, safety review 필수)
 
 MVP 후보 이름:
 
@@ -1240,14 +1254,21 @@ node_modules, bin, obj, build, dist, .next, out, Debug, Release
 
 ```text
 project root 내부
+허용된 산출물 종류
 Risk == SAFE
 Regenerable == true
 reparse point 아님
 보호 경로 아님
+Git tracked 원본 없음
 실행 직전 재검증 성공
 ```
 
-### 24.2 denylist (`DECISION_REQUIRED`, safety review 필수)
+`CleanupEligible`은 위 조건의 AND이며, 현재 네 가지 `CleanupEvidence`
+(ProjectOwned, KnownOutputPath, ReparsePointFree, GitTrackedOriginalsAbsent)를
+기본 증거로 쓴다. 하나라도 미검증이면 REVIEW, system-managed 또는 denylist면
+BLOCKED다. 폴더 이름만으로 SAFE가 되지 않는다.
+
+### 24.2 denylist (`CONFIRMED`, 2026-07-20, safety review 필수)
 
 ```text
 C:\Windows
@@ -1263,7 +1284,7 @@ quarantine 자체
 
 denylist path와 그 하위 path 모두 차단한다.
 
-### 24.3 link 정책 (`DECISION_REQUIRED`)
+### 24.3 link 정책 (`CONFIRMED`, 2026-07-20)
 
 MVP에서는 `FollowReparsePoints` 설정과 관계없이 다음으로 고정하는 방향을 권장한다.
 
@@ -1275,7 +1296,15 @@ restore → manifest에 기록된 일반 directory만 처리
 
 현재 실질적으로 지원하지 않는 `FollowReparsePoints=true`는 제거하거나 명시적인 unsupported 오류를 반환해야 한다.
 
-### 24.4 quarantine (`DECISION_REQUIRED`)
+### 24.4 clean 실행과 quarantine (`CONFIRMED`, 2026-07-20)
+
+```text
+libra clean --plan <id>                 → dry-run
+libra clean --plan <id> --execute       → 실제 격리 + 대화형 확인
+libra clean --plan <id> --execute --yes → 실제 격리 + 확인 생략
+```
+
+`--yes`는 확인 생략만 뜻하며 실행 활성화 의미를 겸하지 않는다.
 
 동일 volume의 전용 디렉터리를 사용한다.
 
@@ -1285,9 +1314,12 @@ D:\.libra-quarantine\tx-...\
 └─ items\
 ```
 
-volume별 위치, hidden attribute, ACL 상속, 공간 부족, 기존 quarantine 충돌을 구현 전에 확정한다.
+하나의 논리 transaction ID를 사용하되 각 volume에 별도 quarantine root를 둔다.
+원본 절대 경로, ACL과 hidden 속성, schema version을 manifest에 보존한다. 파일을
+옮기기 전에 disk manifest를 먼저 기록하며 manifest 기록 실패 시 이동하지 않는다.
+DB는 조회용 index이고 disk manifest가 복구의 최종 근거다.
 
-### 24.5 transaction과 부분 실패 (`DECISION_REQUIRED`)
+### 24.5 transaction과 부분 실패 (`CONFIRMED`, 2026-07-20)
 
 transaction 상태 제안:
 
@@ -1302,9 +1334,9 @@ item 상태 제안:
 PENDING, MOVED, SKIPPED, FAILED, RESTORED
 ```
 
-MVP는 item을 독립 처리하고 실패해도 나머지를 계속하며 최종 상태를 `PARTIALLY_QUARANTINED`로 기록한다. 파일 이동 전에 disk manifest를 쓰고 각 이동 후 갱신해 DB 기록 실패에서도 복구 근거를 남긴다.
+MVP는 item을 독립 처리하고 실패해도 나머지를 계속하며 최종 상태를 `PARTIALLY_QUARANTINED`로 기록한다. 기록 순서는 disk manifest 생성 → 파일 이동 → disk manifest 갱신 → DB 갱신이다. DB 갱신 실패에서도 disk manifest로 복구할 수 있어야 한다.
 
-### 24.6 restore 충돌과 purge (`DECISION_REQUIRED`)
+### 24.6 restore 충돌과 purge (`CONFIRMED`, 2026-07-20)
 
 - 원래 위치가 존재하면 자동 overwrite·merge 금지
 - 해당 item 복구 차단
@@ -1403,7 +1435,7 @@ exit code 변경
 [x] Resource repository interface
 [x] Dependency repository interface
 [x] structured Issue
-[ ] JSON envelope와 exit code
+[x] JSON envelope와 exit code
 ```
 
 ### 분석기 연결 전
@@ -1417,21 +1449,21 @@ exit code 변경
 [ ] Confidence 공식
 [x] 중앙 RiskPolicy
 [ ] Impact enum
-[ ] 산출물 소유권 판정
+[x] 산출물 소유권 판정
 ```
 
 ### 정리 기능 전
 
 ```text
-[ ] SAFE allowlist
-[ ] 절대 금지 denylist
-[ ] link/reparse point 정책
-[ ] plan 실행 전 재검증
-[ ] quarantine와 manifest
-[ ] transaction/item 상태
-[ ] 부분 실패 정책
-[ ] restore 충돌
-[ ] purge 정책
+[x] SAFE allowlist
+[x] 절대 금지 denylist
+[x] link/reparse point 정책
+[x] plan 실행 전 재검증
+[x] quarantine와 manifest
+[x] transaction/item 상태
+[x] 부분 실패 정책
+[x] restore 충돌
+[x] purge 정책
 ```
 
 ### daemon·배포 전

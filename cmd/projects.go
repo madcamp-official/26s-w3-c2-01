@@ -4,16 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 	"github.com/spf13/cobra"
 )
 
-// projects.go reads straight from ProjectRepository/DependencyRepository
-// (no application service in between, unlike cmd/scan.go and
-// cmd/summary.go) since all it does is list, filter, and count -- see
-// docs/libra_review_findings_day4.md §5 for why this is flagged as a
-// structural inconsistency worth a team decision rather than fixed here.
 var (
 	projectsType   string
 	projectsDrive  string
@@ -39,29 +36,26 @@ observed times, activity status, and how many resources it depends on.`,
 		}
 		defer db.Close()
 
-		projects, err := sqlite.NewProjectRepository(db).List(cmd.Context())
+		service := app.NewProjectListService(sqlite.NewProjectRepository(db), sqlite.NewDependencyRepository(db))
+		listings, err := service.List(cmd.Context(), func(project domain.BuildProject) bool {
+			if projectsType != "" && !strings.EqualFold(string(project.Type), projectsType) {
+				return false
+			}
+			if projectsDrive != "" && !strings.EqualFold(project.Drive, projectsDrive) {
+				return false
+			}
+			if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsStatus) {
+				return false
+			}
+			return true
+		})
 		if err != nil {
 			return fmt.Errorf("list projects: %w", err)
 		}
-		dependencies := sqlite.NewDependencyRepository(db)
 
 		view := output.ProjectsView{}
-		for _, project := range projects {
-			if projectsType != "" && !strings.EqualFold(string(project.Type), projectsType) {
-				continue
-			}
-			if projectsDrive != "" && !strings.EqualFold(project.Drive, projectsDrive) {
-				continue
-			}
-			if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsStatus) {
-				continue
-			}
-
-			resources, err := dependencies.FindResourcesByProject(cmd.Context(), project.ID)
-			if err != nil {
-				return fmt.Errorf("count resources for project %q: %w", project.ID, err)
-			}
-
+		for _, listing := range listings {
+			project := listing.Project
 			view.Projects = append(view.Projects, output.ProjectLine{
 				Name:           project.Name,
 				Path:           project.RootPath,
@@ -71,7 +65,7 @@ observed times, activity status, and how many resources it depends on.`,
 				LastModifiedAt: project.LastModifiedAt,
 				LastObservedAt: project.LastObservedAt,
 				Status:         project.Status,
-				ResourceCount:  len(resources),
+				ResourceCount:  listing.ResourceCount,
 			})
 		}
 

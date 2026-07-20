@@ -270,7 +270,7 @@ Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2)
 
 ---
 
-## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20, `cmd/target.go` 설계 근거를 설명하다가 발견)
+## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20 발견, 2026-07-20 해결)
 
 ### 위치
 
@@ -286,9 +286,9 @@ if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsSt
 
 `--drive`/`--status`는 대소문자를 무시하고 `--type`만 정확히 일치해야 한다 — `libra projects --type Node`는 아무것도 안 찾고 `--type node`만 찾는다. 사용자 입장에서 세 옵션이 왜 다르게 동작하는지 알 방법이 없다. `cmd/resources.go`/`cmd/summary.go`의 같은 종류 필터는 전부 `strings.EqualFold`를 쓴다 — `projects.go`의 `--type`만 예외.
 
-### 제안
+### 해결
 
-`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 바꾸면 된다. `cmd/projects.go`는 제 소유 영역(Mac C)이라 원하시면 바로 고치겠습니다 — 지금은 기록만 해둡니다.
+`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 변경 (`fix/risk-policy-scan-service` 브랜치). `cmd/projects_test.go`에 `--type Node`가 `--type node`로 저장된 프로젝트를 대소문자 무시하고 찾는지 검증하는 케이스를 추가했다 -- 수정 전으로 되돌리면 이 테스트가 실제로 fail하는 것을 확인함.
 
 ---
 

@@ -47,7 +47,7 @@ observed times, activity status, and how many resources it depends on.`,
 
 		view := output.ProjectsView{}
 		for _, project := range projects {
-			if projectsType != "" && string(project.Type) != projectsType {
+			if projectsType != "" && !strings.EqualFold(string(project.Type), projectsType) {
 				continue
 			}
 			if projectsDrive != "" && !strings.EqualFold(project.Drive, projectsDrive) {

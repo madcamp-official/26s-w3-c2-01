@@ -800,6 +800,15 @@ libra impact windows-sdk:<version>
 
 > Day 4까지 이 기능이 완성되지 않으면 `clean`과 `daemon` 구현을 시작하지 않는다.
 
+### 현재 상태 (2026-07-20)
+
+Day 4의 핵심 경로인 MSBuild 프로젝트 탐지 → Windows SDK/.NET SDK 의존성 분석
+→ dependency/Evidence 저장 → `explain`/`impact` 출력은 구현 및 E2E 검증을
+완료했다. 중앙 `RiskPolicy`도 완전한 `CleanupEvidence`에서만 SAFE를 반환한다.
+다만 실제 산출물 detector는 reparse point와 Git tracked 원본 부재를 아직
+검증하지 않으므로 결과를 REVIEW로 유지한다. 이 두 증거 수집과 실제 Windows
+환경 검증은 Day 5 clean 실행 전에 완료해야 한다.
+
 ---
 
 ## Day 5 — 정리 계획 및 안전한 격리

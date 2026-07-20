@@ -8,6 +8,15 @@ import (
 	"io"
 )
 
+// [한국어 설명] format.go는 output 패키지의 공통 렌더링 기반
+// (Format/Renderable/Printer)을 정의한다. 각 명령의 결과를 나타내는
+// 구체적인 뷰 타입(예: internal/output/projects.go의 ProjectsView,
+// internal/output/summary.go의 SummaryView)은 Renderable 인터페이스만
+// 구현하면 되고, 텍스트로 보여줄지 JSON으로 보여줄지는 이 파일의
+// Printer가 --json 플래그 값에 따라 일괄 처리한다. 즉 이 파일은
+// "어떻게 출력하는가"라는 공통 메커니즘을, 나머지 파일들은 "무엇을
+// 출력하는가"라는 각 명령별 데이터 구조를 담당한다.
+
 // Format selects how a Printer renders a Renderable.
 type Format int
 

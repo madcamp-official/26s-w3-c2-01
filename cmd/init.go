@@ -1,3 +1,11 @@
+// [한국어 설명] `libra init` 명령을 등록하는 파일이다. cmd 패키지에서
+// 유일하게 .libra.yaml 설정 파일이 없을 때 기본값으로 새로 생성하는
+// 명령이며, 그 다음 로컬 SQLite DB(db.go의 openDatabase)를 열어
+// 마이그레이션까지 적용해 둔다. 다른 명령들(scan.go, projects.go,
+// summary.go 등)은 설정 파일이 이미 존재한다고 가정하거나, 없으면
+// config.Default()로 조용히 대체할 뿐 `libra init`이 먼저 실행됐는지
+// 확인하지 않는다 -- 즉 init.go는 "최초 1회 설정"을 명시적으로
+// 담당하는 유일한 진입점이다.
 package cmd
 
 import (

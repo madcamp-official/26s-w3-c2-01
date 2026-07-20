@@ -1,3 +1,11 @@
+// [한국어 설명] `libra summary` 명령을 등록하는 파일이다. cmd
+// 패키지에서 projects.go 등 다른 읽기 전용 명령들과 달리 유일하게
+// application service(app.SummaryService)를 거쳐 집계를 수행한다
+// -- 부수효과가 있어서가 아니라 순수 집계 로직이기 때문. 리소스
+// 타입을 사람이 읽기 좋은 라벨로 바꾸는 resourceTypeLabels 매핑과
+// resourceTypeLabel 헬퍼도 이 파일에 있으며, 실제 텍스트/JSON 렌더링
+// 형식은 internal/output/summary.go의 SummaryView가 담당한다(이
+// 파일은 도메인 데이터를 그 뷰 구조체로 변환만 한다).
 package cmd
 
 import (

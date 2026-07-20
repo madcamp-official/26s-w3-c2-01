@@ -33,6 +33,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// [한국어 설명] node.go는 단일 Node.js 프로젝트 탐지(package.json
+// 존재 확인 및 domain.BuildProject 생성)와, 그 프로젝트가 소유한
+// 빌드 산출물(node_modules, dist, .next, build, out) 탐지를
+// 담당한다. 같은 디렉터리의 workspace.go는 npm/Yarn/pnpm workspace
+// 탐지와 멤버(하위 패키지) 경로 해석만 전담하며, 이 파일이 제공하는
+// DetectArtifacts/DetectMemberArtifacts를 각 workspace 멤버에 대해
+// 호출해 재사용한다. 즉 "프로젝트 하나를 어떻게 인식하는가"는
+// node.go, "여러 프로젝트가 workspace로 묶여 있을 때 어떻게
+// 찾아내는가"는 workspace.go로 역할이 나뉘어 있다.
+
 // manifestFile is the marker that identifies a Node BuildProject root.
 const manifestFile = "package.json"
 

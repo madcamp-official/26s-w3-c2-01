@@ -11,6 +11,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
+// [한국어 설명] projects.go는 `libra projects` 명령의 출력 형식
+// (ProjectsView/ProjectLine)과 텍스트 렌더링(RenderText)을 정의한다.
+// JSON 렌더링은 별도로 구현하지 않는데, format.go의 Printer가
+// encoding/json으로 이 구조체를 그대로 인코딩해 주기 때문이다(구조체
+// 필드에 붙은 json 태그가 그 계약). 이 파일의 formatTime 헬퍼는
+// 이름과 달리 ProjectsView 전용이 아니라 output 패키지 전체에서
+// 타임스탬프를 표시하는 모든 뷰(explain/impact 등)가 공유하도록
+// 의도된 함수이며, 단지 ProjectsView가 첫 사용처였기 때문에 이
+// 파일에 있을 뿐이다.
+
 // ProjectsView is the rendered result of `libra projects`: every discovered
 // project and its activity state. See F-03/3.4 in
 // docs/libra_cli_commands_and_schedule.md.

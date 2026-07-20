@@ -1,3 +1,11 @@
+// [한국어 설명] `libra projects` 명령을 등록하는 파일이다. 이 명령은
+// 조회/필터링/개수 집계만 수행하는 순수 읽기 전용 명령인데, 같은
+// 성격의 summary.go가 app.SummaryService라는 application service를
+// 거치는 것과 달리 이 파일은 internal/store/sqlite의
+// ProjectRepository/DependencyRepository를 cmd에서 직접 호출한다
+// (계층을 한 단계 건너뜀). 이 비일관성은 팀에서 이미 인지하고
+// docs/libra_review_findings_day4.md §5에 구조적 이슈로 기록해
+// 두었으며, 이 작업에서 임의로 고치지 않는다.
 package cmd
 
 import (

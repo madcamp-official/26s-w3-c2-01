@@ -1,3 +1,10 @@
+// [한국어 설명] root.go는 Cobra 명령 트리의 진입점(entrypoint)이다.
+// main.go는 이 패키지의 Execute() 함수 하나만 호출하며, 나머지
+// cmd/*.go 파일(explain.go, impact.go, init.go, projects.go,
+// scan.go, summary.go 등)은 각자의 init()에서 rootCmd.AddCommand로
+// 자기 자신을 등록한다. 또한 --config, --json, --verbose 등 모든
+// 하위 명령이 공유하는 전역 persistent flag 값도 이 파일에서 선언되며,
+// 각 명령 파일은 이 변수들을 그대로 읽어 쓸 뿐 다시 정의하지 않는다.
 package cmd
 
 import "github.com/spf13/cobra"

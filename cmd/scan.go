@@ -1,3 +1,13 @@
+// [한국어 설명] `libra scan` 명령을 등록하는 파일이다. cmd 패키지에서
+// 유일하게 DB에 쓰기(write)를 수행하는 명령이며 -- projects.go,
+// summary.go 등 나머지 명령은 모두 이전 scan이 저장해 둔 데이터를
+// 읽기만 한다. 파일시스템을 순회하며 프로젝트/리소스 탐지기들
+// (Git/Node/MSBuild 프로젝트 탐지기, Windows SDK/.NET SDK/Visual
+// Studio 리소스 탐지기)을 app.NewAnalysisOrchestrator에 조립해
+// 실행한다. resourceDetectors가 리터럴 호출이 아니라 var로 선언된
+// 것은 테스트(cmd/summary_golden_test.go, cmd/resources_test.go)가
+// 이를 교체해서, 실행 머신에 실제로 설치된 SDK에 의존하지 않고
+// 테스트할 수 있게 하기 위함이다.
 package cmd
 
 import (

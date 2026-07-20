@@ -17,6 +17,16 @@ import (
 // (package.json, node_modules/dist/etc.) live in node.go. See that file's
 // package doc comment for the shared MVP-scope decisions both files follow.
 
+// [한국어 설명] workspace.go는 npm/Yarn의 package.json "workspaces"
+// 필드 또는 pnpm의 pnpm-workspace.yaml을 읽어 workspace 루트 여부를
+// 판정(DetectWorkspace)하고, 그 glob 패턴을 실제 멤버 디렉터리
+// 경로로 해석(ResolveMembers)하며, 각 멤버의 빌드 산출물을
+// node.go의 탐지 로직으로 모아 반환(DetectWorkspaceArtifacts)한다.
+// 단일 프로젝트 자체를 인식하는 로직(package.json 파싱, node_modules
+// 등 산출물 디렉터리 판별)은 여기서 다루지 않고 node.go가 전담하며,
+// 이 파일은 그 위에서 "여러 패키지가 하나의 workspace로 묶여 있다"는
+// 사실만 추가로 처리한다.
+
 // pnpmWorkspaceFile is the marker for a pnpm workspace root.
 const pnpmWorkspaceFile = "pnpm-workspace.yaml"
 

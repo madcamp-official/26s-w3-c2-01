@@ -8,6 +8,14 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
+// [한국어 설명] summary.go는 `libra summary` 명령의 출력 형식
+// (SummaryView/SummaryLine)과 텍스트 렌더링(RenderText)을 정의한다.
+// cmd/summary.go가 app.SummaryService의 집계 결과를 이 구조체로
+// 변환해 넘겨주면, 이 파일은 그것을 tabwriter로 정렬된 표 형태의
+// 텍스트로 출력하는 역할만 담당한다. JSON 출력은 여기서 별도로
+// 구현하지 않고 format.go의 Printer가 구조체의 json 태그를 이용해
+// 공통 처리한다 -- projects.go의 ProjectsView와 동일한 패턴이다.
+
 // SummaryView is the rendered result of `libra summary`: developer storage
 // usage broken down by resource type, plus totals by risk level. See F-06 in
 // docs/libra_cli_commands_and_schedule.md.

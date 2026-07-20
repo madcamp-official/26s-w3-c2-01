@@ -17,6 +17,27 @@ const (
 	EvidenceUnknown  EvidenceKind = "UNKNOWN"
 )
 
+// DefaultConfidence is the CONFIRMED MVP score for each EvidenceKind
+// (docs/libra_integration_contracts.md §20.2). It is the single shared scale
+// every adapter's Confidence value must be drawn from -- adapter-local
+// tables that don't reuse these numbers drift apart silently (this is what
+// happened before §20.2 was confirmed: internal/adapter/node and
+// internal/adapter/msbuild/artifacts.go each had their own placeholder
+// scale, unrelated to internal/adapter/msbuild/resolve.go's).
+//
+// This governs the *base* score for a single piece of evidence only.
+// Combining multiple Evidence for the same Dependency (limited additive
+// credit for corroborating facts) and UnverifiedScope penalties are not
+// implemented yet -- no resource today carries more than one Evidence, so
+// there is nothing to combine in practice.
+var DefaultConfidence = map[EvidenceKind]int{
+	EvidenceResolved: 90,
+	EvidenceObserved: 85,
+	EvidenceDeclared: 75,
+	EvidenceInferred: 40,
+	EvidenceUnknown:  10,
+}
+
 // Evidence is one scan-owned fact supporting a Dependency edge.
 type Evidence struct {
 	ID            string

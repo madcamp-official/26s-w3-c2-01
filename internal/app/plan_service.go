@@ -133,6 +133,7 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 			ConfidenceAtPlanning: r.Confidence,
 			OwnerProjectID:       closestOwningProjectID(r, projects),
 			ScanID:               scan.ID,
+			RegenerationCommand:  r.RegenerationCommand,
 		})
 		selected += r.ReclaimableSize
 	}

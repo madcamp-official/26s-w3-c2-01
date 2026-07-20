@@ -196,11 +196,20 @@ func (s *ParallelScanner) scanDirectory(task directoryTask, maxDepth int, matche
 	return result
 }
 
+// IsLinkLike reports whether info describes a symlink or NTFS reparse point
+// (junction, mount point) rather than a real file or directory -- the same
+// test entryFromInfo uses below to classify an Entry as EntrySymlink.
+// Adapters outside this package use it to decide whether a path is safe to
+// treat as project-owned before including it in cleanup evidence.
+func IsLinkLike(info fs.FileInfo) bool {
+	return info.Mode()&os.ModeSymlink != 0 || isReparsePoint(info)
+}
+
 func entryFromInfo(path string, info os.FileInfo) Entry {
 	kind := EntryOther
 	size := logicalSize(info)
 	switch {
-	case info.Mode()&os.ModeSymlink != 0 || isReparsePoint(info):
+	case IsLinkLike(info):
 		kind = EntrySymlink
 		size = 0
 	case info.IsDir():

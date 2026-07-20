@@ -45,7 +45,13 @@ func (s *ResourceListService) List(ctx context.Context, filter func(domain.Resou
 		if err != nil {
 			return nil, fmt.Errorf("count projects for resource %q: %w", resource.ID, err)
 		}
-		listings = append(listings, ResourceListing{Resource: resource, ProjectCount: len(projects)})
+		count := 0
+		for _, project := range projects {
+			if project.Relation == domain.RelationRequires {
+				count++
+			}
+		}
+		listings = append(listings, ResourceListing{Resource: resource, ProjectCount: count})
 	}
 	return listings, nil
 }

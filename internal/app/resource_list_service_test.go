@@ -13,7 +13,7 @@ func TestResourceListServiceFiltersAndCountsProjects(t *testing.T) {
 		{ID: "r2", Name: "modules", Type: domain.ResourceTypeNodeModules},
 	}}
 	dependencies := &dependencyRepositoryStub{byResource: map[string][]domain.Dependency{
-		"r1": {{SourceID: "p1", TargetID: "r1"}},
+		"r1": {{SourceID: "p1", TargetID: "r1", Relation: domain.RelationRequires}},
 	}}
 
 	service := NewResourceListService(resources, dependencies)

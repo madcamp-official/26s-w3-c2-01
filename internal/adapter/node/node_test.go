@@ -98,6 +98,11 @@ func TestDetectArtifacts_WithLockfile(t *testing.T) {
 	if nodeModules.Confidence != confidenceDeclaredNodeModules {
 		t.Errorf("node_modules Confidence = %d, want %d", nodeModules.Confidence, confidenceDeclaredNodeModules)
 	}
+	// testdata/node/basic has a package-lock.json, so the npm-specific
+	// reinstall command should be recorded, not a generic hint.
+	if nodeModules.RegenerationCommand != "npm ci" {
+		t.Errorf("node_modules RegenerationCommand = %q, want %q", nodeModules.RegenerationCommand, "npm ci")
+	}
 
 	buildOutput, ok := byType[domain.ResourceTypeBuildOutput]
 	if !ok {
@@ -106,8 +111,48 @@ func TestDetectArtifacts_WithLockfile(t *testing.T) {
 	if buildOutput.Name != "dist" {
 		t.Errorf("build output Name = %q, want %q", buildOutput.Name, "dist")
 	}
-	if !buildOutput.Regenerable {
-		t.Error("dist build output should be Regenerable")
+	// testdata/node/basic/package.json declares no "build" script, so there
+	// is no evidence anything would regenerate dist -- see
+	// TestDetectArtifacts_BuildOutputRegenerableOnlyWithBuildScript.
+	if buildOutput.Regenerable {
+		t.Error("dist build output should not be Regenerable without a declared build script")
+	}
+}
+
+func TestDetectArtifacts_BuildOutputRegenerableOnlyWithBuildScript(t *testing.T) {
+	withScript := t.TempDir()
+	writeFixturePackageJSON(t, withScript, `{"name":"app","scripts":{"build":"tsc"}}`)
+	if err := os.Mkdir(filepath.Join(withScript, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	withoutScript := t.TempDir()
+	writeFixturePackageJSON(t, withoutScript, `{"name":"app"}`)
+	if err := os.Mkdir(filepath.Join(withoutScript, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DetectArtifacts(withScript)
+	if err != nil {
+		t.Fatalf("DetectArtifacts(withScript) error = %v", err)
+	}
+	if len(got) != 1 || !got[0].Regenerable {
+		t.Fatalf("DetectArtifacts(withScript) = %+v, want dist Regenerable = true", got)
+	}
+
+	got, err = DetectArtifacts(withoutScript)
+	if err != nil {
+		t.Fatalf("DetectArtifacts(withoutScript) error = %v", err)
+	}
+	if len(got) != 1 || got[0].Regenerable {
+		t.Fatalf("DetectArtifacts(withoutScript) = %+v, want dist Regenerable = false", got)
+	}
+}
+
+func writeFixturePackageJSON(t *testing.T, dir, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, manifestFile), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -124,6 +169,51 @@ func TestDetectArtifacts_MissingLockfileIsNotRegenerable(t *testing.T) {
 	}
 	if got[0].Confidence != confidenceInferredNodeModules {
 		t.Errorf("Confidence = %d, want %d", got[0].Confidence, confidenceInferredNodeModules)
+	}
+	if got[0].RegenerationCommand != "" {
+		t.Errorf("RegenerationCommand = %q, want empty (no lockfile means no known install command)", got[0].RegenerationCommand)
+	}
+}
+
+func TestDetectArtifacts_RegenerationCommandMatchesDetectedPackageManager(t *testing.T) {
+	cases := []struct {
+		lockfile    string
+		wantInstall string
+		wantBuild   string
+	}{
+		{"package-lock.json", "npm ci", "npm run build"},
+		{"yarn.lock", "yarn install", "yarn run build"},
+		{"pnpm-lock.yaml", "pnpm install", "pnpm run build"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.lockfile, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixturePackageJSON(t, root, `{"name":"app","scripts":{"build":"tsc"}}`)
+			if err := os.WriteFile(filepath.Join(root, tc.lockfile), []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(root, "node_modules"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(root, "dist"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := DetectArtifacts(root)
+			if err != nil {
+				t.Fatalf("DetectArtifacts() error = %v", err)
+			}
+			byType := map[domain.ResourceType]domain.Resource{}
+			for _, r := range got {
+				byType[r.Type] = r
+			}
+			if cmd := byType[domain.ResourceTypeNodeModules].RegenerationCommand; cmd != tc.wantInstall {
+				t.Errorf("node_modules RegenerationCommand = %q, want %q", cmd, tc.wantInstall)
+			}
+			if cmd := byType[domain.ResourceTypeBuildOutput].RegenerationCommand; cmd != tc.wantBuild {
+				t.Errorf("dist RegenerationCommand = %q, want %q", cmd, tc.wantBuild)
+			}
+		})
 	}
 }
 

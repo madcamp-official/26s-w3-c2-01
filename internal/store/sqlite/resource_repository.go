@@ -37,8 +37,8 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 		INSERT INTO resources (
 			id, resource_type, name, version, path, normalized_path,
 			logical_size, size_known, reclaimable_size, regenerable, system_managed,
-			last_modified_at, last_observed_at, risk, confidence
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			last_modified_at, last_observed_at, risk, confidence, regeneration_command
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -53,13 +53,14 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			last_modified_at = excluded.last_modified_at,
 			last_observed_at = excluded.last_observed_at,
 			risk = excluded.risk,
-			confidence = excluded.confidence
+			confidence = excluded.confidence,
+			regeneration_command = excluded.regeneration_command
 	`,
 		resource.ID, resource.Type, resource.Name, nullableString(resource.Version),
 		resource.DisplayPath, resource.NormalizedPath, resource.LogicalSize, boolInt(resource.SizeKnown),
 		resource.ReclaimableSize, boolInt(resource.Regenerable), boolInt(resource.SystemManaged),
 		lastModifiedAt, resource.LastObservedAt.UTC().Format(time.RFC3339Nano),
-		resource.Risk, resource.Confidence,
+		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert resource %q: %w", resource.ID, err)
@@ -125,7 +126,7 @@ func (r *ResourceRepository) List(ctx context.Context) ([]domain.Resource, error
 const resourceSelect = `
 	SELECT id, resource_type, name, version, path, normalized_path,
 		logical_size, size_known, reclaimable_size, regenerable, system_managed,
-		last_modified_at, last_observed_at, risk, confidence
+		last_modified_at, last_observed_at, risk, confidence, regeneration_command
 	FROM resources`
 
 type rowScanner interface {
@@ -140,18 +141,22 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 	var regenerable int
 	var systemManaged int
 	var sizeKnown int
+	var regenerationCommand sql.NullString
 	err := row.Scan(
 		&resource.ID, &resource.Type, &resource.Name, &version,
 		&resource.DisplayPath, &resource.NormalizedPath,
 		&resource.LogicalSize, &sizeKnown, &resource.ReclaimableSize,
 		&regenerable, &systemManaged, &lastModifiedAt, &lastObservedAt,
-		&resource.Risk, &resource.Confidence,
+		&resource.Risk, &resource.Confidence, &regenerationCommand,
 	)
 	if err != nil {
 		return domain.Resource{}, err
 	}
 	if version.Valid {
 		resource.Version = version.String
+	}
+	if regenerationCommand.Valid {
+		resource.RegenerationCommand = regenerationCommand.String
 	}
 	resource.Regenerable = regenerable == 1
 	resource.SystemManaged = systemManaged == 1

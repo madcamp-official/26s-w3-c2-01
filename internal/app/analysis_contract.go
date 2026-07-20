@@ -84,12 +84,8 @@ type DetectionResult[T any] struct {
 // to package.json), before its owning project's stable ID is known.
 //
 // OwnerManifestPath records which project the resource belongs to so a
-// future PROJECT -> RESOURCE dependency edge can be built once every
-// candidate's project has been prepared (resolving the manifest path to a
-// project ID the same way WorkspaceProjectPaths is resolved). That edge is
-// not built yet: the current pipeline only observes and persists the
-// Resource so it shows up in `summary`; linking it to its project is
-// deferred to the Day 4 dependency graph.
+// PROJECT -> RESOURCE OWNS edge is built after every candidate's project and
+// resource stable ID has been prepared.
 type ProjectResourceCandidate struct {
 	OwnerManifestPath string
 	Resource          domain.Resource

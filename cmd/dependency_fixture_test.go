@@ -90,3 +90,58 @@ func seedWindowsSDKDependency(t *testing.T, projectName string) (domain.Resource
 
 	return resource, project
 }
+
+// seedSafeResource inserts a resource directly with Risk=SAFE, standing in
+// for a fully verified CleanupEvidence result that no detector produces
+// yet: real Node/MSBuild artifact detectors only fill 2 of the 4
+// CleanupEvidence flags today (see docs/libra_integration_contracts.md
+// §19.3), so a real `libra scan` never yields a SAFE resource. This lets
+// plan/clean command tests exercise the SAFE selection and dry-run preview
+// paths without waiting on that adapter work.
+func seedSafeResource(t *testing.T, name string, reclaimableSize int64) domain.Resource {
+	t.Helper()
+
+	db, err := openDatabase()
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	displayPath := filepath.Join(t.TempDir(), name)
+	normalizedPath, err := pathutil.Normalize(displayPath)
+	if err != nil {
+		t.Fatalf("normalize resource path: %v", err)
+	}
+	resource := domain.Resource{
+		Type: domain.ResourceTypeNodeModules, Name: name,
+		DisplayPath: displayPath, NormalizedPath: normalizedPath,
+		LogicalSize: reclaimableSize, SizeKnown: true, ReclaimableSize: reclaimableSize,
+		Regenerable: true, SystemManaged: false,
+		LastObservedAt: time.Now().UTC(), Risk: domain.RiskSafe, Confidence: 90,
+	}
+	resource.ID = domain.ResourceID(resource.Type, resource.Version, resource.NormalizedPath)
+	if err := sqlite.NewResourceRepository(db).Upsert(ctx, resource); err != nil {
+		t.Fatalf("seed resource: %v", err)
+	}
+	scan, err := sqlite.NewScanRepository(db).FindLatest(ctx)
+	if err != nil {
+		t.Fatalf("find latest scan: %v", err)
+	}
+	root := filepath.Dir(displayPath)
+	manifest := filepath.Join(root, "package.json")
+	normalizedRoot, _ := pathutil.Normalize(root)
+	normalizedManifest, _ := pathutil.Normalize(manifest)
+	project := domain.BuildProject{ID: domain.ProjectID(domain.ProjectTypeNode, normalizedManifest), Name: name + "-owner", Type: domain.ProjectTypeNode, RootPath: root, NormalizedRootPath: normalizedRoot, ManifestPath: manifest, NormalizedManifestPath: normalizedManifest, LastModifiedAt: time.Now().UTC(), LastObservedAt: time.Now().UTC(), Status: domain.ProjectStatusActive}
+	if err := sqlite.NewProjectRepository(db).UpsertObserved(ctx, scan.ID, []domain.BuildProject{project}); err != nil {
+		t.Fatalf("seed owner project: %v", err)
+	}
+	edge := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID, TargetType: domain.NodeResource, TargetID: resource.ID, Relation: domain.RelationOwns, Confidence: domain.DefaultConfidence[domain.EvidenceObserved]}
+	edge.ID = domain.DependencyID(edge.SourceType, edge.SourceID, edge.Relation, edge.TargetType, edge.TargetID)
+	evidence := domain.Evidence{DependencyID: edge.ID, Kind: domain.EvidenceObserved, SourcePath: manifest, Property: "project-output", ResolvedValue: normalizedPath, CollectedAt: time.Now().UTC()}
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	if err := sqlite.NewDependencyRepository(db).UpsertGraph(ctx, scan.ID, edge, []domain.Evidence{evidence}); err != nil {
+		t.Fatalf("seed ownership edge: %v", err)
+	}
+	return resource
+}

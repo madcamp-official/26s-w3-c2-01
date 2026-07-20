@@ -159,7 +159,13 @@ PR을 거쳐 squash-merge된 커밋들(예: `feat(cmd): ...`, `fix(msbuild): ...
 > 해결(2026-07-20): app 공용 `CleanupEvidence`를 추가하고 project 소유,
 > output path, reparse point, Git tracked 원본 부재가 모두 검증되며
 > resource가 재생성 가능한 경우에만 SAFE를 반환하도록 수정했다.
-> Node/MSBuild detector의 evidence 생성은 각 담당의 후속 작업이다.
+>
+> 후속(2026-07-20, 같은 날 추가 반영): reparse point·Git tracked 원본 부재
+> evidence도 Node/MSBuild 양쪽에 실제로 구현됐다 — `internal/scanner.IsLinkLike`
+> export와 `internal/adapter/git`의 `FindRepoRoot`/`TrackedFilesChecker`(`git
+> ls-files` 실행) 조합. 남은 건 output path 판정을 이름 매칭에서 실제 빌드
+> 설정 확인으로 끌어올리는 것(§19.3의 2번 조건)과, symlink 생성 권한이 있는
+> 환경에서 reparse point 테스트를 한 번 실제로 통과시켜 확인하는 것.
 
 ### 위치
 

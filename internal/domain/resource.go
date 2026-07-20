@@ -50,6 +50,12 @@ type Resource struct {
 	// Confidence is analysis-coverage confidence (0-100), not a real
 	// probability. See EvidenceKind weighting in evidence.go.
 	Confidence int
+	// RegenerationCommand is the command a developer would run to recreate
+	// this resource (e.g. "npm ci", "dotnet build App.csproj"), set by the
+	// detecting adapter at the same time it determines Regenerable -- it
+	// already has the lockfile/project-type facts on hand right then. Empty
+	// when no specific command is known, even if Regenerable is true.
+	RegenerationCommand string
 }
 
 // ResourceID returns the stable identity shared by detectors and storage.

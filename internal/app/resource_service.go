@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
@@ -87,10 +88,11 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		return ResourceObservation{}, err
 	}
 	detected.SystemManaged = classification.SystemManaged
+	cleanup := enrichCleanupEvidence(ctx, displayPath, input.Cleanup)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
-		Cleanup:       input.Cleanup,
+		Cleanup:       cleanup,
 	})
 	detected.Risk = assessment.Level
 	switch detected.Risk {
@@ -108,4 +110,55 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Issues:   measured.Issues,
 		Reasons:  assessment.Reasons,
 	}, nil
+}
+
+func enrichCleanupEvidence(ctx context.Context, path string, evidence CleanupEvidence) CleanupEvidence {
+	if !evidence.ProjectOwned || !evidence.KnownOutputPath {
+		return evidence
+	}
+	if reparse, err := safety.IsReparsePoint(path); err == nil {
+		evidence.ReparsePointFree = !reparse
+	}
+	repoRoot, found, err := gitadapter.FindRepoRoot(path)
+	if err != nil {
+		return evidence
+	}
+	if !found {
+		evidence.GitTrackedOriginalsAbsent = true
+		return evidence
+	}
+	if tracked, err := (gitadapter.TrackedFilesChecker{}).HasTrackedFiles(ctx, repoRoot, path); err == nil {
+		evidence.GitTrackedOriginalsAbsent = !tracked
+	}
+	return evidence
+}
+
+// ReclassifyRequired re-classifies an already-observed-and-persisted
+// resource as BLOCKED because scan discovered, only after Observe already
+// ran, that a project depends on it -- see AnalysisOrchestrator.Run, which
+// resolves dependencies (PhaseResolveDependencies) after every resource's
+// first Observe pass (PhaseDiscoverSystemResources), so "does any project
+// require this resource" genuinely isn't knowable any earlier.
+//
+// A resource whose first pass already produced BLOCKED (a protected system
+// path) is left untouched and returned as-is: "required by project" only
+// ever raises the bar to BLOCKED, it never overrides a stronger existing
+// reason or lowers one.
+func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID string) (ResourceObservation, error) {
+	resource, err := s.repository.FindByID(ctx, resourceID)
+	if err != nil {
+		return ResourceObservation{}, fmt.Errorf("find resource %q: %w", resourceID, err)
+	}
+	if resource.Risk == domain.RiskBlocked {
+		return ResourceObservation{Resource: resource}, nil
+	}
+
+	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
+	resource.Risk = assessment.Level
+	resource.ReclaimableSize = 0
+
+	if err := s.repository.Upsert(ctx, resource); err != nil {
+		return ResourceObservation{}, fmt.Errorf("persist reclassified resource: %w", err)
+	}
+	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons}, nil
 }

@@ -35,6 +35,23 @@ func TestResourceRepositoryUpsertsAndFindsResource(t *testing.T) {
 	}
 }
 
+func TestResourceRepositoryRoundTripsRegenerationCommand(t *testing.T) {
+	repository := newTestResourceRepository(t)
+	resource := testResource(t, domain.ResourceTypeNodeModules, "")
+	resource.RegenerationCommand = "npm ci"
+	if err := repository.Upsert(context.Background(), resource); err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	got, err := repository.FindByID(context.Background(), resource.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+	if got.RegenerationCommand != "npm ci" {
+		t.Fatalf("RegenerationCommand = %q, want %q", got.RegenerationCommand, "npm ci")
+	}
+}
+
 func TestResourceRepositoryListsOnlyRequestedType(t *testing.T) {
 	repository := newTestResourceRepository(t)
 	windowsSDK := testResource(t, domain.ResourceTypeWindowsSDK, "10.0.22621.0")

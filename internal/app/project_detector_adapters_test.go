@@ -79,3 +79,41 @@ func TestGitAndMSBuildAdaptersSatisfyProjectDetector(t *testing.T) {
 	var _ ProjectDetector = GitProjectDetector{Detector: gitadapter.FilesystemDetector{}}
 	var _ ProjectDetector = MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}}
 }
+
+func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testing.T) {
+	root := t.TempDir()
+	manifest := filepath.Join(root, "App.csproj")
+	if err := os.WriteFile(manifest, []byte(`<Project></Project>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "obj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}}).
+		Observe(context.Background(), scanner.Entry{Path: manifest})
+	if len(got.Items) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	resources := got.Items[0].ProjectResources
+	if len(resources) != 2 {
+		t.Fatalf("ProjectResources = %#v, want bin and obj", resources)
+	}
+	for _, r := range resources {
+		if r.OwnerManifestPath != manifest {
+			t.Errorf("OwnerManifestPath = %q, want %q", r.OwnerManifestPath, manifest)
+		}
+		if r.Resource.Type != domain.ResourceTypeBuildOutput {
+			t.Errorf("resource type = %q, want build-output", r.Resource.Type)
+		}
+		if !r.Cleanup.ProjectOwned || !r.Cleanup.KnownOutputPath {
+			t.Errorf("Cleanup = %#v, want ProjectOwned and KnownOutputPath true", r.Cleanup)
+		}
+		if r.Cleanup.ReparsePointFree || r.Cleanup.GitTrackedOriginalsAbsent {
+			t.Errorf("Cleanup = %#v, want ReparsePointFree and GitTrackedOriginalsAbsent unverified (false)", r.Cleanup)
+		}
+	}
+}

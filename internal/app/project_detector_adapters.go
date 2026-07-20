@@ -71,11 +71,34 @@ func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry
 	if err != nil {
 		return projectDetectionFailure("msbuild", entry.Path, "parse MSBuild project", err)
 	}
-	projects := make([]domain.BuildProject, 0, len(parsed))
+
+	var candidate ProjectCandidate
+	var issues []Issue
 	for _, item := range parsed {
-		projects = append(projects, item.Project)
+		candidate.Projects = append(candidate.Projects, item.Project)
+
+		artifacts, err := msbuild.DetectArtifacts(item.Project.RootPath)
+		if err != nil {
+			issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "msbuild",
+				Path: item.Project.RootPath, Operation: "detect msbuild artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
+			continue
+		}
+		for _, resource := range artifacts {
+			candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+				OwnerManifestPath: item.Project.ManifestPath,
+				Resource:          resource,
+				// ReparsePointFree and GitTrackedOriginalsAbsent stay
+				// unverified (zero value): no adapter yet checks NTFS reparse
+				// points or Git-tracked files under this directory, and
+				// CleanupEvidence's zero value means unverified, not false.
+				Cleanup: CleanupEvidence{
+					ProjectOwned:    true,
+					KnownOutputPath: true,
+				},
+			})
+		}
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: projects}}}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
 }
 
 type MSBuildWorkspaceDetector struct{ Parser msbuild.WorkspaceParser }

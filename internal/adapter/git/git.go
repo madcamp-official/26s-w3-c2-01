@@ -1,3 +1,7 @@
+// Package git detects Git repositories (a bare .git entry) as a fallback
+// BuildProject classification -- see Detector's doc comment below for why
+// it must only be used when no stronger project marker exists at the same
+// root.
 package git
 
 import (

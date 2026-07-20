@@ -1,3 +1,16 @@
+// Package windowsdk detects installed Windows SDK / .NET Framework SDK
+// versions under the Windows Kits install root.
+//
+// Note on platform isolation: docs/libra_collaboration_rules.md §8
+// prescribes splitting Windows-only code into //go:build-tagged files
+// (detector_windows.go / detector_unsupported.go). This package (and
+// dotnet, msbuild's vswhere.go) instead uses a runtime
+// adapter.RequireWindows(...) guard at the top of Detect, and builds fine
+// on every platform. That's a deliberate difference, not a rule violation:
+// none of these three call an actual Windows-only API (no syscalls, no
+// registry) -- FilesystemDetector.Detect below just reads a directory path
+// that happens to only exist on Windows -- so there's no non-portable
+// surface that needs compile-time isolation in the first place.
 package windowsdk
 
 import (

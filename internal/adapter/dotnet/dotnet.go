@@ -1,3 +1,11 @@
+// Package dotnet detects installed .NET SDKs by shelling out to the
+// official `dotnet` CLI (SDKLister) rather than guessing install
+// directories, per docs/libra_cli_commands_and_schedule.md's F-04
+// ("공식 .NET CLI가 설치된 SDK와 Runtime 목록을 제공하므로 직접 설치 폴더만
+// 추측하지 않고 명령 결과를 우선 사용한다"). Windows-only in practice, guarded
+// by adapter.RequireWindows rather than a //go:build tag -- see
+// windowsdk.FilesystemDetector's doc comment for why that's the pattern
+// this whole codebase uses instead of platform-specific files here.
 package dotnet
 
 import (

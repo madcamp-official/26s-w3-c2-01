@@ -265,6 +265,13 @@ func (r *scanRepositoryCapture) Save(_ context.Context, record ScanRecord) error
 	return nil
 }
 
+func (r *scanRepositoryCapture) FindLatest(_ context.Context) (ScanRecord, error) {
+	if len(r.records) == 0 {
+		return ScanRecord{}, ErrNoScans
+	}
+	return r.records[len(r.records)-1], nil
+}
+
 type projectRepositoryCapture struct {
 	saved []domain.BuildProject
 	err   error

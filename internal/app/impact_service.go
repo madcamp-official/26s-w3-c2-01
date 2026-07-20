@@ -48,7 +48,7 @@ func (s *ImpactService) Assess(ctx context.Context, resourceID string) ([]domain
 
 	var assessments []domain.ImpactAssessment
 	for _, dep := range dependents {
-		if dep.SourceType != domain.NodeProject {
+		if dep.SourceType != domain.NodeProject || dep.Relation != domain.RelationRequires {
 			continue
 		}
 		assessments = append(assessments,

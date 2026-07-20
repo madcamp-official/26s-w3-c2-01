@@ -38,14 +38,15 @@ type PlanResult struct {
 // CleanupPlanRepository.Create with the returned Plan, matching this
 // package's app-decides/store-persists split (see risk_policy.go).
 type PlanService struct {
-	resources ResourceRepository
-	projects  ProjectRepository
-	scans     ScanRepository
-	now       func() time.Time
+	resources    ResourceRepository
+	projects     ProjectRepository
+	dependencies DependencyRepository
+	scans        ScanRepository
+	now          func() time.Time
 }
 
-func NewPlanService(resources ResourceRepository, projects ProjectRepository, scans ScanRepository) *PlanService {
-	return &PlanService{resources: resources, projects: projects, scans: scans, now: time.Now}
+func NewPlanService(resources ResourceRepository, projects ProjectRepository, scans ScanRepository, dependencies DependencyRepository) *PlanService {
+	return &PlanService{resources: resources, projects: projects, scans: scans, dependencies: dependencies, now: time.Now}
 }
 
 // Build implements the greedy candidate-selection algorithm confirmed in
@@ -103,11 +104,6 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 		return safe[i].ID < safe[j].ID
 	})
 
-	projects, err := s.projects.List(ctx)
-	if err != nil {
-		return PlanResult{}, fmt.Errorf("list projects: %w", err)
-	}
-
 	planID, err := newPlanID(s.now)
 	if err != nil {
 		return PlanResult{}, fmt.Errorf("generate plan ID: %w", err)
@@ -122,6 +118,13 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 		if opts.TargetBytes > 0 && selected >= opts.TargetBytes {
 			break
 		}
+		ownerID, err := s.ownerProjectID(ctx, r.ID)
+		if err != nil {
+			return PlanResult{}, err
+		}
+		if ownerID == "" {
+			continue
+		}
 		plan.Items = append(plan.Items, domain.CleanupPlanItem{
 			ID:                   planID + ":" + r.ID,
 			ResourceID:           r.ID,
@@ -131,7 +134,7 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 			ExpectedModifiedTime: expectedModifiedTime(r),
 			RiskAtPlanning:       r.Risk,
 			ConfidenceAtPlanning: r.Confidence,
-			OwnerProjectID:       closestOwningProjectID(r, projects),
+			OwnerProjectID:       ownerID,
 			ScanID:               scan.ID,
 			RegenerationCommand:  r.RegenerationCommand,
 		})
@@ -144,6 +147,19 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 	}
 
 	return PlanResult{Plan: plan, Review: review, Blocked: blocked}, nil
+}
+
+func (s *PlanService) ownerProjectID(ctx context.Context, resourceID string) (string, error) {
+	edges, err := s.dependencies.FindProjectsByResource(ctx, resourceID)
+	if err != nil {
+		return "", fmt.Errorf("find resource owner: %w", err)
+	}
+	for _, edge := range edges {
+		if edge.Relation == domain.RelationOwns {
+			return edge.SourceID, nil
+		}
+	}
+	return "", nil
 }
 
 // newPlanID builds a plan ID from the current time plus a short random
@@ -168,28 +184,4 @@ func expectedModifiedTime(r domain.Resource) time.Time {
 		return *r.LastModifiedAt
 	}
 	return r.LastObservedAt
-}
-
-// closestOwningProjectID returns the ID of the project whose root most
-// tightly contains the resource, or "" if none does. This is a path-prefix
-// stand-in for the PROJECT -> RESOURCE OWNS graph edge that
-// docs/libra_integration_contracts.md §23.1 describes but that isn't
-// persisted yet (still DECISION_REQUIRED, blocked on stable BuildProject ID
-// work). A malformed candidate path is treated as "does not own" rather
-// than failing the whole plan, since this is a best-effort display field,
-// unlike the user-supplied --project scope filter above.
-func closestOwningProjectID(r domain.Resource, projects []domain.BuildProject) string {
-	var ownerID string
-	bestRootLen := -1
-	for _, p := range projects {
-		within, err := pathutil.IsSameOrChild(r.NormalizedPath, p.NormalizedRootPath)
-		if err != nil || !within {
-			continue
-		}
-		if len(p.NormalizedRootPath) > bestRootLen {
-			ownerID = p.ID
-			bestRootLen = len(p.NormalizedRootPath)
-		}
-	}
-	return ownerID
 }

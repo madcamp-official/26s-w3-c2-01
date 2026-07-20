@@ -17,6 +17,7 @@ type RelationType string
 
 const (
 	RelationRequires RelationType = "REQUIRES"
+	RelationOwns     RelationType = "OWNS"
 )
 
 // Dependency is a directed graph edge. Day 4 creates PROJECT -> RESOURCE

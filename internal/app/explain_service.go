@@ -74,6 +74,9 @@ func (s *ExplainService) ExplainResource(ctx context.Context, resourceID string)
 
 	usages := make([]ExplainedUsage, 0, len(edges))
 	for _, edge := range edges {
+		if edge.Relation != domain.RelationRequires {
+			continue
+		}
 		project, err := s.projects.FindByID(ctx, edge.SourceID)
 		if err != nil {
 			return ResourceExplanation{}, fmt.Errorf("find project %q: %w", edge.SourceID, err)

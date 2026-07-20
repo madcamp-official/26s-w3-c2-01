@@ -124,5 +124,24 @@ func seedSafeResource(t *testing.T, name string, reclaimableSize int64) domain.R
 	if err := sqlite.NewResourceRepository(db).Upsert(ctx, resource); err != nil {
 		t.Fatalf("seed resource: %v", err)
 	}
+	scan, err := sqlite.NewScanRepository(db).FindLatest(ctx)
+	if err != nil {
+		t.Fatalf("find latest scan: %v", err)
+	}
+	root := filepath.Dir(displayPath)
+	manifest := filepath.Join(root, "package.json")
+	normalizedRoot, _ := pathutil.Normalize(root)
+	normalizedManifest, _ := pathutil.Normalize(manifest)
+	project := domain.BuildProject{ID: domain.ProjectID(domain.ProjectTypeNode, normalizedManifest), Name: name + "-owner", Type: domain.ProjectTypeNode, RootPath: root, NormalizedRootPath: normalizedRoot, ManifestPath: manifest, NormalizedManifestPath: normalizedManifest, LastModifiedAt: time.Now().UTC(), LastObservedAt: time.Now().UTC(), Status: domain.ProjectStatusActive}
+	if err := sqlite.NewProjectRepository(db).UpsertObserved(ctx, scan.ID, []domain.BuildProject{project}); err != nil {
+		t.Fatalf("seed owner project: %v", err)
+	}
+	edge := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID, TargetType: domain.NodeResource, TargetID: resource.ID, Relation: domain.RelationOwns, Confidence: domain.DefaultConfidence[domain.EvidenceObserved]}
+	edge.ID = domain.DependencyID(edge.SourceType, edge.SourceID, edge.Relation, edge.TargetType, edge.TargetID)
+	evidence := domain.Evidence{DependencyID: edge.ID, Kind: domain.EvidenceObserved, SourcePath: manifest, Property: "project-output", ResolvedValue: normalizedPath, CollectedAt: time.Now().UTC()}
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	if err := sqlite.NewDependencyRepository(db).UpsertGraph(ctx, scan.ID, edge, []domain.Evidence{evidence}); err != nil {
+		t.Fatalf("seed ownership edge: %v", err)
+	}
 	return resource
 }

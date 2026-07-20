@@ -60,7 +60,15 @@ func (c TrackedFilesChecker) run(ctx context.Context, args ...string) ([]byte, e
 // repoRoot and surfaces a missing/failed git invocation as an error rather
 // than guessing.
 func (c TrackedFilesChecker) HasTrackedFiles(ctx context.Context, repoRoot, path string) (bool, error) {
-	output, err := c.run(ctx, "-C", repoRoot, "ls-files", "--", path)
+	pathspec := path
+	if filepath.IsAbs(path) {
+		relative, err := filepath.Rel(repoRoot, path)
+		if err != nil {
+			return false, err
+		}
+		pathspec = relative
+	}
+	output, err := c.run(ctx, "-C", repoRoot, "ls-files", "--", filepath.ToSlash(pathspec))
 	if err != nil {
 		return false, err
 	}

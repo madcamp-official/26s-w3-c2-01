@@ -130,8 +130,8 @@ func TestAnalysisOrchestratorObservesProjectOwnedResources(t *testing.T) {
 	if len(result.Projects) != 1 || len(result.Resources) != 1 {
 		t.Fatalf("Run() projects/resources = %d/%d, want 1/1", len(result.Projects), len(result.Resources))
 	}
-	if len(result.Dependencies) != 0 {
-		t.Fatalf("Run() dependencies = %d, want 0 (edges deferred to Day 4)", len(result.Dependencies))
+	if len(result.Dependencies) != 1 || result.Dependencies[0].Relation != domain.RelationOwns {
+		t.Fatalf("Run() dependencies = %#v, want one OWNS edge", result.Dependencies)
 	}
 	if result.Resources[0].Type != domain.ResourceTypeNodeModules {
 		t.Fatalf("observed resource type = %q, want node-modules", result.Resources[0].Type)

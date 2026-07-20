@@ -67,7 +67,7 @@ see what was considered and why it was left out. Run "libra clean --plan
 		scans := sqlite.NewScanRepository(db)
 		dependencies := sqlite.NewDependencyRepository(db)
 
-		result, err := app.NewPlanService(resources, projects, scans).Build(cmd.Context(), app.PlanOptions{
+		result, err := app.NewPlanService(resources, projects, scans, dependencies).Build(cmd.Context(), app.PlanOptions{
 			TargetBytes:           target,
 			ProjectRootNormalized: projectRoot,
 		})
@@ -159,6 +159,9 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, dependencies app.D
 				return output.PlanView{}, fmt.Errorf("find projects depending on %q: %w", r.ID, err)
 			}
 			for _, edge := range edges {
+				if edge.Relation != domain.RelationRequires {
+					continue
+				}
 				project, err := projects.FindByID(cmd.Context(), edge.SourceID)
 				if err != nil {
 					return output.PlanView{}, fmt.Errorf("find project %q: %w", edge.SourceID, err)

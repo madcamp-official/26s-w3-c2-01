@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -68,7 +69,11 @@ func TestTrackedFilesChecker_HasTrackedFiles(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("HasTrackedFiles() = %v, want %v", got, tc.want)
 			}
-			wantArgs := []string{"-C", `D:\Repo`, "ls-files", "--", `D:\Repo\GameClient\obj`}
+			pathspec := `D:\Repo\GameClient\obj`
+			if runtime.GOOS == "windows" {
+				pathspec = "GameClient/obj"
+			}
+			wantArgs := []string{"-C", `D:\Repo`, "ls-files", "--", pathspec}
 			if !reflect.DeepEqual(gotArgs, wantArgs) {
 				t.Errorf("git args = %v, want %v", gotArgs, wantArgs)
 			}

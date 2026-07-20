@@ -21,7 +21,7 @@ func TestPlanServiceSelectsSafeCandidatesUntilTargetMet(t *testing.T) {
 	}}
 	scans := &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}
 
-	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans).
+	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans, planOwnershipStub(resources.resources)).
 		Build(context.Background(), PlanOptions{TargetBytes: 500})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -59,7 +59,7 @@ func TestPlanServiceReportsInsufficientCandidates(t *testing.T) {
 	}}
 	scans := &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}
 
-	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans).
+	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans, planOwnershipStub(resources.resources)).
 		Build(context.Background(), PlanOptions{TargetBytes: 1000})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -80,7 +80,7 @@ func TestPlanServiceUnlimitedTargetSelectsEverySafeCandidate(t *testing.T) {
 	}}
 	scans := &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}
 
-	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans).
+	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans, planOwnershipStub(resources.resources)).
 		Build(context.Background(), PlanOptions{})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -102,7 +102,7 @@ func TestPlanServiceFiltersByProjectScope(t *testing.T) {
 	resources := &planResourceRepositoryStub{resources: []domain.Resource{inScope, outOfScope}}
 	scans := &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}
 
-	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans).
+	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans, planOwnershipStub(resources.resources)).
 		Build(context.Background(), PlanOptions{ProjectRootNormalized: `/projects/gameclient`})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -123,7 +123,7 @@ func TestPlanServiceFillsOwnerProjectIDFromClosestRoot(t *testing.T) {
 	resources := &planResourceRepositoryStub{resources: []domain.Resource{resource}}
 	scans := &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}
 
-	result, err := NewPlanService(resources, projects, scans).Build(context.Background(), PlanOptions{})
+	result, err := NewPlanService(resources, projects, scans, &planDependencyRepositoryStub{owners: map[string]string{"nested-modules": "package-api"}}).Build(context.Background(), PlanOptions{})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -139,7 +139,7 @@ func TestPlanServiceRequiresAScan(t *testing.T) {
 	resources := &planResourceRepositoryStub{}
 	scans := &planScanRepositoryStub{err: ErrNoScans}
 
-	_, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans).
+	_, err := NewPlanService(resources, &planProjectRepositoryStub{}, scans, planOwnershipStub(resources.resources)).
 		Build(context.Background(), PlanOptions{})
 	if err == nil {
 		t.Fatal("Build() error = nil, want error when no scan has been recorded")
@@ -220,6 +220,34 @@ func (s *planProjectRepositoryStub) List(context.Context) ([]domain.BuildProject
 type planScanRepositoryStub struct {
 	record ScanRecord
 	err    error
+}
+
+type planDependencyRepositoryStub struct{ owners map[string]string }
+
+func planOwnershipStub(resources []domain.Resource) *planDependencyRepositoryStub {
+	owners := make(map[string]string)
+	for _, resource := range resources {
+		if resource.Risk == domain.RiskSafe {
+			owners[resource.ID] = "owner"
+		}
+	}
+	return &planDependencyRepositoryStub{owners: owners}
+}
+func (s *planDependencyRepositoryStub) UpsertGraph(context.Context, string, domain.Dependency, []domain.Evidence) error {
+	return nil
+}
+func (s *planDependencyRepositoryStub) FindResourcesByProject(context.Context, string) ([]domain.Dependency, error) {
+	return nil, nil
+}
+func (s *planDependencyRepositoryStub) FindProjectsByResource(_ context.Context, resourceID string) ([]domain.Dependency, error) {
+	owner := s.owners[resourceID]
+	if owner == "" {
+		return nil, nil
+	}
+	return []domain.Dependency{{SourceType: domain.NodeProject, SourceID: owner, TargetType: domain.NodeResource, TargetID: resourceID, Relation: domain.RelationOwns}}, nil
+}
+func (s *planDependencyRepositoryStub) FindEvidence(context.Context, string) ([]domain.Evidence, error) {
+	return nil, nil
 }
 
 func (s *planScanRepositoryStub) Save(context.Context, ScanRecord) error {

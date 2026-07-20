@@ -1,0 +1,7 @@
+Affected projects: 1
+
+<GameClient>
+RUN      unknown
+BUILD    expected to fail
+DEBUG    unknown
+RESTORE  reinstall via the Visual Studio Installer or the standalone Windows SDK installer

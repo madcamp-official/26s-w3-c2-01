@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 	"github.com/spf13/cobra"
@@ -38,42 +40,30 @@ the confidence of the analysis.`,
 		}
 		defer db.Close()
 
-		// List() returns every resource; filtering happens here in cmd rather
-		// than as a repository query, matching cmd/projects.go's --type/
-		// --drive/--status filters -- keeps ResourceRepository's contract
-		// small (internal/app/resource_repository.go) and filter logic in one
-		// place (this file) instead of one query variant per flag.
-		resources, err := sqlite.NewResourceRepository(db).List(cmd.Context())
+		service := app.NewResourceListService(sqlite.NewResourceRepository(db), sqlite.NewDependencyRepository(db))
+		listings, err := service.List(cmd.Context(), func(resource domain.Resource) bool {
+			if resourcesType != "" && !strings.EqualFold(string(resource.Type), resourcesType) {
+				return false
+			}
+			if resourcesRisk != "" && !strings.EqualFold(string(resource.Risk), resourcesRisk) {
+				return false
+			}
+			return true
+		})
 		if err != nil {
 			return fmt.Errorf("list resources: %w", err)
 		}
-		dependencies := sqlite.NewDependencyRepository(db)
 
 		view := output.ResourcesView{}
-		for _, resource := range resources {
-			if resourcesType != "" && string(resource.Type) != resourcesType {
-				continue
-			}
-			if resourcesRisk != "" && !strings.EqualFold(string(resource.Risk), resourcesRisk) {
-				continue
-			}
-
-			// One dependency-graph query per surviving resource (not one
-			// query total) so unfiltered-out resources never pay for a count
-			// the user didn't ask to see. Same N+1-by-design tradeoff
-			// cmd/projects.go makes for its own resource-count column.
-			projects, err := dependencies.FindProjectsByResource(cmd.Context(), resource.ID)
-			if err != nil {
-				return fmt.Errorf("count projects for resource %q: %w", resource.ID, err)
-			}
-
+		for _, listing := range listings {
+			resource := listing.Resource
 			view.Resources = append(view.Resources, output.ResourceLine{
 				Name:         resource.Name,
 				Type:         resource.Type,
 				Version:      resource.Version,
 				Path:         resource.DisplayPath,
 				LogicalSize:  resource.LogicalSize,
-				ProjectCount: len(projects),
+				ProjectCount: listing.ProjectCount,
 				Regenerable:  resource.Regenerable,
 				Risk:         resource.Risk,
 				Confidence:   resource.Confidence,

@@ -19,7 +19,7 @@
 | 2 | `main`에 PR 없이 직접 push된 커밋 11개 이상 | 높음 (프로세스) | Windows B |
 | 3 | 커밋 메시지 컨벤션 미준수 다수 | 중간 | 주로 Windows B |
 | 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 해결 (2026-07-20) | Windows A |
-| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
+| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 해결 (2026-07-20) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 해결 (2026-07-20) | Windows B·Mac C·공동 |
 | 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 해결 (2026-07-20) | Windows A |
 | 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 해결 (2026-07-20) | Mac C |
@@ -196,7 +196,7 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 ---
 
-## 5. `cmd` 계층이 명령마다 다른 구조를 씀
+## 5. `cmd` 계층이 명령마다 다른 구조를 씀 (2026-07-20 해결)
 
 ### 위치와 증거
 
@@ -206,8 +206,8 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 |---|---|---|
 | `cmd/scan.go` | `app.NewAnalysisOrchestrator`, `app.NewResourceService` | (orchestrator 내부에서만) |
 | `cmd/summary.go` | `app.NewSummaryService` | 없음 |
-| `cmd/projects.go` | 없음 | `sqlite.NewProjectRepository`, `sqlite.NewDependencyRepository` 직접 |
-| `cmd/resources.go` | 없음 | `sqlite.NewResourceRepository`, `sqlite.NewDependencyRepository` 직접 |
+| `cmd/projects.go` | `app.NewProjectListService` | (서비스 내부에서만) |
+| `cmd/resources.go` | `app.NewResourceListService` | (서비스 내부에서만) |
 | `cmd/explain.go` | `app.NewExplainService` (일부) | `sqlite.New*Repository` 직접 (대상 식별용) |
 | `cmd/impact.go` | `app.NewImpactService` (일부) | `sqlite.New*Repository` 직접 (연결 대상 조회용) |
 
@@ -217,11 +217,9 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 `scan`/`summary`는 "여러 단계 로직 + 판정"이 있어서 서비스로 뽑을 이유가 명확하다. `projects`/`resources`는 "목록 조회 + 필터 + 개수 세기"뿐이라 서비스 계층이 그냥 얇은 pass-through가 될 수 있다 — 그래서 지금까지는 실용적으로 생략해왔다. 다만 이게 "의도된 예외"인지 "그냥 빠뜨린 것"인지 문서에 없어서, 다음 사람이 `cmd/*.go`를 새로 만들 때 어느 쪽을 따라야 할지 알 수 없다.
 
-### 제안
+### 해결
 
-둘 중 하나로 팀이 합의해서 문서화하는 걸 제안:
-1. "단순 목록+필터는 cmd에서 repository 직접 호출 허용" 을 §7에 명시적 예외로 추가, 또는
-2. `ProjectsService`/`ResourcesService`처럼 얇은 서비스를 만들어서 일관성을 맞춤 (당장 급한 리팩터링은 아님).
+옵션 2(서비스 계층 신설)로 팀이 결정했다. `internal/app/project_list_service.go`/`resource_list_service.go`에 `ProjectListService`/`ResourceListService`를 추가했다 -- `app.SummaryService`(list + filter closure + 집계)와 정확히 같은 패턴이라 새로 설계하지 않고 그대로 복제했다. `cmd/projects.go`/`cmd/resources.go`는 이제 `sqlite.New*Repository`를 직접 호출하지 않고 이 서비스를 거친다. 이 작업 중 `cmd/resources.go`의 `--type` 필터에서도 finding #8과 동일한 대소문자 구분 버그를 발견해 같이 고쳤다 (`cmd/resources_test.go`에 회귀 테스트 추가, 수정 전으로 되돌리면 실패하는 것 확인함).
 
 ---
 

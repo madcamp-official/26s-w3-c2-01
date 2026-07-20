@@ -70,8 +70,12 @@ func (e QuarantineEngine) Restore(_ context.Context, transaction *domain.Cleanup
 			continue
 		}
 		if _, err := os.Lstat(item.QuarantinePath); err != nil {
-			if item.Status == domain.TransactionItemSkipped { continue }
-			item.Status = domain.TransactionItemFailed; item.Reason = "quarantine item missing: " + err.Error(); continue
+			if item.Status == domain.TransactionItemSkipped {
+				continue
+			}
+			item.Status = domain.TransactionItemFailed
+			item.Reason = "quarantine item missing: " + err.Error()
+			continue
 		}
 		if _, err := os.Lstat(item.OriginalPath); err == nil {
 			item.Status = domain.TransactionItemSkipped

@@ -72,10 +72,22 @@ func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry
 		return projectDetectionFailure("msbuild", entry.Path, "parse MSBuild project", err)
 	}
 	projects := make([]domain.BuildProject, 0, len(parsed))
+	properties := make([]ProjectProperty, 0)
 	for _, item := range parsed {
 		projects = append(projects, item.Project)
+		for _, declared := range item.Declared {
+			properties = append(properties, ProjectProperty{
+				OwnerManifestPath: item.Project.ManifestPath,
+				SourcePath:        item.Project.ManifestPath,
+				Name:              declared.Name,
+				Value:             declared.Value,
+				Condition:         declared.Condition,
+			})
+		}
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: projects}}}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Projects: projects, ProjectProperties: properties,
+	}}}
 }
 
 type MSBuildWorkspaceDetector struct{ Parser msbuild.WorkspaceParser }

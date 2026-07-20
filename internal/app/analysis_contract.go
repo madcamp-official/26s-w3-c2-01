@@ -8,6 +8,13 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// analysis_contract.go is the shared vocabulary every adapter, detector,
+// and AnalysisOrchestrator itself is written against: phases, issue
+// codes/severity, the generic DetectionResult envelope, and the
+// ProjectDetector/ResourceDetector/DependencyAnalyzer interfaces. See §18.2
+// of docs/libra_integration_contracts.md, which this file implements
+// directly -- changing anything here is a common-owned/cross-team contract
+// change, not a local refactor.
 type AnalysisPhase string
 
 const (

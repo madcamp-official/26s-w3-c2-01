@@ -11,6 +11,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// AnalysisOrchestrator.Run (below) is the entire `libra scan` pipeline: it
+// walks the filesystem, hands each entry to every registered
+// ProjectDetector/ResourceDetector/DependencyAnalyzer (see
+// analysis_contract.go for those interfaces), and persists whatever they
+// find through the *Repository interfaces this file's siblings declare.
+// cmd/scan.go is a thin wrapper that only supplies concrete detectors and
+// prints the result -- none of the actual DISCOVER_FILES ->
+// ... -> PERSIST_RESULTS phase sequence (§18.3 of
+// docs/libra_integration_contracts.md) lives in cmd.
 type ResourceObserver interface {
 	Observe(context.Context, domain.Resource) (ResourceObservation, error)
 }

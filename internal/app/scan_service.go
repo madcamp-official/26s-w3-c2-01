@@ -8,6 +8,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// ScanService.Run (below) predates AnalysisOrchestrator.Run
+// (analysis_orchestrator.go) and appears to have been superseded by it:
+// cmd/scan.go builds an AnalysisOrchestrator, not a ScanService, and
+// grepping the whole repo finds no production caller of NewScanService --
+// only this file's own tests. The ScanStatus*/ScanRecord/ScanRepository
+// declarations here are still live, though: AnalysisOrchestrator embeds a
+// ScanRepository field and reuses these same types. Flagged in
+// docs/libra_review_findings_day4.md rather than deleted here, since
+// removing a type this file's own tests still exercise isn't a
+// documentation-only change.
 const (
 	ScanStatusRunning             = "RUNNING"
 	ScanStatusCompleted           = "COMPLETED"

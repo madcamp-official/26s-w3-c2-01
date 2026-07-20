@@ -35,8 +35,8 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 5 {
-		t.Fatalf("migration count = %d, want 5", migrationCount)
+	if migrationCount != 6 {
+		t.Fatalf("migration count = %d, want 6", migrationCount)
 	}
 
 	var sizeKnownColumn string
@@ -64,6 +64,13 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 		var found string
 		if err := db.QueryRow("SELECT name FROM pragma_table_info('projects') WHERE name = ?", column).Scan(&found); err != nil {
 			t.Fatalf("projects.%s was not created: %v", column, err)
+		}
+	}
+
+	for _, column := range []string{"normalized_path", "expected_type", "expected_modified_at", "confidence_at_planning", "owner_project_id", "scan_id", "regeneration_command"} {
+		var found string
+		if err := db.QueryRow("SELECT name FROM pragma_table_info('cleanup_items') WHERE name = ?", column).Scan(&found); err != nil {
+			t.Fatalf("cleanup_items.%s was not created: %v", column, err)
 		}
 	}
 }

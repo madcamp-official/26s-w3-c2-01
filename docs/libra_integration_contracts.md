@@ -945,11 +945,19 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 이 절 자체는 adapter 전반에 걸친 결정이라 Node adapter 하나로 `CONFIRMED`
 처리하지 않는다. 다만 `internal/adapter/node`의 현재 구현은 이미 이 원칙을
 따른다: `dist`/`.next`/`build`/`out`은 디렉터리 이름만으로 판정하므로 항상
-`INFERRED` 수준 Confidence를 부여하고, Git tracked 원본 확인이나 output
-path 설정 파싱은 하지 않는다. 현재 Node/MSBuild detector는 project root 내부와
-알려진 output path라는 두 사실을 `CleanupEvidence`에 채운다. `RiskPolicy`는
-완전한 evidence에서만 SAFE를 반환하므로 reparse point와 Git tracked 원본 부재가
-검증되지 않은 실제 스캔 결과는 보수적으로 `REVIEW`를 유지한다.
+`INFERRED` 수준 Confidence를 부여하고, output path 설정 파싱은 하지 않는다
+(2번 조건은 이름 매칭 수준으로만 채워짐).
+
+> 갱신(2026-07-20): 나머지 세 조건(1·3·4번)은 이제 실제로 검증된다.
+> `internal/app/project_detector_adapters.go`의 `projectArtifactCleanupEvidence`가
+> Node/MSBuild 양쪽에서 공유하는 헬퍼로, `ProjectOwned`(1번)는 project root
+> 밑에서 발견됐다는 사실로 채우고, `ReparsePointFree`(3번)는
+> `internal/scanner.IsLinkLike`(기존 scan 내부 로직을 export)로, `GitTrackedOriginalsAbsent`(4번)는
+> `internal/adapter/git.FindRepoRoot` + `TrackedFilesChecker`(`git ls-files`를
+> 실제로 실행)로 검증한다. 확인이 실패하면(경로 stat 실패, git 미설치 등)
+> 해당 evidence는 false로 남고 Issue로 기록된다 — 안전 쪽으로만 추측한다.
+> 5번(재생성 Evidence)은 `Resource.Regenerable`이 여전히 이름 매칭
+> 수준이라 별개로 남아있다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 

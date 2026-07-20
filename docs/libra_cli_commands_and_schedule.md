@@ -805,9 +805,14 @@ libra impact windows-sdk:<version>
 Day 4의 핵심 경로인 MSBuild 프로젝트 탐지 → Windows SDK/.NET SDK 의존성 분석
 → dependency/Evidence 저장 → `explain`/`impact` 출력은 구현 및 E2E 검증을
 완료했다. 중앙 `RiskPolicy`도 완전한 `CleanupEvidence`에서만 SAFE를 반환한다.
-다만 실제 산출물 detector는 reparse point와 Git tracked 원본 부재를 아직
-검증하지 않으므로 결과를 REVIEW로 유지한다. 이 두 증거 수집과 실제 Windows
-환경 검증은 Day 5 clean 실행 전에 완료해야 한다.
+
+> 갱신(2026-07-20): reparse point와 Git tracked 원본 부재 증거 수집을
+> Node/MSBuild 양쪽에 구현했다(`internal/app/project_detector_adapters.go`의
+> `projectArtifactCleanupEvidence`). git tracked 파일 탐지는 실제
+> `git init`/`git add` fixture로 E2E 검증 완료. reparse point 탐지는 코드는
+> 붙였지만, 이 개발 환경에 symlink 생성 권한(Developer 모드/관리자)이 없어서
+> 로컬에서는 테스트가 스킵됐다 — **Day 5 clean 실행 전에 실제 Windows
+> 환경(권한 있는 곳)에서 한 번은 이 경로를 직접 검증해야 한다.**
 
 ---
 

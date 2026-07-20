@@ -60,6 +60,17 @@ func TestResourcesCommandListsAndFiltersScannedResources(t *testing.T) {
 	if !bytes.Contains(byRisk.Bytes(), []byte("node_modules")) {
 		t.Fatalf("resources --risk review = %s, want node_modules", byRisk)
 	}
+	resourcesRisk = ""
+
+	// --type must match case-insensitively like --risk already does (same
+	// bug class as finding #8 in docs/libra_review_findings_day4.md, found
+	// here too while scoping finding #5): stored resource types are
+	// lowercase ("node-modules"), so a differently-cased query is the
+	// realistic way a user would type it.
+	caseInsensitive := run("resources", "--type", "Node-Modules")
+	if !bytes.Contains(caseInsensitive.Bytes(), []byte("node_modules")) {
+		t.Fatalf("resources --type Node-Modules = %s, want node_modules (case-insensitive match)", caseInsensitive)
+	}
 }
 
 func TestResourcesCommandReportsNoResourcesBeforeScan(t *testing.T) {

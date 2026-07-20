@@ -48,3 +48,12 @@ func (p *Printer) Print(v Renderable) error {
 	}
 	return v.RenderText(p.Out)
 }
+
+// yesNo renders a bool as the "yes"/"no" text tables in this package use,
+// shared by any view with a yes/no column or line (e.g. regenerable).
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}

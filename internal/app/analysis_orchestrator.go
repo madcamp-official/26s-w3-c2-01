@@ -158,7 +158,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	index := newMemoryResourceIndex(result.Resources)
 	for _, project := range result.Projects {
 		for _, analyzer := range o.dependencyAnalyzers {
-			analyzed := analyzer.Analyze(ctx, project, index)
+			analyzed := analyzer.Analyze(ctx, ProjectAnalysisInput{Project: project}, index)
 			result.Issues = append(result.Issues, analyzed.Issues...)
 			result.Unverified = append(result.Unverified, analyzed.Unverified...)
 			for _, bundle := range analyzed.Items {
@@ -305,4 +305,13 @@ func newMemoryResourceIndex(resources []domain.Resource) memoryResourceIndex {
 
 func (i memoryResourceIndex) Find(resourceType domain.ResourceType, version string) []domain.Resource {
 	return append([]domain.Resource(nil), i[resourceType][version]...)
+}
+
+func (i memoryResourceIndex) ListByType(resourceType domain.ResourceType) []domain.Resource {
+	byVersion := i[resourceType]
+	resources := make([]domain.Resource, 0)
+	for _, matches := range byVersion {
+		resources = append(resources, matches...)
+	}
+	return resources
 }

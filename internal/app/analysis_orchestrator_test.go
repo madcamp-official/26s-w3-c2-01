@@ -191,7 +191,8 @@ func (f resourceObserverFake) Observe(_ context.Context, resource domain.Resourc
 
 type dependencyAnalyzerFake struct{}
 
-func (dependencyAnalyzerFake) Analyze(_ context.Context, project domain.BuildProject, resources ResourceIndex) DetectionResult[DependencyBundle] {
+func (dependencyAnalyzerFake) Analyze(_ context.Context, input ProjectAnalysisInput, resources ResourceIndex) DetectionResult[DependencyBundle] {
+	project := input.Project
 	resource := resources.Find(domain.ResourceTypeNodeModules, "")[0]
 	dependency := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID,
 		TargetType: domain.NodeResource, TargetID: resource.ID, Relation: domain.RelationRequires, Confidence: 60}
@@ -200,6 +201,34 @@ func (dependencyAnalyzerFake) Analyze(_ context.Context, project domain.BuildPro
 		SourcePath: project.ManifestPath, CollectedAt: project.LastObservedAt}
 	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, "", "", "")
 	return DetectionResult[DependencyBundle]{Items: []DependencyBundle{{Dependency: dependency, Evidence: []domain.Evidence{evidence}}}}
+}
+
+func TestMemoryResourceIndexListsEveryVersionOfType(t *testing.T) {
+	windowsA := domain.Resource{ID: "win-a", Type: domain.ResourceTypeWindowsSDK, Version: "10.0.1"}
+	windowsB := domain.Resource{ID: "win-b", Type: domain.ResourceTypeWindowsSDK, Version: "10.0.2"}
+	dotnet := domain.Resource{ID: "dotnet", Type: domain.ResourceTypeDotNetSDK, Version: "8.0.1"}
+	index := newMemoryResourceIndex([]domain.Resource{windowsA, dotnet, windowsB})
+
+	got := index.ListByType(domain.ResourceTypeWindowsSDK)
+	if len(got) != 2 {
+		t.Fatalf("ListByType() = %#v, want two Windows SDK resources", got)
+	}
+	seen := map[string]bool{}
+	for _, resource := range got {
+		seen[resource.ID] = true
+	}
+	if !seen[windowsA.ID] || !seen[windowsB.ID] || seen[dotnet.ID] {
+		t.Fatalf("ListByType() IDs = %#v", seen)
+	}
+
+	for i := range got {
+		got[i].ID = "mutated"
+	}
+	for _, resource := range index.ListByType(domain.ResourceTypeWindowsSDK) {
+		if resource.ID == "mutated" {
+			t.Fatal("ListByType() returned storage owned by the index")
+		}
+	}
 }
 
 type scanRepositoryCapture struct{ records []ScanRecord }

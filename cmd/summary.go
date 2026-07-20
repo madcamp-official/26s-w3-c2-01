@@ -12,6 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// summary.go is the one command that goes through an application service
+// (app.SummaryService) purely for aggregation, not because summary has
+// side effects -- contrast with cmd/projects.go/cmd/resources.go, which
+// skip that layer for the same kind of read-only work.
 var (
 	summaryDrive string
 	summaryType  string

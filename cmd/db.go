@@ -7,6 +7,10 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 )
 
+// db.go is the one place every other command in this package goes through
+// to find and open the local SQLite database -- see docs/
+// libra_integration_contracts.md §7.0 for why .libra.yaml/.libra.db live
+// next to each other instead of a fixed OS-standard config directory.
 const (
 	defaultConfigFilename = ".libra.yaml"
 	defaultDBFilename     = ".libra.db"

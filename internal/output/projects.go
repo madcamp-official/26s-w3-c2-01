@@ -48,6 +48,10 @@ func (v ProjectsView) RenderText(w io.Writer) error {
 	return tw.Flush()
 }
 
+// formatTime is shared by every view in this package that renders a
+// timestamp (ProjectLine here, plus explain/impact views), not just
+// ProjectsView -- it lives in this file because ProjectsView was the first
+// caller, not because it's projects-specific.
 func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return "-"

@@ -18,6 +18,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// scan.go is the only command that writes to the database -- every other
+// command (projects/resources/summary/explain/impact) only reads what a
+// prior `libra scan` already persisted. resourceDetectors is a var (not a
+// literal call) specifically so tests can stub it out; see
+// cmd/summary_golden_test.go and cmd/resources_test.go, which both replace
+// it to avoid depending on whatever SDKs happen to be installed on the
+// machine running the test.
 var (
 	scanRoot          string
 	scanFull          bool

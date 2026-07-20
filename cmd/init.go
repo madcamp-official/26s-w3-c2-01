@@ -9,6 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// init.go is the only command that creates .libra.yaml when it's missing;
+// every other command just assumes a config exists (or silently falls back
+// to config.Default(), e.g. cmd/scan.go's resolveScanOptions) rather than
+// requiring `libra init` to have run first.
+//
 // initCmd represents the init command.
 var initCmd = &cobra.Command{
 	Use:   "init",

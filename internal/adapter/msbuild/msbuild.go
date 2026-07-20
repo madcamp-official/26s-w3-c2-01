@@ -1,3 +1,23 @@
+// Package msbuild parses MSBuild C++/.NET projects (.vcxproj/.csproj),
+// defines the contract for future Visual Studio Solution (.sln) parsing,
+// locates Visual Studio and MSBuild installations via vswhere.exe, and
+// matches declared SDK properties against installed resources. Split by
+// concern across several files:
+//
+//   - msbuild.go (this file): the shared contract types every other file in
+//     this package implements against (BuildProjectParser, WorkspaceParser,
+//     ToolLocator, DeclaredProperty).
+//   - xmlparser.go: BuildProjectParser's real implementation -- reads
+//     .vcxproj/.csproj XML. A production WorkspaceParser for .sln files does
+//     not exist yet.
+//   - root.go: project-root/drive determination shared by the parsers.
+//   - version.go: SDK/TargetFramework version string parsing and comparison.
+//   - resolve.go: matches a DeclaredProperty against installed resources to
+//     produce a domain.Dependency + domain.Evidence pair (not yet called by
+//     any production code path -- see issue #22).
+//   - vswhere.go: ToolLocator's real implementation, shelling out to
+//     vswhere.exe.
+//   - artifacts.go: MSBuild build-artifact (bin/obj) detection.
 package msbuild
 
 import (

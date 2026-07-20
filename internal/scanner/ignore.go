@@ -8,6 +8,10 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// excludeMatcher implements the config exclude-list check scanner.go's walk
+// consults per entry -- split into its own file since path-matching (absolute
+// vs. relative exclude patterns, normalization) is a distinct concern from
+// the walk/visitor logic in scanner.go itself.
 type excludeMatcher struct {
 	roots    []string
 	absolute []string

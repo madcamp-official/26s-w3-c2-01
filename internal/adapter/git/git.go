@@ -1,3 +1,7 @@
+// Package git detects Git repositories from a .git entry and reports them as
+// BuildProject facts. The current orchestration may also report a stronger
+// Node or MSBuild project marker at the same root; deciding whether to merge
+// those facts is an application-layer concern.
 package git
 
 import (

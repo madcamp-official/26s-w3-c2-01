@@ -11,6 +11,11 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// project_detector_adapters.go wraps each internal/adapter/* package's own
+// Detector/Parser type in the ProjectDetector interface
+// AnalysisOrchestrator expects (analysis_contract.go), one adapter-specific
+// struct per project kind. resource_detector_adapters.go is this file's
+// counterpart for system resources instead of projects.
 type GitProjectDetector struct{ Detector gitadapter.Detector }
 
 func (d GitProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {

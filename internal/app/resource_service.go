@@ -11,6 +11,11 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// resource_service.go turns one adapter-reported domain.Resource fact into
+// a fully persisted observation: measures its real on-disk size, classifies
+// whether it's system-protected, applies RiskPolicy, and upserts it.
+// analysis_orchestrator.go calls this once per detected resource (system or
+// project-owned) through the ResourceObserver interface it declares.
 type ResourcePathClassifier interface {
 	Classify(string) (safety.PathClassification, error)
 }

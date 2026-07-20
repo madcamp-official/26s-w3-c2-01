@@ -12,6 +12,11 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// workspace.go handles npm/Yarn/pnpm workspace detection and member
+// resolution specifically -- single-project detection and artifact scanning
+// (package.json, node_modules/dist/etc.) live in node.go. See that file's
+// package doc comment for the shared MVP-scope decisions both files follow.
+
 // pnpmWorkspaceFile is the marker for a pnpm workspace root.
 const pnpmWorkspaceFile = "pnpm-workspace.yaml"
 

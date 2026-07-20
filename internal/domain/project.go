@@ -1,3 +1,12 @@
+// Package domain holds libra's core data model, shared by every layer
+// (adapter, app, output) and owned jointly by all three team members per
+// docs/libra_collaboration_rules.md §2/§26 -- no single owner. Split across
+// six files by concept rather than one: project.go (Workspace/BuildProject
+// identity), resource.go (Resource), dependency.go (the PROJECT->RESOURCE
+// graph edge), evidence.go (what backs a Dependency), impact.go (removal
+// impact judgment), unverified.go (analysis gaps, distinct from
+// evaluated-and-empty). None of these types touch OS APIs directly (§7
+// "domain 모델은 OS API에 직접 의존하지 않는다").
 package domain
 
 import (

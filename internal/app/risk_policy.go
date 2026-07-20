@@ -18,6 +18,13 @@ type RiskPolicy interface {
 
 // DefaultRiskPolicy is conservative: protected/system-managed resources are
 // blocked, and resources without enough cleanup evidence require review.
+//
+// Known gap (see docs/libra_review_findings_day4.md §4): Classify below
+// never returns domain.RiskSafe -- it ignores Resource.Regenerable
+// entirely, even though §20.3 of docs/libra_integration_contracts.md's
+// CONFIRMED decision table says a project-owned, clearly-regenerable
+// artifact should be SAFE. Every resource today is REVIEW or BLOCKED, so
+// `libra summary`'s "Safely reclaimable" total is always 0.
 type DefaultRiskPolicy struct{}
 
 func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {

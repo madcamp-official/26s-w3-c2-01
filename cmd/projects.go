@@ -9,6 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// projects.go reads straight from ProjectRepository/DependencyRepository
+// (no application service in between, unlike cmd/scan.go and
+// cmd/summary.go) since all it does is list, filter, and count -- see
+// docs/libra_review_findings_day4.md §5 for why this is flagged as a
+// structural inconsistency worth a team decision rather than fixed here.
 var (
 	projectsType   string
 	projectsDrive  string

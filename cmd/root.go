@@ -2,6 +2,10 @@ package cmd
 
 import "github.com/spf13/cobra"
 
+// root.go wires the Cobra command tree's entrypoint; every other cmd/*.go
+// file registers itself onto rootCmd from its own init(). Execute() is the
+// only symbol main.go calls into this package.
+//
 // Global flag values shared by every subcommand. Populated by rootCmd's
 // persistent flags; subcommands read these instead of redefining them.
 var (

@@ -19,7 +19,7 @@
 | 2 | `main`에 PR 없이 직접 push된 커밋 11개 이상 | 높음 (프로세스) | Windows B |
 | 3 | 커밋 메시지 컨벤션 미준수 다수 | 중간 | 주로 Windows B |
 | 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 해결 (2026-07-20) | Windows A |
-| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
+| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 해결 (2026-07-20) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 해결 (2026-07-20) | Windows B·Mac C·공동 |
 | 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 해결 (2026-07-20) | Windows A |
 | 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 해결 (2026-07-20) | Mac C |

@@ -76,11 +76,14 @@ func DetectArtifacts(root string, declared []DeclaredProperty) ([]domain.Resourc
 		return nil, err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || coveredNames[entry.Name()] {
+		if coveredNames[entry.Name()] {
 			continue
 		}
 		resourceType, recognized := artifactDirs[entry.Name()]
 		if !recognized {
+			continue
+		}
+		if !entry.IsDir() && !resolvesToDirectory(filepath.Join(root, entry.Name())) {
 			continue
 		}
 		resources = append(resources, domain.Resource{
@@ -92,6 +95,20 @@ func DetectArtifacts(root string, declared []DeclaredProperty) ([]domain.Resourc
 		})
 	}
 	return resources, nil
+}
+
+// resolvesToDirectory reports whether path is a directory, following any
+// symlink or NTFS reparse point (junction/mount point) rather than the
+// entry.IsDir() the caller already tried, which is Lstat-based and false for
+// any of those regardless of what they point to. This is deliberately not
+// "is it a reparse point" -- that classification (and the decision to
+// exclude it from CleanupEvidence) belongs to
+// app.projectArtifactCleanupEvidence downstream; here we only need to know
+// whether to treat the name as a candidate at all, the same as a plain
+// directory would be. os.Stat errors (e.g. a dangling symlink) mean no.
+func resolvesToDirectory(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 type declaredOutputDir struct {
@@ -107,13 +124,19 @@ type declaredOutputDir struct {
 // so a value containing one is skipped rather than guessed at. A declared
 // path outside root, or one that doesn't exist on disk, is also skipped: it
 // isn't this scan's job to report a directory that isn't there.
+//
+// MSBuild property values always use "\" as declared in the project file
+// (it's a Windows-authored XML file regardless of which OS libra runs on),
+// so the value is normalized to "/" before filepath.Clean/Join -- otherwise
+// a value like "Build\" is a literal, uninterpreted path segment on
+// non-Windows and never resolves.
 func resolveDeclaredOutputDirs(root string, declared []DeclaredProperty) ([]declaredOutputDir, error) {
 	var dirs []declaredOutputDir
 	for _, d := range declared {
 		if !declaredOutputProperties[d.Name] || d.Condition != "" || strings.Contains(d.Value, "$(") {
 			continue
 		}
-		rel := filepath.Clean(d.Value)
+		rel := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(d.Value, `\`, "/")))
 		if filepath.IsAbs(rel) || strings.HasPrefix(rel, "..") {
 			continue
 		}

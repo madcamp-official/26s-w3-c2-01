@@ -2,7 +2,9 @@ package msbuild
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
@@ -54,6 +56,59 @@ func TestDetectArtifacts_NoArtifacts(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("got %d resources, want 0: %+v", len(got), got)
+	}
+}
+
+// TestDetectArtifacts_SymlinkedArtifactIsStillACandidate guards against a
+// regression: os.ReadDir's DirEntry.IsDir() is Lstat-based, so it's false
+// for a symlink or reparse point regardless of what it points to. Filtering
+// on it directly (as this function used to) silently drops a symlinked bin/
+// obj before it ever reaches app.projectArtifactCleanupEvidence's
+// reparse-point check -- exactly the case that check exists to catch.
+func TestDetectArtifacts_SymlinkedArtifactIsStillACandidate(t *testing.T) {
+	root := t.TempDir()
+	realDir := t.TempDir()
+	if err := os.Symlink(realDir, filepath.Join(root, "bin")); err != nil {
+		t.Skipf("creating symlink is not permitted: %v", err)
+	}
+
+	got, err := DetectArtifacts(root, nil)
+	if err != nil {
+		t.Fatalf("DetectArtifacts() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "bin" {
+		t.Fatalf("got %+v, want the symlinked bin reported as a candidate", got)
+	}
+}
+
+// TestDetectArtifacts_JunctionedArtifactIsStillACandidate is
+// TestDetectArtifacts_SymlinkedArtifactIsStillACandidate's Windows-specific
+// counterpart: a real NTFS junction (mklink /J, no elevated privilege
+// needed, unlike a symlink) is reported by Go as ModeIrregular, not
+// ModeSymlink -- so a fix that only checks DirEntry.Type()&os.ModeSymlink
+// would still miss it. Confirmed by hand against a real junction before
+// writing this: os.ReadDir on a junction gives IsDir()=false and
+// Type()&os.ModeSymlink=false both.
+func TestDetectArtifacts_JunctionedArtifactIsStillACandidate(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("NTFS junctions are Windows-only")
+	}
+	root := t.TempDir()
+	realDir := filepath.Join(root, "realbin")
+	if err := os.Mkdir(realDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "bin")
+	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, realDir).CombinedOutput(); err != nil {
+		t.Skipf("creating a junction is not permitted: %v\n%s", err, out)
+	}
+
+	got, err := DetectArtifacts(root, nil)
+	if err != nil {
+		t.Fatalf("DetectArtifacts() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "bin" {
+		t.Fatalf("got %+v, want the junctioned bin reported as a candidate", got)
 	}
 }
 

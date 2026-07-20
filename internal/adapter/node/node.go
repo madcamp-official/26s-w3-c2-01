@@ -199,12 +199,21 @@ func detectArtifacts(root string, lockfileDirs ...string) ([]domain.Resource, er
 
 	var resources []domain.Resource
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
 		resourceType, recognized := artifactDirs[entry.Name()]
 		if !recognized {
 			continue
+		}
+		// entry.IsDir() is Lstat-based: false for a symlink or (on Windows)
+		// a reparse point regardless of what it points to, so a symlinked/
+		// junctioned node_modules would otherwise be silently dropped here
+		// -- before projectArtifactCleanupEvidence's reparse-point check
+		// ever gets a chance to flag it. os.Stat follows the link to see
+		// whether it actually resolves to a directory.
+		if !entry.IsDir() {
+			info, err := os.Stat(filepath.Join(root, entry.Name()))
+			if err != nil || !info.IsDir() {
+				continue
+			}
 		}
 
 		resource := domain.Resource{

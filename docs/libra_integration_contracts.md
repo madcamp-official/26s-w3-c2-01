@@ -953,6 +953,19 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 > `internal/adapter/git.FindRepoRoot` + `TrackedFilesChecker`(`git ls-files`를
 > 실제로 실행)로 검증한다. 확인이 실패하면(경로 stat 실패, git 미설치 등)
 > 해당 evidence는 false로 남고 Issue로 기록된다 — 안전 쪽으로만 추측한다.
+>
+> 수정(2026-07-20, Mac에서 재현 후 확인): `msbuild.DetectArtifacts`/
+> `node.detectArtifacts`가 `os.ReadDir`의 `DirEntry.IsDir()`(Lstat 기준이라
+> symlink·reparse point는 무조건 false)로 후보를 걸러서, symlink/junction인
+> `bin`/`node_modules`가 candidate로도 안 만들어지고
+> `projectArtifactCleanupEvidence`의 reparse point 체크까지 아예 못
+> 갔었다 — 3번 evidence가 사실상 도달 불가능한 죽은 코드였던 것. 실제 NTFS
+> junction으로 검증해보니 `DirEntry.Type()&os.ModeSymlink`도 false라(Go가
+> junction을 `ModeIrregular`로 분류) `ModeSymlink` 비트 체크로는 못 고치고,
+> `os.Stat`(링크를 따라가는)으로 실제 디렉터리인지 다시 확인하는 방식으로
+> 고쳤다. `resolveDeclaredOutputDirs`의 `OutDir`/`OutputPath` 값도 항상
+> `\` 구분자로 선언돼 있어 macOS/Linux에서 `filepath.Clean`이 리터럴
+> 문자로 취급해버리던 것을 `/`로 정규화 후 처리하도록 같이 고쳤다.
 
 > 갱신(2026-07-20, 2차): 2번(output path)과 5번(재생성 Evidence)도 두
 > adapter에서 각자의 현실적인 방식으로 강화했다.

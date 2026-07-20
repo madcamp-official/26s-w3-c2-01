@@ -1,3 +1,11 @@
+// [파일 역할] BuildProject/Workspace 저장 계약인 ProjectRepository와
+// WorkspaceRepository 두 인터페이스를 선언하는 파일이다. 구현체는
+// internal/store/sqlite에 있다. 하나로 합치지 않고 둘로 나눈 이유는
+// domain/project.go의 주석대로 BuildProject가 Workspace 없이도 존재할 수
+// 있기 때문(§3.1) — cmd/projects.go처럼 프로젝트만 다루는 호출자가
+// WorkspaceRepository에 얹혀갈 필요가 없게 한다. analysis_orchestrator.go의
+// AnalysisOrchestrator와 summary_service.go의 SummaryService가
+// ProjectRepository를, AnalysisOrchestrator가 WorkspaceRepository를 함께 사용한다.
 package app
 
 import (

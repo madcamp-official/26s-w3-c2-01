@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+// [파일 역할] Dependency는 PROJECT -> RESOURCE(현재는 REQUIRES 관계만) 유향
+// 그래프 간선을 나타내는 domain 모델이다. DependencyID는 두 끝점과 관계로부터
+// 안정적인 sha256 해시 ID를 만든다. evidence.go의 Evidence는 DependencyID
+// 필드로 이 Dependency를 참조해 "왜 이 간선이 존재한다고 판단했는지" 근거를
+// 덧붙이고, impact.go의 ImpactAssessment는 이 그래프를 바탕으로 리소스 제거
+// 영향을 판정한다. internal/app/dependency_repository.go(DependencyRepository)가
+// 저장 계약을 정의하며, internal/adapter/msbuild/resolve.go의
+// ResolveDependencies가 실제로 이 그래프 간선을 만들어낸다.
+
 type NodeType string
 
 const (

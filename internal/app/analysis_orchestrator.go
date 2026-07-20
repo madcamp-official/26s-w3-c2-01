@@ -1,3 +1,14 @@
+// [파일 역할] `libra scan` 전체 파이프라인(AnalysisOrchestrator.Run)이 들어있는
+// 파일이다. analysis_contract.go에 정의된 Phase 상수와 ProjectDetector/
+// ResourceDetector/DependencyAnalyzer 인터페이스를 사용해 파일시스템을 순회하고,
+// project_detector_adapters.go / resource_detector_adapters.go가 감싼 어댑터들을
+// 호출해 프로젝트/리소스/의존성을 수집한 뒤, ScanRepository(scan_service.go),
+// ProjectRepository/WorkspaceRepository(project_repository.go), ResourceObserver
+// (resource_service.go), DependencyRepository(dependency_repository.go) 등 이
+// 패키지의 다른 파일이 선언한 저장 인터페이스들을 통해 결과를 영속화한다.
+// cmd/scan.go는 이 오케스트레이터를 생성하고 구체 디텍터를 주입한 뒤 결과를
+// 출력하기만 하는 얇은 래퍼이며, DISCOVER_FILES → ... → PERSIST_RESULTS로 이어지는
+// 실제 단계 흐름은 전부 이 파일에 있다.
 package app
 
 import (

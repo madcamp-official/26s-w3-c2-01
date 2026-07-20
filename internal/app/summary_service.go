@@ -1,3 +1,10 @@
+// [파일 역할] SummaryService.Summarize가 이미 저장되어 있는(즉 `libra scan`이
+// 끝난 뒤의) 프로젝트/리소스를 project_repository.go의 ProjectRepository와
+// resource_repository.go의 ResourceRepository로 읽어와 개수, 리소스 타입별
+// 용량, 위험도(RiskSafe/RiskReview/RiskBlocked)별 회수 가능 용량을 집계하는
+// 파일이다. 이 서비스 자체는 스캔이나 탐지를 전혀 하지 않고 오직 이미 있는
+// 데이터를 집계만 하며, cmd/summary.go(`libra summary`)가 이 서비스를 호출해
+// 결과를 output.SummaryView로 렌더링한다.
 package app
 
 import (

@@ -16,6 +16,17 @@ import (
 	"time"
 )
 
+// [파일 역할] domain 패키지 6개 파일 중 "프로젝트/워크스페이스 정체성"을
+// 담당하는 파일이다. Workspace(현재는 .sln 하나뿐)와 BuildProject(msbuild
+// C++/.NET, Node, Git 등 실제로 빌드/분석 대상이 되는 프로젝트 루트), 그리고
+// 둘 사이의 다대다 관계를 나타내는 WorkspaceProject를 정의한다.
+// ProjectID/WorkspaceID는 타입 + 정규화된 매니페스트 경로를 sha256으로
+// 해시해 안정적 ID를 만든다. internal/app/project_identity.go의
+// PrepareBuildProject/PrepareWorkspace가 어댑터의 원시 fact를 이 구조체로
+// 정규화하고, internal/app/project_repository.go(ProjectRepository/
+// WorkspaceRepository)가 저장 계약을 정의한다. dependency.go의
+// Dependency.SourceID는 여기 BuildProject.ID를 가리킨다.
+
 // WorkspaceType classifies the kind of workspace/grouping file libra detected.
 type WorkspaceType string
 

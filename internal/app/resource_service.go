@@ -1,3 +1,12 @@
+// [파일 역할] ResourceService.Observe가 어댑터가 보고한 domain.Resource
+// 원시 사실(fact) 하나를 받아 (1) 경로 절대화/정규화 + domain.ResourceID
+// 부여, (2) scanner.MeasureResource로 실제 디스크 크기 측정, (3)
+// ResourcePathClassifier로 시스템 보호 경로 여부 판별, (4) risk_policy.go의
+// RiskPolicy 적용, (5) resource_repository.go의 ResourceRepository로 최종
+// 저장까지 한 번에 처리하는 파일이다. analysis_orchestrator.go의
+// AnalysisOrchestrator가 ResourceObserver 인터페이스(analysis_orchestrator.go
+// 자체 선언)를 통해 탐지된 리소스(시스템 리소스든 Node 프로젝트 소유
+// 리소스든)마다 한 번씩 이 Observe를 호출한다.
 package app
 
 import (

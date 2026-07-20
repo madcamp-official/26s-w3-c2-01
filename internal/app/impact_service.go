@@ -1,3 +1,11 @@
+// [파일 역할] ImpactService.Assess는 dependency_repository.go의
+// DependencyRepository를 통해 이미 저장되어 있는 PROJECT -> RESOURCE 의존성
+// 그래프를 조회해서, 특정 리소스를 제거했을 때 어떤 프로젝트의 어떤 활동이
+// 영향을 받는지 domain/impact.go의 ImpactAssessment로 판정하는 파일이다.
+// 의존성을 새로 분석/해석하지 않고 이미 만들어진 그래프만 읽는다는 점에서
+// dependency_service.go(그래프를 "쓰는" 쪽)와 대비된다. 현재는 BUILD 스코프,
+// 직접 의존(dep.SourceType == domain.NodeProject)만 판정하고 RUN/DEBUG/CI와
+// UnverifiedScope를 고려한 규칙은 아직 구현되어 있지 않다(주석에 명시됨).
 package app
 
 import (

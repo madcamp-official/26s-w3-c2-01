@@ -1,3 +1,12 @@
+// [파일 역할] internal/adapter/{windowsdk,dotnet,msbuild} 각각의 시스템 리소스
+// 탐지 타입(windowsdk.Detector, dotnet.SDKLister, msbuild.ToolLocator)을
+// analysis_contract.go의 ResourceDetector 인터페이스로 감싸는 어댑터 모음이다.
+// project_detector_adapters.go의 "리소스 버전" 대응 파일이라고 볼 수 있는데,
+// 차이는 파일 순회 중 만나는 scanner.Entry가 아니라 (현재는 빈 구조체인)
+// Environment를 받아 시스템 전역(설치된 SDK/툴 등)을 한 번에 스캔한다는 점이다.
+// cmd/scan.go가 이 구조체들을 생성해 AnalysisOrchestrator.WithDetectors에
+// 주입하고, analysis_orchestrator.go의 AnalysisOrchestrator.Run이
+// DISCOVER_SYSTEM_RESOURCES 단계에서 호출한다.
 package app
 
 import (

@@ -7,6 +7,15 @@ import (
 	"time"
 )
 
+// [파일 역할] Evidence는 dependency.go의 Dependency 간선 하나를 뒷받침하는
+// "스캔이 관찰한 사실 하나"(예: .csproj의 PackageReference 선언값, 실제로
+// 리졸브된 값 등)를 나타낸다. DependencyID 필드로 Dependency와 다대일로
+// 연결되며, EvidenceKind(DECLARED/RESOLVED/OBSERVED/INFERRED/UNKNOWN)로
+// 그 근거가 "선언만 됐는지/실제로 리졸브됐는지/관찰됐는지/추론됐는지"를
+// 구분한다. EvidenceID는 CollectedAt(관찰 시각)을 식별자 계산에서 일부러
+// 제외해서, 같은 사실을 다시 관찰해도 새 행이 쌓이지 않고 기존 행이 갱신되게
+// 한다.
+
 type EvidenceKind string
 
 const (

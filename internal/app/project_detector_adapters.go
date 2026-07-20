@@ -1,3 +1,12 @@
+// [파일 역할] internal/adapter/{git,node,msbuild} 각각의 Detector/Parser
+// 타입을 analysis_contract.go에 정의된 ProjectDetector 인터페이스로 감싸는
+// 어댑터 모음이다(GitProjectDetector, NodeProjectDetector,
+// MSBuildProjectDetector, MSBuildWorkspaceDetector). 프로젝트 종류별로 어댑터
+// 인터페이스가 제각각(CanDetect/Detect, CanParse/Parse 등)이라, 이 파일이
+// 그 차이를 흡수해서 AnalysisOrchestrator(analysis_orchestrator.go)가 균일한
+// ProjectDetector 슬라이스만 다루면 되게 한다. cmd/scan.go가 이 구조체들을
+// 생성해 AnalysisOrchestrator.WithDetectors에 주입한다. 시스템 리소스 쪽의
+// 대응 파일은 resource_detector_adapters.go.
 package app
 
 import (

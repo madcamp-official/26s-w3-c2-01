@@ -1,3 +1,12 @@
+// [파일 역할] 이 파일은 AnalysisOrchestrator(analysis_orchestrator.go)와 모든
+// 어댑터/디텍터가 공유하는 "공통 어휘(계약)"를 정의한다: 분석 단계(AnalysisPhase),
+// 이슈 코드/심각도(IssueCode/IssueSeverity), 제네릭 결과 봉투(DetectionResult[T]),
+// 그리고 ProjectDetector/ResourceDetector/DependencyAnalyzer 세 인터페이스가 그것이다.
+// project_detector_adapters.go와 resource_detector_adapters.go는 각 internal/adapter/*
+// 패키지의 구체 타입을 여기 정의된 인터페이스로 감싸는 역할만 하고, 실제 파이프라인
+// 흐름 제어는 analysis_orchestrator.go의 AnalysisOrchestrator.Run이 담당한다.
+// docs/libra_integration_contracts.md §18.2를 그대로 구현한 파일이므로, 여기를 바꾸는
+// 것은 로컬 리팩터링이 아니라 3인 공동 소유 크로스팀 계약을 바꾸는 일이다.
 package app
 
 import (

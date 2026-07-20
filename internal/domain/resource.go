@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// [파일 역할] Resource는 SDK/툴/캐시/빌드 산출물 등 스캔으로 발견된 리소스
+// 하나를 나타내는 domain 모델이다. ResourceID는 Type + Version + 정규화된
+// 경로로부터 안정적인 sha256 해시 ID를 만든다. internal/app/resource_service.go의
+// ResourceService.Observe가 어댑터가 보고한 원시 fact를 크기 측정·위험도
+// 분류까지 마친 뒤 이 구조체에 채워 저장하고, dependency.go의
+// Dependency.TargetID가 여기 Resource.ID를 가리켜 PROJECT -> RESOURCE 간선의
+// 대상(target)이 된다.
+
 // ResourceType classifies the kind of development resource libra detected.
 type ResourceType string
 

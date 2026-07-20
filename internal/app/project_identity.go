@@ -1,3 +1,12 @@
+// [파일 역할] PrepareBuildProject / PrepareWorkspace 두 함수만 담고 있는
+// 파일이다. project_detector_adapters.go의 어댑터들이 만들어낸 "관찰 사실
+// (domain.BuildProject / domain.Workspace 원본 candidate)"을 절대경로화·경로
+// 정규화하고 domain.ProjectID / domain.WorkspaceID로 안정적 ID를 부여해
+// "저장 가능한 상태"로 바꾸는 순수 변환 로직만 모아 둔다. 실제 저장 자체는
+// project_repository.go의 ProjectRepository/WorkspaceRepository가 담당하므로,
+// 이 파일은 "저장 전 정규화" 책임만 별도로 분리한 것이다.
+// analysis_orchestrator.go의 AnalysisOrchestrator.Run이 DISCOVER_PROJECTS
+// 단계에서 각 ProjectCandidate.Projects / Workspace마다 이 두 함수를 호출한다.
 package app
 
 import (

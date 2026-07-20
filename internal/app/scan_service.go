@@ -1,3 +1,13 @@
+// [파일 역할] ScanService/ScanService.Run은 analysis_orchestrator.go의
+// AnalysisOrchestrator.Run보다 먼저 만들어진 것으로 보이는 스캔 파이프라인이지만,
+// grep으로 직접 확인한 결과("app.NewScanService" 검색 시 cmd 어디에서도 매치 없음)
+// cmd/scan.go는 AnalysisOrchestrator만 생성해서 쓰고 NewScanService를 호출하는
+// 프로덕션 코드는 이 파일 자신의 테스트 외에는 없다 — 사실상 죽은 코드다.
+// 다만 이 파일에 정의된 ScanRecord / ScanRepository / ScanStatus* 상수는
+// AnalysisOrchestrator가 그대로 재사용하므로(analysis_orchestrator.go의
+// AnalysisOrchestrator.scans 필드) 살아있다. docs/libra_review_findings_day4.md에
+// 기록된 이슈이며, 이 파일 자체 테스트가 여전히 ScanService.Run을 검증하고 있어
+// 문서화만으로 남겨 두고 삭제하지 않았다.
 package app
 
 import (

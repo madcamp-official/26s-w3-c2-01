@@ -911,9 +911,10 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 처리하지 않는다. 다만 `internal/adapter/node`의 현재 구현은 이미 이 원칙을
 따른다: `dist`/`.next`/`build`/`out`은 디렉터리 이름만으로 판정하므로 항상
 `INFERRED` 수준 Confidence를 부여하고, Git tracked 원본 확인이나 output
-path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy`에 SAFE
-분기가 아직 없어(§20.3 코드 참고) 실제 저장되는 Risk는 현재 모두
-`REVIEW`로 귀결된다.
+path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy`는
+완전한 `CleanupEvidence`에서 SAFE를 반환하지만, 현재 Node detector가
+이 evidence를 아직 채우지 않으므로 실제 Node 스캔 결과는 보수적으로
+`REVIEW`를 유지한다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
@@ -984,7 +985,20 @@ adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판
 type RiskPolicy interface {
     Classify(ResourceContext) RiskAssessment
 }
+
+type CleanupEvidence struct {
+    ProjectOwned              bool
+    KnownOutputPath           bool
+    ReparsePointFree          bool
+    GitTrackedOriginalsAbsent bool
+}
 ```
+
+`DefaultRiskPolicy`는 보호/시스템 경로를 우선 `BLOCKED`로 판정한다.
+그 다음 `Resource.Regenerable=true`이고 `CleanupEvidence`의 네 항목이
+모두 검증된 경우에만 `SAFE`를 반환하며, 하나라도 비어 있으면
+`REVIEW`를 반환한다. SAFE resource의 `ReclaimableSize`는 측정된
+`LogicalSize`로 설정하고 BLOCKED resource는 0으로 강제한다.
 
 MVP 결정표:
 

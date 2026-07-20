@@ -86,3 +86,49 @@ func TestScanRepositoryReturnsNotFound(t *testing.T) {
 		t.Fatalf("Find() error = %v, want ErrScanNotFound", err)
 	}
 }
+
+func TestScanRepositoryFindLatestReturnsMostRecentlyStarted(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
+	repository := NewScanRepository(db)
+	base := time.Date(2026, 7, 18, 1, 0, 0, 0, time.UTC)
+	older := app.ScanRecord{ID: "scan-older", StartedAt: base, Roots: []string{`D:\Projects`}, Status: "COMPLETED"}
+	newer := app.ScanRecord{ID: "scan-newer", StartedAt: base.Add(time.Hour), Roots: []string{`D:\Projects`}, Status: "COMPLETED"}
+	if err := repository.Save(context.Background(), older); err != nil {
+		t.Fatalf("Save(older) error = %v", err)
+	}
+	if err := repository.Save(context.Background(), newer); err != nil {
+		t.Fatalf("Save(newer) error = %v", err)
+	}
+
+	got, err := repository.FindLatest(context.Background())
+	if err != nil {
+		t.Fatalf("FindLatest() error = %v", err)
+	}
+	if got.ID != newer.ID {
+		t.Fatalf("FindLatest() = %q, want %q", got.ID, newer.ID)
+	}
+}
+
+func TestScanRepositoryFindLatestReturnsErrNoScansWhenEmpty(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
+	_, err = NewScanRepository(db).FindLatest(context.Background())
+	if !errors.Is(err, app.ErrNoScans) {
+		t.Fatalf("FindLatest() error = %v, want app.ErrNoScans", err)
+	}
+}

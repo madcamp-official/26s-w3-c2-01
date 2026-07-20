@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
 
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
@@ -41,6 +42,7 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 	}
 
 	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	var issues []Issue
 	// DetectArtifacts, not DetectWorkspaceArtifacts: Observe runs once per
 	// project-root entry the scanner walks into, including every workspace
 	// member independently, so scoping to entry.Path's own directory avoids
@@ -55,21 +57,15 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 		}
 	}
 	for _, resource := range artifacts {
+		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, entry.Path, resource.DisplayPath)
+		issues = append(issues, evidenceIssues...)
 		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
 			OwnerManifestPath: project.ManifestPath,
 			Resource:          resource,
-			// ReparsePointFree and GitTrackedOriginalsAbsent stay unverified
-			// (zero value): no adapter yet checks NTFS reparse points or
-			// Git-tracked files under this directory, and CleanupEvidence's
-			// zero value means unverified, not false (see
-			// MSBuildProjectDetector.Observe's identical Cleanup literal).
-			Cleanup: CleanupEvidence{
-				ProjectOwned:    true,
-				KnownOutputPath: true,
-			},
+			Cleanup:           cleanup,
 		})
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
 }
 
 type MSBuildProjectDetector struct{ Parser msbuild.BuildProjectParser }
@@ -107,17 +103,12 @@ func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry
 			continue
 		}
 		for _, resource := range artifacts {
+			cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, item.Project.RootPath, resource.DisplayPath)
+			issues = append(issues, evidenceIssues...)
 			candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
 				OwnerManifestPath: item.Project.ManifestPath,
 				Resource:          resource,
-				// ReparsePointFree and GitTrackedOriginalsAbsent stay
-				// unverified (zero value): no adapter yet checks NTFS reparse
-				// points or Git-tracked files under this directory, and
-				// CleanupEvidence's zero value means unverified, not false.
-				Cleanup: CleanupEvidence{
-					ProjectOwned:    true,
-					KnownOutputPath: true,
-				},
+				Cleanup:           cleanup,
 			})
 		}
 	}
@@ -137,6 +128,51 @@ func (d MSBuildWorkspaceDetector) Observe(ctx context.Context, entry scanner.Ent
 	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
 		Workspace: &parsed.Workspace, WorkspaceProjectPaths: parsed.ProjectPaths,
 	}}}
+}
+
+// projectArtifactCleanupEvidence checks the two safety facts DetectArtifacts
+// itself doesn't determine -- whether resourcePath is an NTFS reparse point
+// (junction/mount point/symlink) and whether Git tracks any file at or under
+// it -- and folds them in alongside the ProjectOwned/KnownOutputPath facts
+// every project-owned build artifact already carries just by being found
+// under projectRoot with a recognized artifact name. A check that fails
+// (can't stat the path, no git binary, etc.) is reported as an Issue and
+// leaves the corresponding evidence field unverified (false), never
+// guessed true -- CleanupEvidence.complete() requires an affirmative answer
+// on all four facts before RiskPolicy will consider SAFE.
+func projectArtifactCleanupEvidence(ctx context.Context, projectRoot, resourcePath string) (CleanupEvidence, []Issue) {
+	evidence := CleanupEvidence{ProjectOwned: true, KnownOutputPath: true}
+	var issues []Issue
+
+	if info, err := os.Lstat(resourcePath); err != nil {
+		issues = append(issues, cleanupEvidenceIssue(resourcePath, "check reparse point", err))
+	} else if !scanner.IsLinkLike(info) {
+		evidence.ReparsePointFree = true
+	}
+
+	repoRoot, found, err := gitadapter.FindRepoRoot(projectRoot)
+	switch {
+	case err != nil:
+		issues = append(issues, cleanupEvidenceIssue(resourcePath, "locate git repository", err))
+	case !found:
+		// No repository at all above this project: vacuously no tracked
+		// files can exist under resourcePath.
+		evidence.GitTrackedOriginalsAbsent = true
+	default:
+		tracked, err := (gitadapter.TrackedFilesChecker{}).HasTrackedFiles(ctx, repoRoot, resourcePath)
+		if err != nil {
+			issues = append(issues, cleanupEvidenceIssue(resourcePath, "check git tracked files", err))
+		} else if !tracked {
+			evidence.GitTrackedOriginalsAbsent = true
+		}
+	}
+
+	return evidence, issues
+}
+
+func cleanupEvidenceIssue(path, operation string, err error) Issue {
+	return Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "cleanup-evidence",
+		Path: path, Operation: operation, Severity: IssueWarning, Message: err.Error(), Cause: err}
 }
 
 func projectDetectionFailure(adapterName, path, operation string, err error) DetectionResult[ProjectCandidate] {

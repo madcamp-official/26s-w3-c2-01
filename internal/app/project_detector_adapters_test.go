@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -58,11 +59,12 @@ func TestNodeProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testing.T
 	if resources[0].Resource.Type != domain.ResourceTypeNodeModules {
 		t.Fatalf("resource type = %q, want node-modules", resources[0].Resource.Type)
 	}
-	if !resources[0].Cleanup.ProjectOwned || !resources[0].Cleanup.KnownOutputPath {
-		t.Errorf("Cleanup = %#v, want ProjectOwned and KnownOutputPath true", resources[0].Cleanup)
-	}
-	if resources[0].Cleanup.ReparsePointFree || resources[0].Cleanup.GitTrackedOriginalsAbsent {
-		t.Errorf("Cleanup = %#v, want ReparsePointFree and GitTrackedOriginalsAbsent unverified (false)", resources[0].Cleanup)
+	// root is a plain t.TempDir(): node_modules is a real directory (not a
+	// reparse point) and root isn't inside any Git repository, so both
+	// checks should resolve to true rather than stay unverified.
+	want := CleanupEvidence{ProjectOwned: true, KnownOutputPath: true, ReparsePointFree: true, GitTrackedOriginalsAbsent: true}
+	if resources[0].Cleanup != want {
+		t.Errorf("Cleanup = %#v, want %#v", resources[0].Cleanup, want)
 	}
 }
 
@@ -108,6 +110,10 @@ func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testin
 	if len(resources) != 2 {
 		t.Fatalf("ProjectResources = %#v, want bin and obj", resources)
 	}
+	// root is a plain t.TempDir(): bin/obj are real directories (not reparse
+	// points) and root isn't inside any Git repository, so both checks
+	// should resolve to true rather than stay unverified.
+	want := CleanupEvidence{ProjectOwned: true, KnownOutputPath: true, ReparsePointFree: true, GitTrackedOriginalsAbsent: true}
 	for _, r := range resources {
 		if r.OwnerManifestPath != manifest {
 			t.Errorf("OwnerManifestPath = %q, want %q", r.OwnerManifestPath, manifest)
@@ -115,12 +121,72 @@ func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testin
 		if r.Resource.Type != domain.ResourceTypeBuildOutput {
 			t.Errorf("resource type = %q, want build-output", r.Resource.Type)
 		}
-		if !r.Cleanup.ProjectOwned || !r.Cleanup.KnownOutputPath {
-			t.Errorf("Cleanup = %#v, want ProjectOwned and KnownOutputPath true", r.Cleanup)
+		if r.Cleanup != want {
+			t.Errorf("Cleanup = %#v, want %#v", r.Cleanup, want)
 		}
-		if r.Cleanup.ReparsePointFree || r.Cleanup.GitTrackedOriginalsAbsent {
-			t.Errorf("Cleanup = %#v, want ReparsePointFree and GitTrackedOriginalsAbsent unverified (false)", r.Cleanup)
-		}
+	}
+}
+
+func TestMSBuildProjectDetectorMarksReparsePointArtifactUnverified(t *testing.T) {
+	root := t.TempDir()
+	realDir := t.TempDir()
+	manifest := filepath.Join(root, "App.csproj")
+	if err := os.WriteFile(manifest, []byte(`<Project></Project>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realDir, filepath.Join(root, "bin")); err != nil {
+		t.Skipf("creating symlink is not permitted: %v", err)
+	}
+
+	got := (MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}}).
+		Observe(context.Background(), scanner.Entry{Path: manifest})
+	resources := got.Items[0].ProjectResources
+	if len(resources) != 1 {
+		t.Fatalf("ProjectResources = %#v, want the symlinked bin only", resources)
+	}
+	if resources[0].Cleanup.ReparsePointFree {
+		t.Errorf("Cleanup.ReparsePointFree = true, want false (bin is a symlink)")
+	}
+}
+
+func TestMSBuildProjectDetectorMarksTrackedArtifactUnverified(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available on PATH")
+	}
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init", "-q")
+
+	manifest := filepath.Join(repoRoot, "App.csproj")
+	if err := os.WriteFile(manifest, []byte(`<Project></Project>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	objDir := filepath.Join(repoRoot, "obj")
+	if err := os.Mkdir(objDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	trackedFile := filepath.Join(objDir, "Licenses.txt")
+	if err := os.WriteFile(trackedFile, []byte("original license text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repoRoot, "add", trackedFile)
+
+	got := (MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}}).
+		Observe(context.Background(), scanner.Entry{Path: manifest})
+	resources := got.Items[0].ProjectResources
+	if len(resources) != 1 {
+		t.Fatalf("ProjectResources = %#v, want the obj directory only", resources)
+	}
+	if resources[0].Cleanup.GitTrackedOriginalsAbsent {
+		t.Errorf("Cleanup.GitTrackedOriginalsAbsent = true, want false (obj contains a tracked file)")
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

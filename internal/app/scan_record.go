@@ -44,6 +44,12 @@ func (s ScanRecord) Validate() error {
 	return nil
 }
 
+// ErrNoScans is returned by ScanRepository.FindLatest when no scan has been
+// saved yet, so callers can tell a caller-facing "run `libra scan` first"
+// message apart from a real storage failure.
+var ErrNoScans = errors.New("no scan has been recorded yet")
+
 type ScanRepository interface {
 	Save(context.Context, ScanRecord) error
+	FindLatest(context.Context) (ScanRecord, error)
 }

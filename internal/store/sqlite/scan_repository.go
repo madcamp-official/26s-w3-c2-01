@@ -17,6 +17,8 @@ type ScanRepository struct {
 	db *sql.DB
 }
 
+var _ app.ScanRepository = (*ScanRepository)(nil)
+
 func NewScanRepository(db *sql.DB) *ScanRepository {
 	return &ScanRepository{db: db}
 }
@@ -53,38 +55,67 @@ func (r *ScanRepository) Save(ctx context.Context, scan app.ScanRecord) error {
 }
 
 func (r *ScanRepository) Find(ctx context.Context, id string) (app.ScanRecord, error) {
-	var record app.ScanRecord
-	var startedAt string
-	var finishedAt sql.NullString
-	var roots string
-	err := r.db.QueryRowContext(ctx, `
+	record, err := scanFromRow(r.db.QueryRowContext(ctx, `
 		SELECT id, started_at, finished_at, roots, file_count, error_count, status
 		FROM scans
 		WHERE id = ?
-	`, id).Scan(
-		&record.ID, &startedAt, &finishedAt, &roots,
-		&record.FileCount, &record.ErrorCount, &record.Status,
-	)
+	`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return app.ScanRecord{}, fmt.Errorf("%w: %s", ErrScanNotFound, id)
 	}
 	if err != nil {
 		return app.ScanRecord{}, fmt.Errorf("find scan %q: %w", id, err)
 	}
+	return record, nil
+}
 
+// FindLatest returns the most recently started scan, regardless of status.
+// Callers that need a scan ID to stamp onto derived records (e.g. cleanup
+// plan items) use this rather than requiring every caller to track "the
+// last scan I ran" themselves.
+func (r *ScanRepository) FindLatest(ctx context.Context) (app.ScanRecord, error) {
+	record, err := scanFromRow(r.db.QueryRowContext(ctx, `
+		SELECT id, started_at, finished_at, roots, file_count, error_count, status
+		FROM scans
+		ORDER BY started_at DESC
+		LIMIT 1
+	`))
+	if errors.Is(err, sql.ErrNoRows) {
+		return app.ScanRecord{}, app.ErrNoScans
+	}
+	if err != nil {
+		return app.ScanRecord{}, fmt.Errorf("find latest scan: %w", err)
+	}
+	return record, nil
+}
+
+// scanFromRow decodes the shared scans-table column list into a ScanRecord.
+// It returns the row's raw error (including sql.ErrNoRows) unwrapped so
+// callers can apply their own not-found semantics.
+func scanFromRow(row *sql.Row) (app.ScanRecord, error) {
+	var record app.ScanRecord
+	var startedAt string
+	var finishedAt sql.NullString
+	var roots string
+	if err := row.Scan(&record.ID, &startedAt, &finishedAt, &roots,
+		&record.FileCount, &record.ErrorCount, &record.Status); err != nil {
+		return app.ScanRecord{}, err
+	}
+
+	var err error
 	record.StartedAt, err = time.Parse(time.RFC3339Nano, startedAt)
 	if err != nil {
-		return app.ScanRecord{}, fmt.Errorf("decode scan %q start time: %w", id, err)
+		return app.ScanRecord{}, fmt.Errorf("decode scan %q start time: %w", record.ID, err)
 	}
 	if finishedAt.Valid {
 		parsed, err := time.Parse(time.RFC3339Nano, finishedAt.String)
 		if err != nil {
-			return app.ScanRecord{}, fmt.Errorf("decode scan %q finish time: %w", id, err)
+			return app.ScanRecord{}, fmt.Errorf("decode scan %q finish time: %w", record.ID, err)
 		}
 		record.FinishedAt = &parsed
 	}
 	if err := json.Unmarshal([]byte(roots), &record.Roots); err != nil {
-		return app.ScanRecord{}, fmt.Errorf("decode scan %q roots: %w", id, err)
+		return app.ScanRecord{}, fmt.Errorf("decode scan %q roots: %w", record.ID, err)
 	}
 	return record, nil
 }

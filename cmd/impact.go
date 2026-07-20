@@ -74,6 +74,9 @@ dependency, and any CI configuration that references it.`,
 
 		view := output.ImpactView{}
 		for _, edge := range edges {
+			if edge.Relation != domain.RelationRequires {
+				continue
+			}
 			project, err := projectRepo.FindByID(cmd.Context(), edge.SourceID)
 			if err != nil {
 				return fmt.Errorf("find affected project %q: %w", edge.SourceID, err)

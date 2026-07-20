@@ -62,7 +62,7 @@ needs review, or is blocked from cleanup.`,
 
 		service := app.NewSummaryService(sqlite.NewProjectRepository(db), sqlite.NewResourceRepository(db))
 		summary, err := service.Summarize(cmd.Context(), func(resource domain.Resource) bool {
-			if summaryType != "" && string(resource.Type) != summaryType {
+			if summaryType != "" && !strings.EqualFold(string(resource.Type), summaryType) {
 				return false
 			}
 			if summaryDrive != "" && !strings.EqualFold(filepath.VolumeName(resource.DisplayPath), summaryDrive) {

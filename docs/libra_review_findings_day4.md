@@ -19,7 +19,7 @@
 | 2 | `main`에 PR 없이 직접 push된 커밋 11개 이상 | 높음 (프로세스) | Windows B |
 | 3 | 커밋 메시지 컨벤션 미준수 다수 | 중간 | 주로 Windows B |
 | 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 해결 (2026-07-20) | Windows A |
-| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
+| 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 해결 (2026-07-20) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 해결 (2026-07-20) | Windows B·Mac C·공동 |
 | 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 해결 (2026-07-20) | Windows A |
 | 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 해결 (2026-07-20) | Mac C |
@@ -202,7 +202,7 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 ---
 
-## 5. `cmd` 계층이 명령마다 다른 구조를 씀
+## 5. `cmd` 계층이 명령마다 다른 구조를 씀 (2026-07-20 해결)
 
 ### 위치와 증거
 
@@ -212,8 +212,8 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 |---|---|---|
 | `cmd/scan.go` | `app.NewAnalysisOrchestrator`, `app.NewResourceService` | (orchestrator 내부에서만) |
 | `cmd/summary.go` | `app.NewSummaryService` | 없음 |
-| `cmd/projects.go` | 없음 | `sqlite.NewProjectRepository`, `sqlite.NewDependencyRepository` 직접 |
-| `cmd/resources.go` | 없음 | `sqlite.NewResourceRepository`, `sqlite.NewDependencyRepository` 직접 |
+| `cmd/projects.go` | `app.NewProjectListService` | (서비스 내부에서만) |
+| `cmd/resources.go` | `app.NewResourceListService` | (서비스 내부에서만) |
 | `cmd/explain.go` | `app.NewExplainService` (일부) | `sqlite.New*Repository` 직접 (대상 식별용) |
 | `cmd/impact.go` | `app.NewImpactService` (일부) | `sqlite.New*Repository` 직접 (연결 대상 조회용) |
 
@@ -223,11 +223,9 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 `scan`/`summary`는 "여러 단계 로직 + 판정"이 있어서 서비스로 뽑을 이유가 명확하다. `projects`/`resources`는 "목록 조회 + 필터 + 개수 세기"뿐이라 서비스 계층이 그냥 얇은 pass-through가 될 수 있다 — 그래서 지금까지는 실용적으로 생략해왔다. 다만 이게 "의도된 예외"인지 "그냥 빠뜨린 것"인지 문서에 없어서, 다음 사람이 `cmd/*.go`를 새로 만들 때 어느 쪽을 따라야 할지 알 수 없다.
 
-### 제안
+### 해결
 
-둘 중 하나로 팀이 합의해서 문서화하는 걸 제안:
-1. "단순 목록+필터는 cmd에서 repository 직접 호출 허용" 을 §7에 명시적 예외로 추가, 또는
-2. `ProjectsService`/`ResourcesService`처럼 얇은 서비스를 만들어서 일관성을 맞춤 (당장 급한 리팩터링은 아님).
+옵션 2(서비스 계층 신설)로 팀이 결정했다. `internal/app/project_list_service.go`/`resource_list_service.go`에 `ProjectListService`/`ResourceListService`를 추가했다 -- `app.SummaryService`(list + filter closure + 집계)와 정확히 같은 패턴이라 새로 설계하지 않고 그대로 복제했다. `cmd/projects.go`/`cmd/resources.go`는 이제 `sqlite.New*Repository`를 직접 호출하지 않고 이 서비스를 거친다. 이 작업 중 `cmd/resources.go`의 `--type` 필터에서도 finding #8과 동일한 대소문자 구분 버그를 발견해 같이 고쳤다 (`cmd/resources_test.go`에 회귀 테스트 추가, 수정 전으로 되돌리면 실패하는 것 확인함).
 
 ---
 
@@ -278,25 +276,30 @@ Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2)
 
 ---
 
-## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20 발견, 2026-07-20 해결)
+## 8. `--type` 필터만 대소문자를 구분함 -- `cmd/projects.go`/`cmd/resources.go`/`cmd/summary.go` 세 곳 전부 (2026-07-20 발견, 2026-07-20 전부 해결)
 
 ### 위치
 
-`cmd/projects.go`의 세 필터:
+세 명령 모두 같은 모양의 버그였다 (예: `cmd/projects.go`):
 
 ```go
-if projectsType != "" && string(project.Type) != projectsType { continue }                          // 대소문자 구분
+if projectsType != "" && string(project.Type) != projectsType { continue }                          // 대소문자 구분 (버그)
 if projectsDrive != "" && !strings.EqualFold(project.Drive, projectsDrive) { continue }               // 대소문자 무시
 if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsStatus) { continue }    // 대소문자 무시
 ```
 
 ### 왜 문제인가
 
-`--drive`/`--status`는 대소문자를 무시하고 `--type`만 정확히 일치해야 한다 — `libra projects --type Node`는 아무것도 안 찾고 `--type node`만 찾는다. 사용자 입장에서 세 옵션이 왜 다르게 동작하는지 알 방법이 없다. `cmd/resources.go`/`cmd/summary.go`의 같은 종류 필터는 전부 `strings.EqualFold`를 쓴다 — `projects.go`의 `--type`만 예외.
+`--drive`/`--status`/`--risk`는 대소문자를 무시하고 `--type`만 정확히 일치해야 한다 — 예를 들어 `libra projects --type Node`는 아무것도 안 찾고 `--type node`만 찾는다. 사용자 입장에서 옵션마다 왜 다르게 동작하는지 알 방법이 없다.
+
+**정정: 처음 이 항목을 적을 때 "`cmd/resources.go`/`cmd/summary.go`는 전부 `strings.EqualFold`를 쓴다"고 썼는데, 이건 틀린 확인이었다** -- 실제로는 두 파일 모두 `--type`에서 정확히 같은 버그를 갖고 있었다. `cmd/projects.go`만 고치고 다른 두 곳을 안 살펴봤던 것; 이후 finding #5(cmd 계층 리팩터링) 스코핑 중 `resources.go`에서, 그리고 사용자가 "finding #8과 동일한 버그 더 없는지" 확인을 요청한 뒤 `summary.go`에서 각각 발견했다.
 
 ### 해결
 
-`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 변경 (`fix/risk-policy-scan-service` 브랜치). `cmd/projects_test.go`에 `--type Node`가 `--type node`로 저장된 프로젝트를 대소문자 무시하고 찾는지 검증하는 케이스를 추가했다 -- 수정 전으로 되돌리면 이 테스트가 실제로 fail하는 것을 확인함.
+세 파일 전부 `string(...) != X`를 `!strings.EqualFold(string(...), X)`로 변경, 각각 회귀 테스트 추가 (수정 전 코드로 되돌리면 전부 fail하는 것 확인):
+- `cmd/projects.go`: PR #30 (병합됨)
+- `cmd/resources.go`: PR #31 (finding #5 리팩터링과 같은 PR -- 그 파일을 다시 쓰는 김에 같이 수정)
+- `cmd/summary.go`: 별도 브랜치/PR (다른 두 곳과 달리 finding #5/risk-policy 어느 쪽과도 무관한 파일이라 독립적으로 분리)
 
 ---
 

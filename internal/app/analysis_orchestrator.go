@@ -116,7 +116,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	o.phase(&result, PhaseDiscoverProjects)
 	observedAt := o.now()
 	workspaceCandidates := make([]workspaceCandidate, 0)
-	var projectResourceFacts []ResourceObservationInput
+	var projectResourceCandidates []ProjectResourceCandidate
 	propertiesByManifest := make(map[string][]ProjectProperty)
 	for _, candidate := range candidates {
 		for _, projectFact := range candidate.Projects {
@@ -127,12 +127,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 			}
 			result.Projects = append(result.Projects, project)
 		}
-		for _, projectResource := range candidate.ProjectResources {
-			projectResourceFacts = append(projectResourceFacts, ResourceObservationInput{
-				Resource: projectResource.Resource,
-				Cleanup:  projectResource.Cleanup,
-			})
-		}
+		projectResourceCandidates = append(projectResourceCandidates, candidate.ProjectResources...)
 		for _, property := range candidate.ProjectProperties {
 			normalizedManifest, err := pathutil.Normalize(property.OwnerManifestPath)
 			if err != nil {
@@ -166,12 +161,42 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 			return o.fail(ctx, result, record, fmt.Errorf("observe resource: %w", err))
 		}
 	}
-	// Project-scoped resources (Node's node_modules/dist/build) were collected
-	// during project discovery; observe them the same way as system resources
-	// so they are sized, risk-classified, and persisted. Linking each back to
-	// its owning project (a dependency edge) is deferred to the Day 4 graph.
+	// Project-scoped resources are observed, then linked to their owner with
+	// an explicit OWNS edge below.
+	projectResourceFacts := make([]ResourceObservationInput, 0, len(projectResourceCandidates))
+	for _, candidate := range projectResourceCandidates {
+		projectResourceFacts = append(projectResourceFacts, ResourceObservationInput{Resource: candidate.Resource, Cleanup: candidate.Cleanup})
+	}
 	if err := o.observeResourceFacts(ctx, &result, projectResourceFacts); err != nil {
 		return o.fail(ctx, result, record, fmt.Errorf("observe project resource: %w", err))
+	}
+	for _, candidate := range projectResourceCandidates {
+		owner, found := projectByManifest(result.Projects, candidate.OwnerManifestPath)
+		if !found {
+			result.Issues = append(result.Issues, structuredCandidateIssue(candidate.OwnerManifestPath, "resolve resource owner", errors.New("owner project not found")))
+			continue
+		}
+		normalizedResource, err := pathutil.Normalize(candidate.Resource.DisplayPath)
+		if err != nil {
+			result.Issues = append(result.Issues, structuredCandidateIssue(candidate.Resource.DisplayPath, "normalize owned resource", err))
+			continue
+		}
+		var resourceID string
+		for _, resource := range result.Resources {
+			if resource.NormalizedPath == normalizedResource {
+				resourceID = resource.ID
+				break
+			}
+		}
+		if resourceID == "" {
+			continue
+		}
+		dependency := domain.Dependency{SourceType: domain.NodeProject, SourceID: owner.ID, TargetType: domain.NodeResource, TargetID: resourceID, Relation: domain.RelationOwns, Confidence: domain.DefaultConfidence[domain.EvidenceObserved]}
+		dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
+		evidence := domain.Evidence{DependencyID: dependency.ID, Kind: domain.EvidenceObserved, SourcePath: candidate.OwnerManifestPath, Property: "project-output", ResolvedValue: normalizedResource, CollectedAt: observedAt}
+		evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+		result.Dependencies = append(result.Dependencies, dependency)
+		result.Evidence = append(result.Evidence, evidence)
 	}
 
 	o.phase(&result, PhaseAnalyzeProjectSettings)
@@ -203,7 +228,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	// "current project depends on this SDK -> BLOCKED" rule actually applies.
 	requiredResourceIDs := make(map[string]bool, len(result.Dependencies))
 	for _, dependency := range result.Dependencies {
-		if dependency.TargetType == domain.NodeResource {
+		if dependency.TargetType == domain.NodeResource && dependency.Relation == domain.RelationRequires {
 			requiredResourceIDs[dependency.TargetID] = true
 		}
 	}
@@ -309,6 +334,19 @@ func structuredCandidateIssue(path, operation string, err error) Issue {
 type workspaceCandidate struct {
 	workspace    domain.Workspace
 	projectPaths []string
+}
+
+func projectByManifest(projects []domain.BuildProject, manifestPath string) (domain.BuildProject, bool) {
+	normalized, err := pathutil.Normalize(manifestPath)
+	if err != nil {
+		return domain.BuildProject{}, false
+	}
+	for _, project := range projects {
+		if project.NormalizedManifestPath == normalized {
+			return project, true
+		}
+	}
+	return domain.BuildProject{}, false
 }
 
 func resolveWorkspaceMembers(paths []string, projects []domain.BuildProject) ([]string, []Issue) {

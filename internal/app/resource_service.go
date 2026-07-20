@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
@@ -87,10 +88,11 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		return ResourceObservation{}, err
 	}
 	detected.SystemManaged = classification.SystemManaged
+	cleanup := enrichCleanupEvidence(ctx, displayPath, input.Cleanup)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
-		Cleanup:       input.Cleanup,
+		Cleanup:       cleanup,
 	})
 	detected.Risk = assessment.Level
 	switch detected.Risk {
@@ -108,6 +110,27 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Issues:   measured.Issues,
 		Reasons:  assessment.Reasons,
 	}, nil
+}
+
+func enrichCleanupEvidence(ctx context.Context, path string, evidence CleanupEvidence) CleanupEvidence {
+	if !evidence.ProjectOwned || !evidence.KnownOutputPath {
+		return evidence
+	}
+	if reparse, err := safety.IsReparsePoint(path); err == nil {
+		evidence.ReparsePointFree = !reparse
+	}
+	repoRoot, found, err := gitadapter.FindRepoRoot(path)
+	if err != nil {
+		return evidence
+	}
+	if !found {
+		evidence.GitTrackedOriginalsAbsent = true
+		return evidence
+	}
+	if tracked, err := (gitadapter.TrackedFilesChecker{}).HasTrackedFiles(ctx, repoRoot, path); err == nil {
+		evidence.GitTrackedOriginalsAbsent = !tracked
+	}
+	return evidence
 }
 
 // ReclassifyRequired re-classifies an already-observed-and-persisted

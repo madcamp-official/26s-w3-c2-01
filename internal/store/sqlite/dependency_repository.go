@@ -168,7 +168,7 @@ func validateDependency(dependency domain.Dependency) error {
 	if dependency.SourceID == "" || dependency.TargetID == "" {
 		return errors.New("dependency source and target IDs are required")
 	}
-	if dependency.Relation != domain.RelationRequires {
+	if dependency.Relation != domain.RelationRequires && dependency.Relation != domain.RelationOwns {
 		return fmt.Errorf("unsupported dependency relation %q", dependency.Relation)
 	}
 	wantID := domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)

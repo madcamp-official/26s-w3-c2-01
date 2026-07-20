@@ -14,6 +14,14 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// scanner.go는 scanner 패키지의 본체로, 병렬 디렉터리 순회를 구현하는
+// ParallelScanner와 Scanner 인터페이스, 그리고 Options/Result/Entry/Issue
+// 등 패키지 전역에서 쓰이는 공용 타입을 정의한다. 같은 패키지의 다른
+// 파일들은 이 파일이 정의한 것을 보조하는 역할이다: ignore.go는 순회 중
+// exclude 패턴 매칭을, reparse_other.go/reparse_windows.go는 플랫폼별
+// reparse point 판정을, size.go는 개별 엔트리의 논리 크기 계산을,
+// resource_size.go는 이 파일의 Scanner를 재사용해 단일 리소스를 측정하는
+// 상위 헬퍼를 각각 맡는다.
 // Scanner traverses configured roots. Recoverable path issues are returned in
 // Result.Issues; error is reserved for failures that prevent the scan itself.
 type Scanner interface {

@@ -11,6 +11,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 )
 
+// scan_repository.go는 internal/app에 정의된 app.ScanRepository
+// 인터페이스를 SQLite로 구현한다. 다른 형제 repository 파일들과 달리
+// 이 파일에는 var _ app.ScanRepository = (*ScanRepository)(nil) 같은
+// 명시적 컴파일타임 assertion이 없지만, ScanRepository가 app.ScanRepository
+// 시그니처를 그대로 구현하고 있음은 동일하다. scans 테이블에 스캔 1회
+// 실행의 요약(시작/종료 시각, 스캔한 루트, 파일 수, 에러 수, 상태)을
+// 저장(Save)하고 조회(Find)한다. Roots는 Windows 경로 구분자와 delimiter가
+// 충돌하지 않도록 JSON으로 인코딩해서 저장한다. project_repository.go,
+// resource_repository.go, dependency_repository.go, workspace_repository.go가
+// scan_id로 이 테이블의 레코드를 참조하는 관계다.
 var ErrScanNotFound = errors.New("scan not found")
 
 type ScanRepository struct {

@@ -11,6 +11,14 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
+// dependency_repository.go는 internal/app에 정의된 app.DependencyRepository
+// 인터페이스를 SQLite로 구현한다(아래 var _ 컴파일타임 assertion이 이를
+// 보장). PROJECT -> RESOURCE 의존성 그래프를 저장하는 dependencies 테이블과
+// 그 의존성을 뒷받침하는 근거를 저장하는 evidence 테이블을 함께 다루며,
+// UpsertGraph가 두 테이블을 하나의 트랜잭션으로 갱신한다. 같은 패키지의
+// project_repository.go/resource_repository.go/scan_repository.go/
+// workspace_repository.go도 각각 다른 app.XRepository 인터페이스를
+// 구현하는 형제 파일들로, 도메인 엔티티 하나당 파일 하나 구조를 따른다.
 type DependencyRepository struct {
 	db *sql.DB
 }

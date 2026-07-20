@@ -10,6 +10,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// config.go는 internal/config 패키지의 유일한 소스 파일로, 패키지가 다루는
+// 모든 것 -- YAML 설정 스키마(Config/ScanConfig/CleanupConfig), 누락된
+// 필드를 채우는 안전한 기본값(Default), 파일에서 읽어와 검증까지 마치는
+// 로딩(Load), 그리고 저장(Save) -- 을 한 곳에 모아 둔다. 스키마 정의와
+// 로드/검증 로직이 서로 강하게 얽혀 있어 별도 파일로 쪼갤 이유가 없었다.
+// cmd/init.go는 Save로 초기 설정 파일을 만들고, cmd/db.go 등 다른
+// 커맨드들은 Load를 통해 이 설정을 읽어 사용한다.
 const CurrentVersion = 1
 
 type Config struct {

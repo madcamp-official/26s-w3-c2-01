@@ -11,6 +11,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
+// workspace_repository.go는 internal/app에 정의된 app.WorkspaceRepository
+// 인터페이스를 SQLite로 구현한다(아래 var _ 컴파일타임 assertion이 이를
+// 보장). 두 테이블을 다룬다: workspace 자체를 저장하는 workspaces
+// 테이블(Upsert)과, 워크스페이스에 속한 프로젝트 ID 목록을 저장하는
+// workspace_projects 매핑 테이블(ReplaceMembers). ReplaceMembers는
+// 멤버 목록을 delete-then-insert 방식으로 트랜잭션 안에서 통째로
+// 교체하며 중복 ID는 무시한다. project_repository.go,
+// resource_repository.go, dependency_repository.go, scan_repository.go와
+// 함께 도메인 엔티티 하나당 파일 하나 구조를 이루는 형제 파일이다.
 type WorkspaceRepository struct {
 	db *sql.DB
 }

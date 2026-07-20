@@ -12,6 +12,14 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// project_repository.go는 internal/app에 정의된 app.ProjectRepository
+// 인터페이스를 SQLite로 구현한다(아래 var _ 컴파일타임 assertion이 이를
+// 보장). projects 테이블에 대한 저장(UpsertObserved)과 조회(FindByID,
+// FindByManifestPath, List)를 담당하며, domain.BuildProject의 안정적
+// ID(project.ID == domain.ProjectID(...))와 정규화된 매니페스트 경로
+// 일치를 저장 전에 검증(validateProject)한다. dependency_repository.go,
+// resource_repository.go, scan_repository.go, workspace_repository.go와
+// 함께 도메인 엔티티 하나당 파일 하나 구조를 이루는 형제 파일이다.
 var ErrProjectNotFound = errors.New("project not found")
 
 type ProjectRepository struct {

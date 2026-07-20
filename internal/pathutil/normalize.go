@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+// normalize.go는 pathutil 패키지의 플랫폼 독립적인 핵심 로직을 담는다:
+// 절대 경로 변환(Absolute), DB 저장/비교용 정규화(Normalize), 두 경로의
+// 동일성(Equal), 상위/하위 경로 관계 판정(IsSameOrChild)이 전부 여기에
+// 있다. 다만 "정규화 시 대소문자를 어떻게 다룰지"는 OS마다 파일시스템
+// 특성이 달라 이 파일이 직접 정하지 않고 normalizePlatform 함수로
+// 위임하며, 그 실제 구현은 //go:build 태그로 나뉜 normalize_other.go
+// (비Windows)와 normalize_windows.go(Windows)에 각각 있다.
 var ErrEmptyPath = errors.New("path must not be empty")
 
 // Normalize returns an absolute, cleaned path suitable for comparison and DB

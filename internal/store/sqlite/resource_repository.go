@@ -12,6 +12,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// resource_repository.go는 internal/app에 정의된 app.ResourceRepository
+// 인터페이스를 SQLite로 구현한다(아래 var _ 컴파일타임 assertion이 이를
+// 보장). resources 테이블에 대한 저장(Upsert)과 조회(FindByID, ListByType,
+// List)를 담당하며, domain.Resource의 안정적 ID와 정규화 경로 일치를
+// 저장 전에 검증(validateResource)한다. 파일 맨 아래의 nullableString/
+// boolInt는 이 파일만을 위한 것이 아니라 dependency_repository.go에서도
+// 함께 쓰는 패키지 전역 SQL 스캔 보조 헬퍼다. project_repository.go,
+// dependency_repository.go, scan_repository.go, workspace_repository.go와
+// 함께 도메인 엔티티 하나당 파일 하나 구조를 이루는 형제 파일이다.
 var ErrResourceNotFound = errors.New("resource not found")
 
 type ResourceRepository struct {

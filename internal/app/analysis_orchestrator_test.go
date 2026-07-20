@@ -171,7 +171,8 @@ func (d resourceDetectorFake) Detect(context.Context, Environment) DetectionResu
 
 type resourceObserverFake struct{ observedAt time.Time }
 
-func (f resourceObserverFake) Observe(_ context.Context, resource domain.Resource) (ResourceObservation, error) {
+func (f resourceObserverFake) Observe(_ context.Context, input ResourceObservationInput) (ResourceObservation, error) {
+	resource := input.Resource
 	display, err := pathutil.Absolute(resource.DisplayPath)
 	if err != nil {
 		return ResourceObservation{}, err

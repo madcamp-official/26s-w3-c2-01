@@ -44,7 +44,7 @@ func TestDetectArtifactsPersistThroughResourceService(t *testing.T) {
 
 	observed := map[domain.ResourceType]app.ResourceObservation{}
 	for _, candidate := range candidates {
-		observation, err := service.Observe(context.Background(), candidate)
+		observation, err := service.Observe(context.Background(), app.ResourceObservationInput{Resource: candidate})
 		if err != nil {
 			t.Fatalf("Observe(%+v): %v", candidate, err)
 		}
@@ -61,10 +61,8 @@ func TestDetectArtifactsPersistThroughResourceService(t *testing.T) {
 	if nodeModules.SystemManaged {
 		t.Error("node_modules under testdata should not be SystemManaged")
 	}
-	// DefaultRiskPolicy has no SAFE branch yet -- see risk_policy.go comment
-	// and docs/libra_integration_contracts.md §20.3 -- so a non-protected,
-	// non-system-managed candidate lands as REVIEW, not SAFE, until the
-	// team extends the shared risk formula.
+	// The adapter has not supplied all cleanup evidence yet, so the policy
+	// conservatively keeps this resource in REVIEW.
 	if nodeModules.Risk != domain.RiskReview {
 		t.Errorf("node_modules Risk = %v, want %v", nodeModules.Risk, domain.RiskReview)
 	}

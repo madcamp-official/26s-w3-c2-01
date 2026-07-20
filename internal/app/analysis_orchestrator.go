@@ -21,7 +21,7 @@ import (
 // ... -> PERSIST_RESULTS phase sequence (§18.3 of
 // docs/libra_integration_contracts.md) lives in cmd.
 type ResourceObserver interface {
-	Observe(context.Context, domain.Resource) (ResourceObservation, error)
+	Observe(context.Context, ResourceObservationInput) (ResourceObservation, error)
 }
 
 type AnalysisOptions struct {
@@ -112,7 +112,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	o.phase(&result, PhaseDiscoverProjects)
 	observedAt := o.now()
 	workspaceCandidates := make([]workspaceCandidate, 0)
-	var projectResourceFacts []domain.Resource
+	var projectResourceFacts []ResourceObservationInput
 	for _, candidate := range candidates {
 		for _, projectFact := range candidate.Projects {
 			project, err := PrepareBuildProject(projectFact, observedAt)
@@ -123,7 +123,10 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 			result.Projects = append(result.Projects, project)
 		}
 		for _, projectResource := range candidate.ProjectResources {
-			projectResourceFacts = append(projectResourceFacts, projectResource.Resource)
+			projectResourceFacts = append(projectResourceFacts, ResourceObservationInput{
+				Resource: projectResource.Resource,
+				Cleanup:  projectResource.Cleanup,
+			})
 		}
 		if candidate.Workspace != nil {
 			workspace, err := PrepareWorkspace(*candidate.Workspace, observedAt)
@@ -141,7 +144,11 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		detected := detector.Detect(ctx, options.Environment)
 		result.Issues = append(result.Issues, detected.Issues...)
 		result.Unverified = append(result.Unverified, detected.Unverified...)
-		if err := o.observeResourceFacts(ctx, &result, detected.Items); err != nil {
+		facts := make([]ResourceObservationInput, 0, len(detected.Items))
+		for _, resource := range detected.Items {
+			facts = append(facts, ResourceObservationInput{Resource: resource})
+		}
+		if err := o.observeResourceFacts(ctx, &result, facts); err != nil {
 			return o.fail(ctx, result, record, fmt.Errorf("observe resource: %w", err))
 		}
 	}
@@ -215,7 +222,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 // observeResourceFacts enriches, risk-classifies, and persists each detected
 // resource fact through the ResourceObserver, appending the results and any
 // recoverable measurement issues to result.
-func (o *AnalysisOrchestrator) observeResourceFacts(ctx context.Context, result *ScanResult, facts []domain.Resource) error {
+func (o *AnalysisOrchestrator) observeResourceFacts(ctx context.Context, result *ScanResult, facts []ResourceObservationInput) error {
 	for _, resourceFact := range facts {
 		observed, err := o.resources.Observe(ctx, resourceFact)
 		if err != nil {

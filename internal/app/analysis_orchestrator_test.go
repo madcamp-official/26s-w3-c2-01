@@ -31,7 +31,7 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	resourceObserver := resourceObserverFake{observedAt: time.Date(2026, 7, 18, 10, 0, 0, 0, time.UTC)}
 	projectDetector := projectDetectorFake{root: root}
 	resourceDetector := resourceDetectorFake{path: resourceRoot}
-	analyzer := dependencyAnalyzerFake{}
+	analyzer := &dependencyAnalyzerFake{}
 	orchestrator := NewAnalysisOrchestrator(scanner.New(2), scans, projects, workspaces, resourceObserver, dependencies).
 		WithDetectors([]ProjectDetector{projectDetector}, []ResourceDetector{resourceDetector}, []DependencyAnalyzer{analyzer})
 	orchestrator.now = func() time.Time { return time.Date(2026, 7, 18, 11, 0, 0, 0, time.UTC) }
@@ -52,6 +52,10 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	}
 	if len(projects.saved) != 1 || len(dependencies.saved) != 1 {
 		t.Fatalf("persisted projects/dependencies = %d/%d", len(projects.saved), len(dependencies.saved))
+	}
+	if len(analyzer.inputs) != 1 || len(analyzer.inputs[0].Properties) != 1 ||
+		analyzer.inputs[0].Properties[0].Name != "TargetFramework" {
+		t.Fatalf("analyzer inputs = %#v, want the detected project's property", analyzer.inputs)
 	}
 	wantPhases := []AnalysisPhase{
 		PhaseDiscoverFiles, PhaseDiscoverProjects, PhaseDiscoverSystemResources,
@@ -155,10 +159,16 @@ func (d projectDetectorFake) Observe(_ context.Context, entry scanner.Entry) Det
 	if filepath.Base(entry.Path) != "package.json" {
 		return DetectionResult[ProjectCandidate]{}
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{{
-		Name: "app", Type: domain.ProjectTypeNode, RootPath: d.root,
-		ManifestPath: entry.Path, LastModifiedAt: entry.ModifiedAt,
-	}}}}}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Projects: []domain.BuildProject{{
+			Name: "app", Type: domain.ProjectTypeNode, RootPath: d.root,
+			ManifestPath: entry.Path, LastModifiedAt: entry.ModifiedAt,
+		}},
+		ProjectProperties: []ProjectProperty{{
+			OwnerManifestPath: entry.Path, SourcePath: entry.Path,
+			Name: "TargetFramework", Value: "net8.0",
+		}},
+	}}}
 }
 
 type resourceDetectorFake struct{ path string }
@@ -189,9 +199,10 @@ func (f resourceObserverFake) Observe(_ context.Context, resource domain.Resourc
 	return ResourceObservation{Resource: resource}, nil
 }
 
-type dependencyAnalyzerFake struct{}
+type dependencyAnalyzerFake struct{ inputs []ProjectAnalysisInput }
 
-func (dependencyAnalyzerFake) Analyze(_ context.Context, input ProjectAnalysisInput, resources ResourceIndex) DetectionResult[DependencyBundle] {
+func (d *dependencyAnalyzerFake) Analyze(_ context.Context, input ProjectAnalysisInput, resources ResourceIndex) DetectionResult[DependencyBundle] {
+	d.inputs = append(d.inputs, input)
 	project := input.Project
 	resource := resources.Find(domain.ResourceTypeNodeModules, "")[0]
 	dependency := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID,

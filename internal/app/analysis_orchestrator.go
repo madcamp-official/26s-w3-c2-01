@@ -113,6 +113,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	observedAt := o.now()
 	workspaceCandidates := make([]workspaceCandidate, 0)
 	var projectResourceFacts []domain.Resource
+	propertiesByManifest := make(map[string][]ProjectProperty)
 	for _, candidate := range candidates {
 		for _, projectFact := range candidate.Projects {
 			project, err := PrepareBuildProject(projectFact, observedAt)
@@ -124,6 +125,15 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		}
 		for _, projectResource := range candidate.ProjectResources {
 			projectResourceFacts = append(projectResourceFacts, projectResource.Resource)
+		}
+		for _, property := range candidate.ProjectProperties {
+			normalizedManifest, err := pathutil.Normalize(property.OwnerManifestPath)
+			if err != nil {
+				result.Issues = append(result.Issues, structuredCandidateIssue(
+					property.OwnerManifestPath, "resolve project property owner", err))
+				continue
+			}
+			propertiesByManifest[normalizedManifest] = append(propertiesByManifest[normalizedManifest], property)
 		}
 		if candidate.Workspace != nil {
 			workspace, err := PrepareWorkspace(*candidate.Workspace, observedAt)
@@ -157,8 +167,13 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	o.phase(&result, PhaseResolveDependencies)
 	index := newMemoryResourceIndex(result.Resources)
 	for _, project := range result.Projects {
+		input := ProjectAnalysisInput{
+			Project: project,
+			Properties: append([]ProjectProperty(nil),
+				propertiesByManifest[project.NormalizedManifestPath]...),
+		}
 		for _, analyzer := range o.dependencyAnalyzers {
-			analyzed := analyzer.Analyze(ctx, ProjectAnalysisInput{Project: project}, index)
+			analyzed := analyzer.Analyze(ctx, input, index)
 			result.Issues = append(result.Issues, analyzed.Issues...)
 			result.Unverified = append(result.Unverified, analyzed.Unverified...)
 			for _, bundle := range analyzed.Items {

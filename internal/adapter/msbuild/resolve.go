@@ -7,6 +7,20 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
+// 이 파일은 msbuild 패키지의 "해석(resolve)" 단계를 담당한다: xmlparser.go가 .vcxproj/
+// .csproj에서 뽑아낸 원시 DeclaredProperty(예: WindowsTargetPlatformVersion="10.0.22621.0")
+// 와, windowsdk/dotnet/vswhere.go 같은 다른 어댑터들이 찾아낸 "실제로 설치된"
+// domain.Resource 목록을 서로 매칭해서 domain.Dependency + domain.Evidence 쌍으로
+// 만들어내는 접착 로직이다. 버전 문자열 자체의 파싱/비교는 version.go에 위임하고, 이 파일은
+// "정확히 일치하면 EvidenceDeclared, Major.Minor 접두사로만 맞으면 EvidenceResolved"
+// 같은 매칭 정책과, Condition이 걸린 PropertyGroup은 평가하지 않고 UnverifiedScope로
+// 남기는 정책을 담당한다.
+//
+// 주의: ResolveDependencies는 구현과 테스트가 모두 끝나 있지만, 이 글을 쓰는 시점 기준으로
+// cmd/scan.go가 DependencyAnalyzer 자체를 등록하지 않아서 실제 프로덕션 경로에서 호출하는
+// 곳이 어디에도 없다(issue #22, docs/libra_review_findings_day4.md 참고). 이 파일을 고치라는
+// 뜻이 아니라, 아직 배선(wiring)되지 않은 완성 로직이라는 사실을 남겨두는 것이다.
+
 // tentativeConfidence mirrors the draft default scores in
 // docs/libra_integration_contracts.md §20.2. That formula is still
 // DECISION_REQUIRED for the team, so these numbers are a placeholder good

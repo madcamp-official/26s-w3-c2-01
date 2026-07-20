@@ -1,14 +1,18 @@
-// Package msbuild detects and parses Visual Studio Solutions (.sln) and
-// MSBuild C++/.NET projects (.vcxproj/.csproj), locates Visual Studio and
-// MSBuild installations via vswhere.exe, and matches declared SDK
-// properties against installed resources. Split by concern across several
-// files:
+// Package msbuild detects and parses MSBuild C++/.NET projects
+// (.vcxproj/.csproj), locates Visual Studio and MSBuild installations via
+// vswhere.exe, and matches declared SDK properties against installed
+// resources. It also declares (but does not yet implement) parsing for
+// Visual Studio Solutions (.sln) -- see WorkspaceParser and xmlparser.go's
+// note below. Split by concern across several files:
 //
 //   - msbuild.go (this file): the shared contract types every other file in
 //     this package implements against (BuildProjectParser, WorkspaceParser,
 //     ToolLocator, DeclaredProperty).
-//   - xmlparser.go: BuildProjectParser/WorkspaceParser's real implementation
-//     -- reads .vcxproj/.csproj/.sln XML.
+//   - xmlparser.go: BuildProjectParser's real implementation -- reads
+//     .vcxproj/.csproj XML. No WorkspaceParser (.sln) implementation exists
+//     anywhere in this package yet, despite this file declaring the
+//     interface -- corrected here after a review pass caught this doc
+//     comment overclaiming it.
 //   - root.go: project-root/drive determination shared by the parsers.
 //   - version.go: SDK/TargetFramework version string parsing and comparison.
 //   - resolve.go: matches a DeclaredProperty against installed resources to
@@ -25,6 +29,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
+
+// 이 파일(msbuild.go) 자체의 역할: 패키지 doc 주석에서 이미 7개 파일의 역할을 목록으로
+// 정리했지만, 정작 이 파일이 하는 일은 그 7개 파일이 서로 의존 없이 맞물릴 수 있도록 하는
+// "계약(contract)"만 정의하는 것이다. 즉 ToolLocator/BuildProjectParser/WorkspaceParser
+// 인터페이스와 DeclaredProperty/ParsedBuildProject/ParsedWorkspace 값 타입이 전부이고,
+// 실제 로직(XML 파싱, vswhere.exe 실행, 버전 비교, 루트 경로 유도, 산출물 탐지, SDK 매칭)은
+// 단 한 줄도 없다. msbuild는 ".vcxproj/.csproj/.sln 파싱 -> 선언된 속성 추출 -> 설치된
+// 도구/SDK 탐지 -> 둘을 매칭해 Dependency 생성"까지 단계가 많고 각 단계가 독립적으로
+// 테스트 가능해야 하므로, 이 파일이 정의하는 인터페이스를 기준으로 나머지 6개 파일이 각자
+// 하나의 관심사만 맡도록 쪼개져 있다.
 
 // ToolLocator finds Visual Studio and MSBuild installations, typically via
 // vswhere.exe, and reports them as domain.Resource values

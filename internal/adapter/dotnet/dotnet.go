@@ -22,6 +22,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// 이 파일은 dotnet 패키지의 유일한 소스 파일로, ".NET SDK 설치 목록 조회"라는 책임 하나만
+// 진다. 레지스트리나 설치 폴더를 직접 뒤지는 대신 공식 `dotnet --list-sdks` CLI를 실행해 그
+// 출력(예: "8.0.404 [C:\Program Files\dotnet\sdk]")을 파싱하는데, 이는 SDK 설치 방식이
+// 바뀌어도 libra가 직접 따라가지 않고 .NET 툴체인이 보장하는 안정적인 인터페이스에 기대기
+// 위함이다. SDKLister 인터페이스, 실제 구현체 CLISDKLister, 그리고 출력 파싱 로직
+// (parseListSDKs/splitSDKLine)이 모두 이 한 파일 안에 들어 있다. Windows 전용 기능이지만
+// windowsdk 패키지와 마찬가지로 //go:build 태그로 파일을 분리하지 않고 ListSDKs 안에서
+// adapter.RequireWindows로 런타임에 걸러낸다 -- 레지스트리/syscall 같은 실제 플랫폼 종속
+// API를 쓰지 않고 dotnet.exe 존재 여부만 확인하므로 컴파일타임 분리가 필요 없기 때문이다.
+
 // SDKLister finds installed .NET SDKs, typically by parsing the output of
 // `dotnet --list-sdks`, and reports them as domain.Resource values
 // (Type == domain.ResourceTypeDotNetSDK).

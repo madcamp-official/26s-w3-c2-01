@@ -12,6 +12,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// 이 파일은 msbuild.go가 정의하는 ToolLocator 인터페이스의 실제 구현체
+// (VSWhereToolLocator)로, Visual Studio 설치기가 함께 깔아주는 vswhere.exe를 실행해 그
+// JSON 출력을 파싱함으로써 설치된 Visual Studio/MSBuild를 domain.Resource로 변환한다.
+// vswhere.exe 자체가 없으면 "Visual Studio 미설치"로 보고 에러가 아닌 빈 결과를 반환한다.
+// windowsdk, dotnet 패키지와 마찬가지로 //go:build 태그 대신 Locate 진입부의
+// adapter.RequireWindows 런타임 체크만 쓰는데, 레지스트리나 syscall 같은 실제 Windows
+// 전용 API를 호출하지 않고 exec.Command로 외부 실행 파일을 실행할 뿐이라 컴파일타임 분리가
+// 필요 없기 때문이다.
+
 // defaultVSWherePath is where the Visual Studio Installer places vswhere.exe.
 // It ships automatically with any Visual Studio 2017+ installation.
 const defaultVSWherePath = `C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe`

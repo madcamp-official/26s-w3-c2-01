@@ -23,6 +23,17 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
 
+// 이 파일은 windowsdk 패키지의 유일한 소스 파일로, "Windows Kits 설치 루트 아래를 직접
+// 뒤져서 SDK 버전을 나열"하는 책임을 진다. Windows 10/11 SDK(10\Include 아래 버전별
+// 하위 폴더), Windows 8.1 SDK(하위 폴더 없이 "8.1" 폴더 자체가 곧 버전), .NET Framework
+// SDK(NETFXSDK 아래 버전별 하위 폴더)까지 세 가지를 서로 다른 방식으로 순회해 각각
+// domain.Resource로 변환한다. 원래 팀 규칙(docs/libra_collaboration_rules.md §8)은
+// Windows 전용 코드를 //go:build 태그로 파일 분리(detector_windows.go /
+// detector_unsupported.go)하도록 하지만, 이 패키지는 레지스트리나 syscall 같은 실제
+// Windows 전용 API를 전혀 쓰지 않고 "Windows에만 존재하는 경로를 읽는 것"뿐이라서 컴파일타임
+// 분리 대신 Detect 진입부의 adapter.RequireWindows 런타임 체크만으로 충분하다고 판단했다
+// (dotnet, msbuild/vswhere.go도 같은 이유로 같은 패턴을 쓴다).
+
 // Detector finds Windows SDK installations on this machine and reports them
 // as domain.Resource values (Type == domain.ResourceTypeWindowsSDK).
 type Detector interface {

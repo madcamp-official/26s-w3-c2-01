@@ -14,6 +14,16 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
 
+// 이 파일은 git 패키지의 유일한 소스 파일이며, Detector 인터페이스와 그 실제 구현체
+// FilesystemDetector를 정의한다. 하는 일은 "이 디렉터리에 .git이 있는가"만 확인해서
+// domain.BuildProject로 만드는 것뿐인 아주 작은 탐지기지만, node/msbuild 패키지 소속이
+// 아니라 별도 패키지로 분리되어 있다 -- 특정 빌드 생태계에 속하지 않고 .vcxproj/.csproj/
+// package.json 등 더 강한 마커가 하나도 없을 때만 최후 수단(fallback)으로 쓰이는,
+// 모든 프로젝트 탐지기 공통의 최하위 우선순위 로직이기 때문이다. 이 우선순위 규칙(더 강한
+// 마커가 있으면 git.go는 호출조차 되면 안 됨)을 지키는 책임은 호출자에게 있다 -- 그렇지
+// 않으면 같은 디렉터리가 msbuild-cpp/git 두 개의 BuildProject로 중복 등록되어
+// LogicalSize가 이중으로 집계된다.
+
 // Detector determines whether a directory entry is the root of a Git
 // repository and, if so, builds the resulting domain.BuildProject.
 //

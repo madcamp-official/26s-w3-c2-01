@@ -22,8 +22,9 @@
 | 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 이미 issue #22로 추적 중 | Windows B |
 | 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 낮음 (정리) | Windows A |
+| 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 낮음 (일관성) | Mac C |
 
-1~3은 "어떻게 협업하는가"의 문제, 4~7은 "코드가 우리가 합의한 문서와 실제로 일치하는가 / 정리가 필요한가"의 문제로 나눴다.
+1~3은 "어떻게 협업하는가"의 문제, 4~8은 "코드가 우리가 합의한 문서와 실제로 일치하는가 / 정리·일관성이 필요한가"의 문제로 나눴다.
 
 ---
 
@@ -257,6 +258,28 @@ Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2)
 ### 제안
 
 `ScanService`/`ScanService.Run`과 그 전용 테스트 2개 파일만 삭제하는 걸 제안한다 (`ScanRecord`/`ScanRepository`/`ScanStatus*`는 유지). 다만 이건 A가 만든 영역이니 A 확인 후 진행하는 게 맞다고 봐서 여기 기록만 하고 직접 지우지 않았다.
+
+---
+
+## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20, `cmd/target.go` 설계 근거를 설명하다가 발견)
+
+### 위치
+
+`cmd/projects.go`의 세 필터:
+
+```go
+if projectsType != "" && string(project.Type) != projectsType { continue }                          // 대소문자 구분
+if projectsDrive != "" && !strings.EqualFold(project.Drive, projectsDrive) { continue }               // 대소문자 무시
+if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsStatus) { continue }    // 대소문자 무시
+```
+
+### 왜 문제인가
+
+`--drive`/`--status`는 대소문자를 무시하고 `--type`만 정확히 일치해야 한다 — `libra projects --type Node`는 아무것도 안 찾고 `--type node`만 찾는다. 사용자 입장에서 세 옵션이 왜 다르게 동작하는지 알 방법이 없다. `cmd/resources.go`/`cmd/summary.go`의 같은 종류 필터는 전부 `strings.EqualFold`를 쓴다 — `projects.go`의 `--type`만 예외.
+
+### 제안
+
+`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 바꾸면 된다. `cmd/projects.go`는 제 소유 영역(Mac C)이라 원하시면 바로 고치겠습니다 — 지금은 기록만 해둡니다.
 
 ---
 

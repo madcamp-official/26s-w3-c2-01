@@ -90,3 +90,39 @@ func seedWindowsSDKDependency(t *testing.T, projectName string) (domain.Resource
 
 	return resource, project
 }
+
+// seedSafeResource inserts a resource directly with Risk=SAFE, standing in
+// for a fully verified CleanupEvidence result that no detector produces
+// yet: real Node/MSBuild artifact detectors only fill 2 of the 4
+// CleanupEvidence flags today (see docs/libra_integration_contracts.md
+// §19.3), so a real `libra scan` never yields a SAFE resource. This lets
+// plan/clean command tests exercise the SAFE selection and dry-run preview
+// paths without waiting on that adapter work.
+func seedSafeResource(t *testing.T, name string, reclaimableSize int64) domain.Resource {
+	t.Helper()
+
+	db, err := openDatabase()
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	displayPath := filepath.Join(t.TempDir(), name)
+	normalizedPath, err := pathutil.Normalize(displayPath)
+	if err != nil {
+		t.Fatalf("normalize resource path: %v", err)
+	}
+	resource := domain.Resource{
+		Type: domain.ResourceTypeNodeModules, Name: name,
+		DisplayPath: displayPath, NormalizedPath: normalizedPath,
+		LogicalSize: reclaimableSize, SizeKnown: true, ReclaimableSize: reclaimableSize,
+		Regenerable: true, SystemManaged: false,
+		LastObservedAt: time.Now().UTC(), Risk: domain.RiskSafe, Confidence: 90,
+	}
+	resource.ID = domain.ResourceID(resource.Type, resource.Version, resource.NormalizedPath)
+	if err := sqlite.NewResourceRepository(db).Upsert(ctx, resource); err != nil {
+		t.Fatalf("seed resource: %v", err)
+	}
+	return resource
+}

@@ -50,6 +50,13 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	if len(result.Projects) != 1 || len(result.Resources) != 1 || len(result.Dependencies) != 1 || len(result.Evidence) != 1 {
 		t.Fatalf("Run() result = %#v", result)
 	}
+	// dependencyAnalyzerFake below points a REQUIRES edge at this scan's one
+	// resource, so PhaseCalculateRisk's post-ResolveDependencies pass should
+	// have overridden resourceObserverFake's initial RiskReview to BLOCKED
+	// (§20.3: "current project depends on this SDK -> BLOCKED").
+	if result.Resources[0].Risk != domain.RiskBlocked {
+		t.Fatalf("Resources[0].Risk = %v, want BLOCKED (a project requires it)", result.Resources[0].Risk)
+	}
 	if len(projects.saved) != 1 || len(dependencies.saved) != 1 {
 		t.Fatalf("persisted projects/dependencies = %d/%d", len(projects.saved), len(dependencies.saved))
 	}
@@ -198,6 +205,14 @@ func (f resourceObserverFake) Observe(_ context.Context, input ResourceObservati
 	resource.Risk = domain.RiskReview
 	resource.LastObservedAt = f.observedAt
 	return ResourceObservation{Resource: resource}, nil
+}
+
+// ReclassifyRequired mirrors ResourceService.ReclassifyRequired's contract
+// (force BLOCKED) without a backing repository: callers only read the
+// returned Risk/ReclaimableSize, which is all AnalysisOrchestrator.Run
+// merges back into result.Resources.
+func (resourceObserverFake) ReclassifyRequired(_ context.Context, resourceID string) (ResourceObservation, error) {
+	return ResourceObservation{Resource: domain.Resource{ID: resourceID, Risk: domain.RiskBlocked}}, nil
 }
 
 type dependencyAnalyzerFake struct{ inputs []ProjectAnalysisInput }

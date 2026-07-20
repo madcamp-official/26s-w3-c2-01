@@ -95,8 +95,51 @@ func TestResourceServiceSetsMeasuredSizeReclaimableForSafeArtifact(t *testing.T)
 	}
 }
 
+func TestResourceServiceReclassifyRequiredBlocksAnUnclassifiedResource(t *testing.T) {
+	repository := &resourceRepositoryStub{
+		byID: domain.Resource{
+			ID: "resource-1", Type: domain.ResourceTypeWindowsSDK,
+			Risk: domain.RiskReview, LogicalSize: 100, ReclaimableSize: 100,
+		},
+	}
+	// ReclassifyRequired never touches the classifier (the resource is
+	// already-classified), so a nil ResourcePathClassifier is fine here.
+	service := NewResourceService(scanner.New(1), repository, nil, DefaultRiskPolicy{})
+
+	got, err := service.ReclassifyRequired(context.Background(), "resource-1")
+	if err != nil {
+		t.Fatalf("ReclassifyRequired() error = %v", err)
+	}
+	if got.Resource.Risk != domain.RiskBlocked || got.Resource.ReclaimableSize != 0 {
+		t.Fatalf("ReclassifyRequired() resource = %#v, want BLOCKED with ReclaimableSize 0", got.Resource)
+	}
+	if repository.saved.ID != "resource-1" || repository.saved.Risk != domain.RiskBlocked {
+		t.Fatalf("persisted resource = %#v, want the reclassified BLOCKED resource", repository.saved)
+	}
+	if len(got.Reasons) == 0 {
+		t.Error("ReclassifyRequired() gave no reason for the BLOCKED verdict")
+	}
+}
+
+func TestResourceServiceReclassifyRequiredLeavesAlreadyBlockedResourceAlone(t *testing.T) {
+	repository := &resourceRepositoryStub{
+		byID: domain.Resource{ID: "resource-1", Risk: domain.RiskBlocked},
+	}
+	// ReclassifyRequired never touches the classifier (the resource is
+	// already-classified), so a nil ResourcePathClassifier is fine here.
+	service := NewResourceService(scanner.New(1), repository, nil, DefaultRiskPolicy{})
+
+	if _, err := service.ReclassifyRequired(context.Background(), "resource-1"); err != nil {
+		t.Fatalf("ReclassifyRequired() error = %v", err)
+	}
+	if repository.saved != (domain.Resource{}) {
+		t.Fatalf("ReclassifyRequired() re-persisted an already-BLOCKED resource: %#v", repository.saved)
+	}
+}
+
 type resourceRepositoryStub struct {
 	saved domain.Resource
+	byID  domain.Resource
 }
 
 func (r *resourceRepositoryStub) Upsert(_ context.Context, resource domain.Resource) error {
@@ -104,8 +147,8 @@ func (r *resourceRepositoryStub) Upsert(_ context.Context, resource domain.Resou
 	return nil
 }
 
-func (*resourceRepositoryStub) FindByID(context.Context, string) (domain.Resource, error) {
-	return domain.Resource{}, errors.New("not implemented")
+func (r *resourceRepositoryStub) FindByID(context.Context, string) (domain.Resource, error) {
+	return r.byID, nil
 }
 
 func (*resourceRepositoryStub) ListByType(context.Context, domain.ResourceType) ([]domain.Resource, error) {

@@ -109,3 +109,33 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Reasons:  assessment.Reasons,
 	}, nil
 }
+
+// ReclassifyRequired re-classifies an already-observed-and-persisted
+// resource as BLOCKED because scan discovered, only after Observe already
+// ran, that a project depends on it -- see AnalysisOrchestrator.Run, which
+// resolves dependencies (PhaseResolveDependencies) after every resource's
+// first Observe pass (PhaseDiscoverSystemResources), so "does any project
+// require this resource" genuinely isn't knowable any earlier.
+//
+// A resource whose first pass already produced BLOCKED (a protected system
+// path) is left untouched and returned as-is: "required by project" only
+// ever raises the bar to BLOCKED, it never overrides a stronger existing
+// reason or lowers one.
+func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID string) (ResourceObservation, error) {
+	resource, err := s.repository.FindByID(ctx, resourceID)
+	if err != nil {
+		return ResourceObservation{}, fmt.Errorf("find resource %q: %w", resourceID, err)
+	}
+	if resource.Risk == domain.RiskBlocked {
+		return ResourceObservation{Resource: resource}, nil
+	}
+
+	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
+	resource.Risk = assessment.Level
+	resource.ReclaimableSize = 0
+
+	if err := s.repository.Upsert(ctx, resource); err != nil {
+		return ResourceObservation{}, fmt.Errorf("persist reclassified resource: %w", err)
+	}
+	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons}, nil
+}

@@ -22,6 +22,10 @@ import (
 // docs/libra_integration_contracts.md) lives in cmd.
 type ResourceObserver interface {
 	Observe(context.Context, ResourceObservationInput) (ResourceObservation, error)
+	// ReclassifyRequired re-classifies an already-persisted resource as
+	// BLOCKED because dependency resolution (which runs after every
+	// resource's first Observe) found a project that requires it.
+	ReclassifyRequired(ctx context.Context, resourceID string) (ResourceObservation, error)
 }
 
 type AnalysisOptions struct {
@@ -192,6 +196,28 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 
 	o.phase(&result, PhaseClassifyArtifacts)
 	o.phase(&result, PhaseCalculateRisk)
+	// A resource's first Classify pass (inside Observe, back during
+	// PhaseDiscoverSystemResources) can't know yet whether any project
+	// requires it -- that's only known now that PhaseResolveDependencies has
+	// run. Re-classify every resource a REQUIRES edge targets so §20.3's
+	// "current project depends on this SDK -> BLOCKED" rule actually applies.
+	requiredResourceIDs := make(map[string]bool, len(result.Dependencies))
+	for _, dependency := range result.Dependencies {
+		if dependency.TargetType == domain.NodeResource {
+			requiredResourceIDs[dependency.TargetID] = true
+		}
+	}
+	for i, resource := range result.Resources {
+		if !requiredResourceIDs[resource.ID] {
+			continue
+		}
+		reclassified, err := o.resources.ReclassifyRequired(ctx, resource.ID)
+		if err != nil {
+			return o.fail(ctx, result, record, fmt.Errorf("reclassify required resource: %w", err))
+		}
+		result.Resources[i].Risk = reclassified.Resource.Risk
+		result.Resources[i].ReclaimableSize = reclassified.Resource.ReclaimableSize
+	}
 	o.phase(&result, PhasePersistResults)
 	if err := o.projects.UpsertObserved(ctx, options.ScanID, result.Projects); err != nil {
 		return o.fail(ctx, result, record, fmt.Errorf("persist projects: %w", err))

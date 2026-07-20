@@ -5,7 +5,14 @@ import "github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 type ResourceContext struct {
 	Resource      domain.Resource
 	ProtectedPath bool
-	Cleanup       CleanupEvidence
+	// RequiredByProject is true when the dependency graph shows at least one
+	// scanned project currently depends on this resource (e.g. a project
+	// declares the exact Windows SDK version installed here). It can only be
+	// known once dependency resolution has run, which is after this
+	// resource's first Classify pass -- see
+	// AnalysisOrchestrator.Run/ResourceService.ReclassifyRequired.
+	RequiredByProject bool
+	Cleanup           CleanupEvidence
 }
 
 // CleanupEvidence records the independent safety facts required before a
@@ -31,9 +38,10 @@ type RiskPolicy interface {
 	Classify(ResourceContext) RiskAssessment
 }
 
-// DefaultRiskPolicy is conservative: protected/system-managed resources are
-// blocked, fully verified and regenerable project artifacts are safe, and
-// every incomplete evidence set requires review.
+// DefaultRiskPolicy is conservative: protected/system-managed resources and
+// resources a scanned project currently depends on are blocked, fully
+// verified and regenerable project artifacts are safe, and every incomplete
+// evidence set requires review.
 type DefaultRiskPolicy struct{}
 
 func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
@@ -41,6 +49,12 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 		return RiskAssessment{
 			Level:   domain.RiskBlocked,
 			Reasons: []string{"resource is inside an operating-system managed path"},
+		}
+	}
+	if context.RequiredByProject {
+		return RiskAssessment{
+			Level:   domain.RiskBlocked,
+			Reasons: []string{"a scanned project currently depends on this resource"},
 		}
 	}
 	if context.Resource.Regenerable && context.Cleanup.complete() {

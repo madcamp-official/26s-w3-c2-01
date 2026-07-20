@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
@@ -36,9 +37,9 @@ import (
 // manifestFile is the marker that identifies a Node BuildProject root.
 const manifestFile = "package.json"
 
-// lockfiles are recognized as regenerability evidence for node_modules. MVP
-// scope only needs a yes/no answer ("is there a lockfile at all"), so no
-// priority order between them is required yet (§19.2).
+// lockfiles are recognized as regenerability evidence for node_modules, and
+// (via packageManagerOf) identify which package manager owns the project.
+// Order is the priority checked in if more than one is somehow present.
 var lockfiles = []string{
 	"package-lock.json",
 	"npm-shrinkwrap.json",
@@ -119,7 +120,8 @@ func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (doma
 }
 
 type packageManifest struct {
-	Name string `json:"name"`
+	Name    string            `json:"name"`
+	Scripts map[string]string `json:"scripts"`
 }
 
 // readManifestName parses package.json for its "name" field. A malformed
@@ -138,15 +140,37 @@ func readManifestName(path string) (string, error) {
 	return manifest.Name, nil
 }
 
+// hasBuildScript reports whether root's package.json declares a non-empty
+// "build" script. Unlike node_modules (whose install command is implied by
+// the presence of a lockfile), a build-output directory's regeneration
+// command is whatever "npm run build" happens to run -- so a declared build
+// script is the minimum real evidence that *some* regeneration process
+// exists, as opposed to a bare dist/.next/build/out name match with nothing
+// backing it. It says nothing about whether that script's output actually
+// lands in the directory being considered -- that would need parsing each
+// bundler's own config format, which is out of scope (§19.3 -- this MVP
+// only reads package.json, not webpack/next/vite config).
+func hasBuildScript(root string) bool {
+	data, err := os.ReadFile(filepath.Join(root, manifestFile))
+	if err != nil {
+		return false
+	}
+	var manifest packageManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return false
+	}
+	return strings.TrimSpace(manifest.Scripts["build"]) != ""
+}
+
 // DetectArtifacts inspects a Node project root (a directory containing
 // package.json) for recognized build artifact directories immediately
 // beneath it and returns unenriched domain.Resource candidates.
 //
 // Candidates only carry the fields an adapter is responsible for (Name,
-// Type, DisplayPath, Regenerable, Confidence). app.ResourceService.Observe
-// fills in the normalized path, stable ID, measured size, safety
-// classification, and risk, and persists the result -- see
-// docs/libra_integration_contracts.md §7.3 and §18.4.
+// Type, DisplayPath, Regenerable, Confidence, RegenerationCommand).
+// app.ResourceService.Observe fills in the normalized path, stable ID,
+// measured size, safety classification, and risk, and persists the result
+// -- see docs/libra_integration_contracts.md §7.3 and §18.4.
 func DetectArtifacts(root string) ([]domain.Resource, error) {
 	return detectArtifacts(root, root)
 }
@@ -161,19 +185,17 @@ func DetectMemberArtifacts(memberRoot, workspaceRoot string) ([]domain.Resource,
 }
 
 // detectArtifacts is the shared implementation. lockfileDirs are checked, in
-// order, for any recognized lockfile; the first hit is enough evidence.
+// order, for any recognized lockfile; the first hit is enough evidence, and
+// also identifies which package manager owns the project (for
+// RegenerationCommand) -- see detectPackageManager.
 func detectArtifacts(root string, lockfileDirs ...string) ([]domain.Resource, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
-	lockfilePresent := false
-	for _, dir := range lockfileDirs {
-		if hasAnyLockfile(dir) {
-			lockfilePresent = true
-			break
-		}
-	}
+	manager := detectPackageManager(lockfileDirs...)
+	lockfilePresent := manager != ""
+	buildScriptPresent := hasBuildScript(root)
 
 	var resources []domain.Resource
 	for _, entry := range entries {
@@ -194,26 +216,77 @@ func detectArtifacts(root string, lockfileDirs ...string) ([]domain.Resource, er
 			resource.Regenerable = lockfilePresent
 			if lockfilePresent {
 				resource.Confidence = confidenceDeclaredNodeModules
+				resource.RegenerationCommand = installCommand(manager)
 			} else {
 				resource.Confidence = confidenceInferredNodeModules
 			}
 		} else {
 			// Build output directories are only ever name-matched in this
-			// MVP -- no OutputPath/build config parsing -- so they stay
-			// INFERRED-strength regardless of lockfile presence (§19.3).
-			resource.Regenerable = true
+			// MVP -- no bundler config parsing -- so they stay
+			// INFERRED-strength regardless (§19.3). Regenerable is gated on
+			// a declared "build" script existing at all: without one, there
+			// is no evidence any process would recreate this directory, so
+			// guessing Regenerable=true would be exactly the "name alone
+			// isn't SAFE" mistake §19.3 warns about.
+			resource.Regenerable = buildScriptPresent
 			resource.Confidence = confidenceInferredBuildOutput
+			if buildScriptPresent {
+				// Run the build script through whichever package manager
+				// owns the project (npm if none of the recognized lockfiles
+				// were found -- npm ships with Node itself, the safest
+				// generic default).
+				resource.RegenerationCommand = buildCommand(manager)
+			}
 		}
 		resources = append(resources, resource)
 	}
 	return resources, nil
 }
 
-func hasAnyLockfile(root string) bool {
-	for _, name := range lockfiles {
-		if _, err := os.Stat(filepath.Join(root, name)); err == nil {
-			return true
+// packageManagerOf maps each recognized lockfile to the package manager it
+// implies. Checked in the same priority order as lockfiles: the first
+// lockfile found wins if more than one is somehow present (e.g. a project
+// mid-migration between package managers).
+var packageManagerOf = map[string]string{
+	"package-lock.json":   "npm",
+	"npm-shrinkwrap.json": "npm",
+	"yarn.lock":           "yarn",
+	"pnpm-lock.yaml":      "pnpm",
+}
+
+// detectPackageManager returns which package manager's lockfile is present
+// in dirs (checked in order), or "" if none is.
+func detectPackageManager(dirs ...string) string {
+	for _, dir := range dirs {
+		for _, name := range lockfiles {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return packageManagerOf[name]
+			}
 		}
 	}
-	return false
+	return ""
+}
+
+// installCommand returns the command that reinstalls dependencies for the
+// given package manager. manager must be non-empty (a recognized lockfile
+// was found) -- callers only call this once lockfilePresent is true.
+func installCommand(manager string) string {
+	switch manager {
+	case "yarn":
+		return "yarn install"
+	case "pnpm":
+		return "pnpm install"
+	default:
+		return "npm ci"
+	}
+}
+
+// buildCommand returns the command that runs the project's declared "build"
+// script through the given package manager. An empty manager (no lockfile
+// found, but a build script still exists) defaults to npm.
+func buildCommand(manager string) string {
+	if manager == "" {
+		manager = "npm"
+	}
+	return manager + " run build"
 }

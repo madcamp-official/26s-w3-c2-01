@@ -943,12 +943,9 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 이름만 일치하면 `build-output + REVIEW + INFERRED`, 설정에서 확인되면 `SAFE 후보 + DECLARED/RESOLVED`로 처리한다.
 
 이 절 자체는 adapter 전반에 걸친 결정이라 Node adapter 하나로 `CONFIRMED`
-처리하지 않는다. 다만 `internal/adapter/node`의 현재 구현은 이미 이 원칙을
-따른다: `dist`/`.next`/`build`/`out`은 디렉터리 이름만으로 판정하므로 항상
-`INFERRED` 수준 Confidence를 부여하고, output path 설정 파싱은 하지 않는다
-(2번 조건은 이름 매칭 수준으로만 채워짐).
+처리하지 않는다.
 
-> 갱신(2026-07-20): 나머지 세 조건(1·3·4번)은 이제 실제로 검증된다.
+> 갱신(2026-07-20, 1차): 1·3·4번은 실제로 검증된다.
 > `internal/app/project_detector_adapters.go`의 `projectArtifactCleanupEvidence`가
 > Node/MSBuild 양쪽에서 공유하는 헬퍼로, `ProjectOwned`(1번)는 project root
 > 밑에서 발견됐다는 사실로 채우고, `ReparsePointFree`(3번)는
@@ -956,8 +953,34 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 > `internal/adapter/git.FindRepoRoot` + `TrackedFilesChecker`(`git ls-files`를
 > 실제로 실행)로 검증한다. 확인이 실패하면(경로 stat 실패, git 미설치 등)
 > 해당 evidence는 false로 남고 Issue로 기록된다 — 안전 쪽으로만 추측한다.
-> 5번(재생성 Evidence)은 `Resource.Regenerable`이 여전히 이름 매칭
-> 수준이라 별개로 남아있다.
+
+> 갱신(2026-07-20, 2차): 2번(output path)과 5번(재생성 Evidence)도 두
+> adapter에서 각자의 현실적인 방식으로 강화했다.
+>
+> **MSBuild**: `WindowsTargetPlatformVersion`/`TargetFramework`와 같은
+> declared-property 파이프라인을 `OutputPath`/`BaseOutputPath`/
+> `IntermediateOutputPath`/`BaseIntermediateOutputPath`(.csproj)와
+> `OutDir`/`IntDir`(.vcxproj)까지 확장했다(`internal/adapter/msbuild/artifacts.go`의
+> `DetectArtifacts(root, declared)`). 프로젝트가 이 property를 무조건부로,
+> MSBuild 매크로(`$(...)`) 없이 선언하고 그 경로가 실제로 존재하면
+> `DECLARED` 수준 Confidence를 주고, `KnownOutputPath`는 이 Confidence가
+> DECLARED 이상일 때만 `true`가 된다 — `bin`/`obj` 이름이 우연히 맞아도
+> 설정으로 확인되지 않으면 `INFERRED`에 머문다. VC++(.vcxproj)는 애초에
+> `bin`/`obj`가 기본값이 아니므로(보통 `$(Configuration)\` 계열) 이 구분이
+> 특히 중요하다 — 매크로가 섞인 값은 어떤 Configuration으로 평가할지 알 수
+> 없어 해석하지 않는다(Condition 미평가와 같은 정책).
+>
+> **Node**: 번들러(webpack/next/vite 등)마다 설정 파일 형식이 달라 output
+> path 자체를 설정에서 확인하는 건 범위 밖으로 남겨뒀다(Day7 P1 "MSBuild
+> preprocess 분석"과 같은 급의 작업). 대신 `Regenerable`을
+> `package.json`의 `scripts.build` 존재 여부에 걸었다(`internal/adapter/node.hasBuildScript`) —
+> `dist`/`.next`/`build`/`out`이 이름과 일치해도 build 스크립트가 없으면
+> 재생성 증거가 전혀 없는 것이므로 더 이상 무조건 `Regenerable=true`를
+> 주지 않는다. `node_modules`는 그대로 lockfile 존재로 판단(변경 없음).
+>
+> `KnownOutputPath`는 `node_modules`에 한해 예외적으로 항상 `true`다 —
+> npm/Yarn/pnpm은 그 위치를 프로젝트가 바꿀 수 없게 고정해두므로, lockfile
+> 유무로 달라지는 건 재생성 신뢰도이지 위치 확인 여부가 아니다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
@@ -1066,6 +1089,21 @@ MVP 결정표:
 | project 내부 산출물이고 재생성 Evidence가 명확함 | `SAFE` |
 | 분석 실패·불명확 | 최소 `REVIEW` |
 | 경로가 사라짐·변경됨 | 실행 대상 제외 |
+
+> 갱신(2026-07-20): "현재 project가 요구하는 SDK → BLOCKED"를 구현했다.
+> 이 규칙은 다른 규칙과 달리 **resource 첫 판정 시점엔 판단할 수 없다** —
+> 어떤 project가 이 resource를 요구하는지는 `PhaseResolveDependencies`가
+> 끝나야 알 수 있는데, resource는 그보다 앞선 `PhaseDiscoverSystemResources`
+> 단계에서 이미 한 번 `Observe`로 관측·판정·저장되기 때문이다. 그래서
+> `AnalysisOrchestrator.Run`은 `PhaseCalculateRisk`(원래 phase 목록에 이미
+> 있었지만 지금까지 아무 일도 안 하던 자리)에서, dependency 그래프의
+> `REQUIRES` edge가 가리키는 모든 resource ID에 대해
+> `ResourceService.ReclassifyRequired`를 다시 호출한다. 이 재판정은
+> `ResourceContext.RequiredByProject=true`로 `RiskPolicy.Classify`를 한 번
+> 더 호출해서 이미 `BLOCKED`인 항목은 그대로 두고, 아니면 `BLOCKED`로
+> 승격해서 다시 저장한다. `RiskPolicy`가 유일한 판정 주체라는 원칙은 그대로
+> 유지된다 — orchestrator가 직접 Risk를 대입하지 않고 `RiskPolicy`를 한 번
+> 더 호출할 뿐이다.
 
 Windows MVP 보호 경로는 현재 장비에서 확인되는 `%WINDIR%`,
 `%ProgramFiles%`, `%ProgramFiles(x86)%`, `%ProgramData%`로 확정한다. A의
@@ -1224,6 +1262,23 @@ MVP greedy 순서:
 소유 Evidence를 기존 evidence 구조로 연결한다. 재생성 명령은 plan/recovery
 snapshot에 둔다. 관계에는 소유 프로젝트, resource, 판단 근거, 재생성 가능 여부,
 마지막 검증 scan을 추적할 수 있어야 한다.
+
+> 갱신(2026-07-20): 재생성 명령의 **출처**를 확정했다 — plan 생성 시점에
+> 다시 계산하지 않고, scan 시점에 adapter가 `Regenerable`/`Confidence`를
+> 정하는 바로 그 순간 `domain.Resource.RegenerationCommand`에 같이 채워
+> 저장한다(마이그레이션 `007_resource_regeneration_command.sql`). plan
+> 시점 재계산은 (a) clean 실행 전 재검증이 어차피 최종 안전장치라 신선도
+> 이득이 없고 (b) 같은 리소스가 재계획될 때마다 lockfile stat·package.json
+> 파싱을 반복하게 되는 비용만 있어서 채택하지 않았다. `CleanupPlanItem`을
+> 만들 때는 `RiskAtPlanning`/`ConfidenceAtPlanning`이 이미 하듯
+> `resource.RegenerationCommand`를 그대로 복사하기만 하면 된다.
+>
+> Node: 감지된 lockfile로 패키지 매니저를 식별해 `npm ci`/`yarn
+> install`/`pnpm install`(node_modules), `<manager> run build`(빌드
+> 스크립트가 있는 build-output)를 만든다. MSBuild: 프로젝트 타입으로
+> `dotnet build <manifest>` 또는 `msbuild <manifest>`를 만든다(둘 다
+> `internal/app/project_detector_adapters.go`). 판단 불가 시 빈 문자열 —
+> 호출부는 `output.RecoveryHint`(타입 단위의 뭉뚱그린 안내)로 폴백한다.
 
 ### 23.2 계획 snapshot (`CONFIRMED`, 2026-07-20)
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,8 +113,11 @@ func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testin
 	}
 	// root is a plain t.TempDir(): bin/obj are real directories (not reparse
 	// points) and root isn't inside any Git repository, so both checks
-	// should resolve to true rather than stay unverified.
-	want := CleanupEvidence{ProjectOwned: true, KnownOutputPath: true, ReparsePointFree: true, GitTrackedOriginalsAbsent: true}
+	// resolve to true. KnownOutputPath stays false: nothing in this bare
+	// <Project></Project> manifest declares OutDir/OutputPath, so bin/obj
+	// were only ever found by name match (INFERRED), not confirmed by
+	// project config (see TestMSBuildProjectDetectorTrustsDeclaredOutputPath).
+	want := CleanupEvidence{ProjectOwned: true, KnownOutputPath: false, ReparsePointFree: true, GitTrackedOriginalsAbsent: true}
 	for _, r := range resources {
 		if r.OwnerManifestPath != manifest {
 			t.Errorf("OwnerManifestPath = %q, want %q", r.OwnerManifestPath, manifest)
@@ -124,6 +128,30 @@ func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testin
 		if r.Cleanup != want {
 			t.Errorf("Cleanup = %#v, want %#v", r.Cleanup, want)
 		}
+	}
+}
+
+func TestMSBuildProjectDetectorTrustsDeclaredOutputPath(t *testing.T) {
+	root := t.TempDir()
+	manifest := filepath.Join(root, "App.vcxproj")
+	if err := os.WriteFile(manifest, []byte(`<Project></Project>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "Build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	parser := buildProjectParserFake{parsed: []msbuild.ParsedBuildProject{{
+		Project:  domain.BuildProject{ManifestPath: manifest, RootPath: root},
+		Declared: []msbuild.DeclaredProperty{{Name: "OutDir", Value: `Build\`}},
+	}}}
+
+	got := (MSBuildProjectDetector{Parser: parser}).Observe(context.Background(), scanner.Entry{Path: manifest})
+	resources := got.Items[0].ProjectResources
+	if len(resources) != 1 || resources[0].Resource.Name != "Build" {
+		t.Fatalf("ProjectResources = %#v, want the declared Build dir", resources)
+	}
+	if !resources[0].Cleanup.KnownOutputPath {
+		t.Errorf("Cleanup.KnownOutputPath = false, want true (OutDir was declared and resolved to a real directory)")
 	}
 }
 
@@ -208,6 +236,43 @@ func TestMSBuildProjectDetectorPreservesDeclaredProperties(t *testing.T) {
 		property.Name != "TargetFramework" || property.Value != "net8.0" ||
 		property.Condition != "'$(Configuration)' == 'Debug'" {
 		t.Fatalf("property = %#v", property)
+	}
+}
+
+func TestMSBuildProjectDetectorSetsRegenerationCommandByProjectType(t *testing.T) {
+	cases := []struct {
+		name        string
+		projectType domain.ProjectType
+		manifest    string
+		wantCommand string
+	}{
+		{"dotnet", domain.ProjectTypeMSBuildDotNet, "App.csproj", `dotnet build "%s"`},
+		{"cpp", domain.ProjectTypeMSBuildCpp, "App.vcxproj", `msbuild "%s"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			manifest := filepath.Join(root, tc.manifest)
+			if err := os.WriteFile(manifest, []byte(`<Project></Project>`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(root, "bin"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			parser := buildProjectParserFake{parsed: []msbuild.ParsedBuildProject{{
+				Project: domain.BuildProject{ManifestPath: manifest, RootPath: root, Type: tc.projectType},
+			}}}
+
+			got := (MSBuildProjectDetector{Parser: parser}).Observe(context.Background(), scanner.Entry{Path: manifest})
+			resources := got.Items[0].ProjectResources
+			if len(resources) != 1 {
+				t.Fatalf("ProjectResources = %#v, want the bin dir", resources)
+			}
+			want := fmt.Sprintf(tc.wantCommand, manifest)
+			if resources[0].Resource.RegenerationCommand != want {
+				t.Errorf("RegenerationCommand = %q, want %q", resources[0].Resource.RegenerationCommand, want)
+			}
+		})
 	}
 }
 

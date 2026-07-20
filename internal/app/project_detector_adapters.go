@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
@@ -57,7 +58,7 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 		}
 	}
 	for _, resource := range artifacts {
-		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, entry.Path, resource.DisplayPath)
+		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, entry.Path, resource)
 		issues = append(issues, evidenceIssues...)
 		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
 			OwnerManifestPath: project.ManifestPath,
@@ -96,14 +97,15 @@ func (d MSBuildProjectDetector) Observe(ctx context.Context, entry scanner.Entry
 			})
 		}
 
-		artifacts, err := msbuild.DetectArtifacts(item.Project.RootPath)
+		artifacts, err := msbuild.DetectArtifacts(item.Project.RootPath, item.Declared)
 		if err != nil {
 			issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "msbuild",
 				Path: item.Project.RootPath, Operation: "detect msbuild artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
 			continue
 		}
 		for _, resource := range artifacts {
-			cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, item.Project.RootPath, resource.DisplayPath)
+			resource.RegenerationCommand = msbuildRegenerationCommand(item.Project)
+			cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, item.Project.RootPath, resource)
 			issues = append(issues, evidenceIssues...)
 			candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
 				OwnerManifestPath: item.Project.ManifestPath,
@@ -130,22 +132,50 @@ func (d MSBuildWorkspaceDetector) Observe(ctx context.Context, entry scanner.Ent
 	}}}
 }
 
-// projectArtifactCleanupEvidence checks the two safety facts DetectArtifacts
-// itself doesn't determine -- whether resourcePath is an NTFS reparse point
-// (junction/mount point/symlink) and whether Git tracks any file at or under
-// it -- and folds them in alongside the ProjectOwned/KnownOutputPath facts
-// every project-owned build artifact already carries just by being found
-// under projectRoot with a recognized artifact name. A check that fails
-// (can't stat the path, no git binary, etc.) is reported as an Issue and
-// leaves the corresponding evidence field unverified (false), never
-// guessed true -- CleanupEvidence.complete() requires an affirmative answer
-// on all four facts before RiskPolicy will consider SAFE.
-func projectArtifactCleanupEvidence(ctx context.Context, projectRoot, resourcePath string) (CleanupEvidence, []Issue) {
-	evidence := CleanupEvidence{ProjectOwned: true, KnownOutputPath: true}
+// msbuildRegenerationCommand returns the command that rebuilds project,
+// recreating its bin/obj output -- dotnet build for .NET SDK-style projects,
+// msbuild for VC++, matching the two ProjectType values XMLBuildProjectParser
+// ever produces. "" for any other type (there is currently no other MSBuild
+// project type, but a switch is more honest about that than a panic).
+func msbuildRegenerationCommand(project domain.BuildProject) string {
+	switch project.Type {
+	case domain.ProjectTypeMSBuildDotNet:
+		return fmt.Sprintf(`dotnet build "%s"`, project.ManifestPath)
+	case domain.ProjectTypeMSBuildCpp:
+		return fmt.Sprintf(`msbuild "%s"`, project.ManifestPath)
+	default:
+		return ""
+	}
+}
+
+// projectArtifactCleanupEvidence checks the three safety facts DetectArtifacts
+// itself doesn't already prove -- whether the output location is genuinely
+// known (not just name-guessed), whether the resource is an NTFS reparse
+// point (junction/mount point/symlink), and whether Git tracks any file at
+// or under it -- alongside the ProjectOwned fact every project-owned build
+// artifact already carries just by being found under projectRoot.
+//
+// KnownOutputPath is true unconditionally for node_modules: npm/Yarn/pnpm
+// never let a project customize where it lives, so its location is known
+// regardless of how confident the *regenerability* evidence (the lockfile
+// check) is. Every other resource type only counts as KnownOutputPath when
+// its Confidence is at least DECLARED-strength -- i.e. DetectArtifacts found
+// it via a real declared OutputPath/OutDir-family property, not just a bin/
+// obj/dist name that happened to match (see msbuild/artifacts.go).
+//
+// A check that fails (can't stat the path, no git binary, etc.) is reported
+// as an Issue and leaves the corresponding evidence field unverified
+// (false), never guessed true -- CleanupEvidence.complete() requires an
+// affirmative answer on all four facts before RiskPolicy will consider SAFE.
+func projectArtifactCleanupEvidence(ctx context.Context, projectRoot string, resource domain.Resource) (CleanupEvidence, []Issue) {
+	evidence := CleanupEvidence{
+		ProjectOwned:    true,
+		KnownOutputPath: resource.Type == domain.ResourceTypeNodeModules || resource.Confidence >= domain.DefaultConfidence[domain.EvidenceDeclared],
+	}
 	var issues []Issue
 
-	if info, err := os.Lstat(resourcePath); err != nil {
-		issues = append(issues, cleanupEvidenceIssue(resourcePath, "check reparse point", err))
+	if info, err := os.Lstat(resource.DisplayPath); err != nil {
+		issues = append(issues, cleanupEvidenceIssue(resource.DisplayPath, "check reparse point", err))
 	} else if !scanner.IsLinkLike(info) {
 		evidence.ReparsePointFree = true
 	}
@@ -153,15 +183,15 @@ func projectArtifactCleanupEvidence(ctx context.Context, projectRoot, resourcePa
 	repoRoot, found, err := gitadapter.FindRepoRoot(projectRoot)
 	switch {
 	case err != nil:
-		issues = append(issues, cleanupEvidenceIssue(resourcePath, "locate git repository", err))
+		issues = append(issues, cleanupEvidenceIssue(resource.DisplayPath, "locate git repository", err))
 	case !found:
 		// No repository at all above this project: vacuously no tracked
-		// files can exist under resourcePath.
+		// files can exist under resource.DisplayPath.
 		evidence.GitTrackedOriginalsAbsent = true
 	default:
-		tracked, err := (gitadapter.TrackedFilesChecker{}).HasTrackedFiles(ctx, repoRoot, resourcePath)
+		tracked, err := (gitadapter.TrackedFilesChecker{}).HasTrackedFiles(ctx, repoRoot, resource.DisplayPath)
 		if err != nil {
-			issues = append(issues, cleanupEvidenceIssue(resourcePath, "check git tracked files", err))
+			issues = append(issues, cleanupEvidenceIssue(resource.DisplayPath, "check git tracked files", err))
 		} else if !tracked {
 			evidence.GitTrackedOriginalsAbsent = true
 		}

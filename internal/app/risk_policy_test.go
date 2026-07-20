@@ -67,6 +67,22 @@ func TestDefaultRiskPolicyRequiresEveryCleanupEvidenceFact(t *testing.T) {
 	}
 }
 
+func TestDefaultRiskPolicyBlocksResourceRequiredByProjectDespiteCleanupEvidence(t *testing.T) {
+	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{
+		Resource:          domain.Resource{Regenerable: true},
+		RequiredByProject: true,
+		Cleanup: CleanupEvidence{
+			ProjectOwned:              true,
+			KnownOutputPath:           true,
+			ReparsePointFree:          true,
+			GitTrackedOriginalsAbsent: true,
+		},
+	})
+	if assessment.Level != domain.RiskBlocked || len(assessment.Reasons) == 0 {
+		t.Fatalf("Classify() = %#v, want BLOCKED with a reason (a project depends on this resource)", assessment)
+	}
+}
+
 func TestDefaultRiskPolicyBlocksProtectedResourceDespiteCleanupEvidence(t *testing.T) {
 	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{
 		Resource:      domain.Resource{Regenerable: true},

@@ -22,12 +22,20 @@ func TestImpactServiceAssessesDirectDependents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Assess() error = %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d assessments, want 2: %+v", len(got), got)
+	// 2 dependent projects x 4 scopes (RUN, BUILD, DEBUG, CI) each.
+	if len(got) != 8 {
+		t.Fatalf("got %d assessments, want 8: %+v", len(got), got)
+	}
+
+	want := map[domain.ImpactScope]domain.ImpactLevel{
+		domain.ImpactScopeRun:   domain.ImpactLevelLow,
+		domain.ImpactScopeBuild: domain.ImpactLevelHigh,
+		domain.ImpactScopeDebug: domain.ImpactLevelHigh,
+		domain.ImpactScopeCI:    domain.ImpactLevelUnknown,
 	}
 	for _, a := range got {
-		if a.Scope != domain.ImpactScopeBuild || a.Level != domain.ImpactLevelHigh {
-			t.Errorf("assessment = %+v, want BUILD/HIGH", a)
+		if a.Level != want[a.Scope] {
+			t.Errorf("assessment = %+v, want level %s for scope %s", a, want[a.Scope], a.Scope)
 		}
 	}
 }

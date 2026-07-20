@@ -33,9 +33,9 @@ type xmlProjectFile struct {
 }
 
 // XMLBuildProjectParser parses .vcxproj and .csproj files by reading every
-// <PropertyGroup> in the file. It does not resolve properties inherited from
-// Directory.Build.props or other imports -- only what the file itself
-// declares.
+// <PropertyGroup> in the file, plus any property inherited from the nearest
+// Directory.Build.props above the project that the project doesn't declare
+// itself (see directorybuildprops.go). It does not resolve other imports.
 type XMLBuildProjectParser struct{}
 
 func (XMLBuildProjectParser) CanParse(entry scanner.Entry) bool {
@@ -69,9 +69,10 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]
 	for _, group := range file.PropertyGroups {
 		for _, prop := range group.Properties {
 			declared = append(declared, DeclaredProperty{
-				Name:      prop.XMLName.Local,
-				Value:     prop.Value,
-				Condition: group.Condition,
+				Name:       prop.XMLName.Local,
+				Value:      prop.Value,
+				Condition:  group.Condition,
+				SourcePath: entry.Path,
 			})
 		}
 	}
@@ -79,6 +80,18 @@ func (XMLBuildProjectParser) Parse(ctx context.Context, entry scanner.Entry) ([]
 	root, name, drive, err := ProjectRoot(entry.Path)
 	if err != nil {
 		return nil, err
+	}
+
+	propsPath, found, err := findDirectoryBuildProps(root)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		inherited, err := parseDirectoryBuildProps(propsPath)
+		if err != nil {
+			return nil, err
+		}
+		declared = mergeInheritedProperties(declared, inherited)
 	}
 
 	projectType := domain.ProjectTypeMSBuildCpp

@@ -56,14 +56,15 @@ var artifactDirs = map[string]domain.ResourceType{
 	"out":          domain.ResourceTypeBuildOutput,
 }
 
-// Confidence placeholders until the team confirms a shared formula
-// (docs/libra_integration_contracts.md §20.2, still DECISION_REQUIRED).
-// These are intentionally conservative and only need to be internally
-// ordered (stronger evidence scores higher) until that formula lands.
-const (
-	confidenceDeclaredNodeModules = 60 // package.json + lockfile: dependencies are declared and resolvable
-	confidenceInferredNodeModules = 35 // node_modules exists but nothing declares how to regenerate it
-	confidenceInferredBuildOutput = 30 // directory name match only, no build config confirmation (§19.3)
+// Confidence scores draw from the CONFIRMED shared scale
+// (docs/libra_integration_contracts.md §20.2, domain.DefaultConfidence).
+var (
+	// package.json + lockfile: dependencies are declared and resolvable.
+	confidenceDeclaredNodeModules = domain.DefaultConfidence[domain.EvidenceDeclared]
+	// node_modules exists but nothing declares how to regenerate it.
+	confidenceInferredNodeModules = domain.DefaultConfidence[domain.EvidenceInferred]
+	// directory name match only, no build config confirmation (§19.3).
+	confidenceInferredBuildOutput = domain.DefaultConfidence[domain.EvidenceInferred]
 )
 
 // Detector determines whether a directory is the root of a Node project

@@ -31,12 +31,14 @@ func TestResourceServiceObservesClassifiesAndPersists(t *testing.T) {
 	observedAt := time.Date(2026, 7, 18, 3, 4, 5, 6, time.UTC)
 	service.now = func() time.Time { return observedAt }
 
-	got, err := service.Observe(context.Background(), domain.Resource{
-		Name:        "Windows SDK 10.0.22621.0",
-		Type:        domain.ResourceTypeWindowsSDK,
-		Version:     "10.0.22621.0",
-		DisplayPath: resourcePath,
-		Confidence:  90,
+	got, err := service.Observe(context.Background(), ResourceObservationInput{
+		Resource: domain.Resource{
+			Name:        "Windows SDK 10.0.22621.0",
+			Type:        domain.ResourceTypeWindowsSDK,
+			Version:     "10.0.22621.0",
+			DisplayPath: resourcePath,
+			Confidence:  90,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Observe() error = %v", err)
@@ -55,6 +57,41 @@ func TestResourceServiceObservesClassifiesAndPersists(t *testing.T) {
 	}
 	if len(got.Reasons) == 0 || len(got.Issues) != 0 {
 		t.Fatalf("Observe() reasons/issues = %v/%v", got.Reasons, got.Issues)
+	}
+}
+
+func TestResourceServiceSetsMeasuredSizeReclaimableForSafeArtifact(t *testing.T) {
+	resourcePath := filepath.Join(t.TempDir(), "node_modules")
+	if err := os.Mkdir(resourcePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(resourcePath, "index.js"), []byte("1234"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	classifier, err := safety.NewPathClassifier(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &resourceRepositoryStub{}
+	service := NewResourceService(scanner.New(1), repository, classifier, DefaultRiskPolicy{})
+
+	got, err := service.Observe(context.Background(), ResourceObservationInput{
+		Resource: domain.Resource{
+			Name: "node_modules", Type: domain.ResourceTypeNodeModules,
+			DisplayPath: resourcePath, Regenerable: true,
+		},
+		Cleanup: CleanupEvidence{
+			ProjectOwned:              true,
+			KnownOutputPath:           true,
+			ReparsePointFree:          true,
+			GitTrackedOriginalsAbsent: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Observe() error = %v", err)
+	}
+	if got.Resource.Risk != domain.RiskSafe || got.Resource.LogicalSize != 4 || got.Resource.ReclaimableSize != 4 {
+		t.Fatalf("Observe() resource = %#v, want measured SAFE resource", got.Resource)
 	}
 }
 

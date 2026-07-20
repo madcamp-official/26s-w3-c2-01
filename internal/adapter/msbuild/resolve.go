@@ -7,18 +7,6 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
-// tentativeConfidence mirrors the draft default scores in
-// docs/libra_integration_contracts.md §20.2. That formula is still
-// DECISION_REQUIRED for the team, so these numbers are a placeholder good
-// enough to populate Dependency.Confidence today, not a final answer.
-var tentativeConfidence = map[domain.EvidenceKind]int{
-	domain.EvidenceResolved: 90,
-	domain.EvidenceObserved: 85,
-	domain.EvidenceDeclared: 75,
-	domain.EvidenceInferred: 40,
-	domain.EvidenceUnknown:  10,
-}
-
 // MatchWindowsSDK finds the installed Windows SDK a project's declared
 // WindowsTargetPlatformVersion resolves to, per the version matching rule:
 //
@@ -168,7 +156,7 @@ func resolveDependency(
 		TargetType: domain.NodeResource,
 		TargetID:   resource.ID,
 		Relation:   domain.RelationRequires,
-		Confidence: tentativeConfidence[kind],
+		Confidence: domain.DefaultConfidence[kind],
 	}
 	dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
 

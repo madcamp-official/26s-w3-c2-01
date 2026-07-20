@@ -16,11 +16,10 @@ var artifactDirs = map[string]domain.ResourceType{
 	"obj": domain.ResourceTypeBuildOutput,
 }
 
-// confidenceInferredBuildOutput matches internal/adapter/node's placeholder
-// of the same name and rationale: a directory-name match alone is
-// INFERRED-strength evidence, pending the team's shared Confidence formula
-// (docs/libra_integration_contracts.md §20.2, still DECISION_REQUIRED).
-const confidenceInferredBuildOutput = 30
+// confidenceInferredBuildOutput: a directory-name match alone is
+// INFERRED-strength evidence, per the CONFIRMED shared Confidence scale
+// (docs/libra_integration_contracts.md §20.2, domain.DefaultConfidence).
+var confidenceInferredBuildOutput = domain.DefaultConfidence[domain.EvidenceInferred]
 
 // DetectArtifacts finds recognized build-output directories (bin, obj)
 // immediately under a build project's root.

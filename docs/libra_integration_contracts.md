@@ -863,6 +863,17 @@ type Dependency struct {
 
 ### 19.1 MSBuild (`DECISION_REQUIRED`)
 
+> 부분 해결(2026-07-20): `Directory.Build.props` 상속 property는 이제 실제로
+> 읽힌다. `XMLBuildProjectParser`가 프로젝트 디렉터리부터 상위로 올라가며
+> 가장 가까운 `Directory.Build.props` 하나를 찾아 파싱하고, 프로젝트 파일
+> 자신이 같은 이름의 property를 선언하면 상속값을 버리는 방식으로 override를
+> 구현했다(실제 MSBuild의 `<Import>` 위치 기반 평가 순서 전체를 재현하지는
+> 않음 — "프로젝트 자신의 파일이 항상 우선"이라는 단순 규칙). `DeclaredProperty.SourcePath`가
+> 실제 원본 파일(프로젝트 파일 또는 props 파일)을 가리키므로 §15.1의
+> "Directory.Build.props는 manifest가 아닌 Evidence source"라는 기존 결정과
+> 일치한다. Configuration/Platform 변수 치환, 조건부 속성 평가, 여러 단계로
+> 체이닝된 `Directory.Build.props`는 여전히 `DECISION_REQUIRED`로 남아있다.
+
 MVP Evidence mapping:
 
 ```text
@@ -935,9 +946,10 @@ RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요
 처리하지 않는다. 다만 `internal/adapter/node`의 현재 구현은 이미 이 원칙을
 따른다: `dist`/`.next`/`build`/`out`은 디렉터리 이름만으로 판정하므로 항상
 `INFERRED` 수준 Confidence를 부여하고, Git tracked 원본 확인이나 output
-path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy`에 SAFE
-분기가 아직 없어(§20.3 코드 참고) 실제 저장되는 Risk는 현재 모두
-`REVIEW`로 귀결된다.
+path 설정 파싱은 하지 않는다(2·3·4번 조건 미검증). `RiskPolicy`는
+완전한 `CleanupEvidence`에서 SAFE를 반환하지만, 현재 Node detector가
+이 evidence를 아직 채우지 않으므로 실제 Node 스캔 결과는 보수적으로
+`REVIEW`를 유지한다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
@@ -977,9 +989,9 @@ type Evidence struct {
 귀속하여 삭제 없이 보존한다. Dependency는 최신 관계를 upsert하며 과거 graph
 snapshot과 미발견 관계 삭제는 snapshot 계약을 확정할 때까지 수행하지 않는다.
 
-### 20.2 Confidence (`CONFIRMED`)
+### 20.2 Confidence (`CONFIRMED`, 2026-07-20)
 
-MVP 기본 점수 제안:
+EvidenceKind별 기본 점수를 `internal/domain.DefaultConfidence`로 확정했다. 모든 어댑터는 자체 스케일을 만들지 않고 이 맵을 그대로 참조한다.
 
 ```text
 RESOLVED  90
@@ -989,16 +1001,23 @@ INFERRED  40
 UNKNOWN   10
 ```
 
-2026-07-20 issue #22 dependency analyzer 연결 합의에서 위 점수를
-MVP 기본값으로 채택했다. 추후 점수를 변경하면 계약 변경으로
-처리하고 Evidence/impact 회귀 테스트를 함께 갱신한다.
+확정 전에는 `internal/adapter/msbuild/resolve.go`만 이 표와 같은 숫자를 우연히 쓰고 있었고, `internal/adapter/node`(60/35/30)와 `internal/adapter/msbuild/artifacts.go`(30)는 서로 다른 placeholder 스케일을 썼다. 이번에 세 곳 모두 `domain.DefaultConfidence`를 참조하도록 통일했다:
 
-복수 Evidence를 단순 합산하지 않는다.
+| 어댑터 | 근거 | EvidenceKind |
+|---|---|---|
+| `msbuild/resolve.go` | SDK 버전 매칭 (`MatchWindowsSDK`/`MatchDotNetSDK`) | 매칭 방식에 따라 RESOLVED/DECLARED |
+| `node` | `package.json` + lockfile 존재 (재생성 가능성 선언됨) | DECLARED |
+| `node` | `node_modules` 존재하지만 lockfile 없음 | INFERRED |
+| `node`, `msbuild/artifacts.go` | `dist`/`.next`/`build`/`out`/`bin`/`obj` 등 디렉터리 이름만 일치, 설정 확인 안 함 (§19.3) | INFERRED |
+
+복수 Evidence 가산과 UnverifiedScope 감점 규칙은 이번 확정 범위에 포함하지 않았다 — 지금 어떤 리소스도 두 개 이상의 Evidence를 동시에 갖는 경우가 없어서(리소스당 매칭 시도 1회) 합산할 대상 자체가 없다. 실제로 여러 Evidence가 쌓이는 시나리오가 생기면 그때 다시 결정한다.
+
+추후 점수를 변경하면 계약 변경으로 처리하고 Evidence/impact 회귀 테스트를 함께 갱신한다.
 
 ```text
 기본 점수       = 가장 강한 Evidence
-서로 다른 보조 근거 = 제한된 가산
-UnverifiedScope = 항목별 감점
+서로 다른 보조 근거 = 제한된 가산  ── 미구현 (DECISION_REQUIRED로 남음)
+UnverifiedScope = 항목별 감점    ── 미구현 (DECISION_REQUIRED로 남음)
 최종 범위       = 0..100
 ```
 
@@ -1012,7 +1031,20 @@ adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판
 type RiskPolicy interface {
     Classify(ResourceContext) RiskAssessment
 }
+
+type CleanupEvidence struct {
+    ProjectOwned              bool
+    KnownOutputPath           bool
+    ReparsePointFree          bool
+    GitTrackedOriginalsAbsent bool
+}
 ```
+
+`DefaultRiskPolicy`는 보호/시스템 경로를 우선 `BLOCKED`로 판정한다.
+그 다음 `Resource.Regenerable=true`이고 `CleanupEvidence`의 네 항목이
+모두 검증된 경우에만 `SAFE`를 반환하며, 하나라도 비어 있으면
+`REVIEW`를 반환한다. SAFE resource의 `ReclaimableSize`는 측정된
+`LogicalSize`로 설정하고 BLOCKED resource는 0으로 강제한다.
 
 MVP 결정표:
 

@@ -44,6 +44,15 @@ func TestProjectsCommandListsAndFiltersScannedProjects(t *testing.T) {
 	if !bytes.Contains(filtered.Bytes(), []byte("No projects found")) {
 		t.Fatalf("projects --type msbuild-cpp = %s, want no matches", filtered)
 	}
+
+	// --type must match case-insensitively like --drive/--status already do
+	// (finding #8 in docs/libra_review_findings_day4.md): stored project
+	// types are lowercase ("node"), so a differently-cased query is the
+	// realistic way a user would type it.
+	caseInsensitive := run("projects", "--type", "Node")
+	if !bytes.Contains(caseInsensitive.Bytes(), []byte("sample-app")) {
+		t.Fatalf("projects --type Node = %s, want sample-app (case-insensitive match)", caseInsensitive)
+	}
 }
 
 func TestProjectsCommandReportsNoProjectsBeforeScan(t *testing.T) {

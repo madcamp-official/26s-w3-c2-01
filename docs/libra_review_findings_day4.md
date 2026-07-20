@@ -18,10 +18,10 @@
 | 1 | PR 리뷰가 사실상 한 번도 완료된 적 없음 | 높음 (프로세스) | 팀 전체 |
 | 2 | `main`에 PR 없이 직접 push된 커밋 11개 이상 | 높음 (프로세스) | Windows B |
 | 3 | 커밋 메시지 컨벤션 미준수 다수 | 중간 | 주로 Windows B |
-| 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 중간 (계약 위배) | Windows A |
+| 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 해결 (2026-07-20) | Windows A |
 | 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
 | 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 이미 issue #22로 추적 중 | Windows B |
-| 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 낮음 (정리) | Windows A |
+| 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 해결 (2026-07-20) | Windows A |
 | 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 낮음 (일관성) | Mac C |
 
 1~3은 "어떻게 협업하는가"의 문제, 4~8은 "코드가 우리가 합의한 문서와 실제로 일치하는가 / 정리·일관성이 필요한가"의 문제로 나눴다.
@@ -156,6 +156,11 @@ PR을 거쳐 squash-merge된 커밋들(예: `feat(cmd): ...`, `fix(msbuild): ...
 
 ## 4. `DefaultRiskPolicy`가 계약과 달리 SAFE를 절대 반환하지 않음
 
+> 해결(2026-07-20): app 공용 `CleanupEvidence`를 추가하고 project 소유,
+> output path, reparse point, Git tracked 원본 부재가 모두 검증되며
+> resource가 재생성 가능한 경우에만 SAFE를 반환하도록 수정했다.
+> Node/MSBuild detector의 evidence 생성은 각 담당의 후속 작업이다.
+
 ### 위치
 
 `internal/app/risk_policy.go:23-34`
@@ -232,6 +237,10 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 ## 7. `ScanService`가 죽은 코드로 보임 (2026-07-20 파일별 주석 작업 중 발견)
 
+> 해결(2026-07-20): 프로덕션 호출자가 없음을 재확인한 뒤
+> `ScanService`/`Run`과 전용 테스트를 삭제했다. 살아 있는 `ScanRecord`,
+> `ScanRepository`, `ScanStatus*`는 `internal/app/scan_record.go`로 이동했다.
+
 ### 위치
 
 `internal/app/scan_service.go` — `ScanRecord`, `ScanRepository`, `ScanService`, `ScanService.Run`.
@@ -261,7 +270,7 @@ Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2)
 
 ---
 
-## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20, `cmd/target.go` 설계 근거를 설명하다가 발견)
+## 8. `cmd/projects.go`의 `--type` 필터만 대소문자를 구분함 (2026-07-20 발견, 2026-07-20 해결)
 
 ### 위치
 
@@ -277,9 +286,9 @@ if projectsStatus != "" && !strings.EqualFold(string(project.Status), projectsSt
 
 `--drive`/`--status`는 대소문자를 무시하고 `--type`만 정확히 일치해야 한다 — `libra projects --type Node`는 아무것도 안 찾고 `--type node`만 찾는다. 사용자 입장에서 세 옵션이 왜 다르게 동작하는지 알 방법이 없다. `cmd/resources.go`/`cmd/summary.go`의 같은 종류 필터는 전부 `strings.EqualFold`를 쓴다 — `projects.go`의 `--type`만 예외.
 
-### 제안
+### 해결
 
-`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 바꾸면 된다. `cmd/projects.go`는 제 소유 영역(Mac C)이라 원하시면 바로 고치겠습니다 — 지금은 기록만 해둡니다.
+`string(project.Type) != projectsType`을 `!strings.EqualFold(string(project.Type), projectsType)`으로 변경 (`fix/risk-policy-scan-service` 브랜치). `cmd/projects_test.go`에 `--type Node`가 `--type node`로 저장된 프로젝트를 대소문자 무시하고 찾는지 검증하는 케이스를 추가했다 -- 수정 전으로 되돌리면 이 테스트가 실제로 fail하는 것을 확인함.
 
 ---
 

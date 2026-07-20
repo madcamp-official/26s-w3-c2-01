@@ -93,6 +93,7 @@ type DetectionResult[T any] struct {
 type ProjectResourceCandidate struct {
 	OwnerManifestPath string
 	Resource          domain.Resource
+	Cleanup           CleanupEvidence
 }
 
 // ProjectProperty is an adapter-neutral declared build property associated

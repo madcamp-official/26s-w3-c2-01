@@ -26,6 +26,14 @@ type ResourceObservation struct {
 	Reasons  []string
 }
 
+// ResourceObservationInput keeps cleanup evidence separate from persisted
+// resource facts. Detectors must explicitly provide every verified fact;
+// omitted facts remain conservative REVIEW inputs.
+type ResourceObservationInput struct {
+	Resource domain.Resource
+	Cleanup  CleanupEvidence
+}
+
 // ResourceService enriches one adapter-detected resource with filesystem and
 // safety facts, applies central risk policy, and persists the observation.
 type ResourceService struct {
@@ -51,7 +59,8 @@ func NewResourceService(
 	}
 }
 
-func (s *ResourceService) Observe(ctx context.Context, detected domain.Resource) (ResourceObservation, error) {
+func (s *ResourceService) Observe(ctx context.Context, input ResourceObservationInput) (ResourceObservation, error) {
+	detected := input.Resource
 	displayPath, err := pathutil.Absolute(detected.DisplayPath)
 	if err != nil {
 		return ResourceObservation{}, fmt.Errorf("resolve resource display path: %w", err)
@@ -81,9 +90,13 @@ func (s *ResourceService) Observe(ctx context.Context, detected domain.Resource)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
+		Cleanup:       input.Cleanup,
 	})
 	detected.Risk = assessment.Level
-	if detected.Risk == domain.RiskBlocked {
+	switch detected.Risk {
+	case domain.RiskSafe:
+		detected.ReclaimableSize = detected.LogicalSize
+	case domain.RiskBlocked:
 		detected.ReclaimableSize = 0
 	}
 

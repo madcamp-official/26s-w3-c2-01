@@ -60,6 +60,17 @@ func TestXMLBuildProjectParser_Parse(t *testing.T) {
 	// entry's ModifiedAt instead of re-stat'ing the filesystem.
 	modTime := time.Date(2026, 7, 18, 3, 4, 5, 0, time.UTC)
 
+	gameClientPath := "../../../testdata/msbuild/GameClient/GameClient.vcxproj"
+	dotNetAppPath := "../../../testdata/msbuild/SampleDotNetApp/SampleDotNetApp.csproj"
+	// GameClient.vcxproj sits next to its own Directory.Build.props, so its
+	// inherited properties (Company, Platform) come first, tagged with the
+	// props file's absolute path -- neither name collides with anything
+	// GameClient.vcxproj declares itself, so nothing is shadowed here.
+	gameClientPropsPath, err := filepath.Abs("../../../testdata/msbuild/GameClient/Directory.Build.props")
+	if err != nil {
+		t.Fatalf("resolve Directory.Build.props path: %v", err)
+	}
+
 	cases := []struct {
 		name         string
 		path         string
@@ -69,25 +80,32 @@ func TestXMLBuildProjectParser_Parse(t *testing.T) {
 	}{
 		{
 			name:        "cpp project declares its Windows SDK and toolset properties",
-			path:        "../../../testdata/msbuild/GameClient/GameClient.vcxproj",
+			path:        gameClientPath,
 			wantProject: "GameClient",
 			wantType:    domain.ProjectTypeMSBuildCpp,
 			wantDeclared: []DeclaredProperty{
-				{Name: "ProjectGuid", Value: "{11111111-2222-3333-4444-555555555555}"},
-				{Name: "WindowsTargetPlatformVersion", Value: "10.0.22621.0"},
-				{Name: "PlatformToolset", Value: "v143"},
-				{Name: "ConfigurationType", Value: "Application"},
-				{Name: "UseDebugLibraries", Value: "true"},
+				{Name: "Company", Value: "Libra Sample Studio", SourcePath: gameClientPropsPath},
+				// Platform's Condition is on the <Platform> element itself,
+				// not its enclosing <PropertyGroup> -- xmlProperty doesn't
+				// capture per-element Condition attributes (a pre-existing
+				// parser limitation, unrelated to this change), so it comes
+				// through empty here.
+				{Name: "Platform", Value: "x64", SourcePath: gameClientPropsPath},
+				{Name: "ProjectGuid", Value: "{11111111-2222-3333-4444-555555555555}", SourcePath: gameClientPath},
+				{Name: "WindowsTargetPlatformVersion", Value: "10.0.22621.0", SourcePath: gameClientPath},
+				{Name: "PlatformToolset", Value: "v143", SourcePath: gameClientPath},
+				{Name: "ConfigurationType", Value: "Application", SourcePath: gameClientPath},
+				{Name: "UseDebugLibraries", Value: "true", SourcePath: gameClientPath},
 			},
 		},
 		{
 			name:        "dotnet project declares its output type and target framework",
-			path:        "../../../testdata/msbuild/SampleDotNetApp/SampleDotNetApp.csproj",
+			path:        dotNetAppPath,
 			wantProject: "SampleDotNetApp",
 			wantType:    domain.ProjectTypeMSBuildDotNet,
 			wantDeclared: []DeclaredProperty{
-				{Name: "OutputType", Value: "Exe"},
-				{Name: "TargetFramework", Value: "net8.0"},
+				{Name: "OutputType", Value: "Exe", SourcePath: dotNetAppPath},
+				{Name: "TargetFramework", Value: "net8.0", SourcePath: dotNetAppPath},
 			},
 		},
 	}

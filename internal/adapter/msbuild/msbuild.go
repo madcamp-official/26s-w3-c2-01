@@ -10,6 +10,9 @@
 //   - xmlparser.go: BuildProjectParser's real implementation -- reads
 //     .vcxproj/.csproj XML. A production WorkspaceParser for .sln files does
 //     not exist yet.
+//   - directorybuildprops.go: locates and parses the nearest Directory.Build.props
+//     above a project, so properties inherited from it participate in
+//     dependency resolution alongside the project's own declarations.
 //   - root.go: project-root/drive determination shared by the parsers.
 //   - version.go: SDK/TargetFramework version string parsing and comparison.
 //   - resolve.go: matches a DeclaredProperty against installed resources to
@@ -47,6 +50,10 @@ type DeclaredProperty struct {
 	// property came from (e.g. Condition="'$(Configuration)|$(Platform)'
 	// =='Debug|x64'"). Empty if the PropertyGroup was unconditional.
 	Condition string
+	// SourcePath is the file this property was actually declared in: the
+	// project file itself, or the nearest Directory.Build.props above it if
+	// the project doesn't declare the same property name itself.
+	SourcePath string
 }
 
 // ParsedBuildProject is the result of parsing a single .vcxproj or .csproj

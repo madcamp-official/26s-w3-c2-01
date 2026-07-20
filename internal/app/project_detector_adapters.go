@@ -55,8 +55,19 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 		}
 	}
 	for _, resource := range artifacts {
-		candidate.ProjectResources = append(candidate.ProjectResources,
-			ProjectResourceCandidate{OwnerManifestPath: project.ManifestPath, Resource: resource})
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath,
+			Resource:          resource,
+			// ReparsePointFree and GitTrackedOriginalsAbsent stay unverified
+			// (zero value): no adapter yet checks NTFS reparse points or
+			// Git-tracked files under this directory, and CleanupEvidence's
+			// zero value means unverified, not false (see
+			// MSBuildProjectDetector.Observe's identical Cleanup literal).
+			Cleanup: CleanupEvidence{
+				ProjectOwned:    true,
+				KnownOutputPath: true,
+			},
+		})
 	}
 	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}}
 }

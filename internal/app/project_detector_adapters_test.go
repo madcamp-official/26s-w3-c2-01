@@ -58,6 +58,12 @@ func TestNodeProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testing.T
 	if resources[0].Resource.Type != domain.ResourceTypeNodeModules {
 		t.Fatalf("resource type = %q, want node-modules", resources[0].Resource.Type)
 	}
+	if !resources[0].Cleanup.ProjectOwned || !resources[0].Cleanup.KnownOutputPath {
+		t.Errorf("Cleanup = %#v, want ProjectOwned and KnownOutputPath true", resources[0].Cleanup)
+	}
+	if resources[0].Cleanup.ReparsePointFree || resources[0].Cleanup.GitTrackedOriginalsAbsent {
+		t.Errorf("Cleanup = %#v, want ReparsePointFree and GitTrackedOriginalsAbsent unverified (false)", resources[0].Cleanup)
+	}
 }
 
 func TestNodeProjectDetectorReturnsStructuredParseIssue(t *testing.T) {

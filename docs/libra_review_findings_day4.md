@@ -20,9 +20,9 @@
 | 3 | 커밋 메시지 컨벤션 미준수 다수 | 중간 | 주로 Windows B |
 | 4 | `DefaultRiskPolicy`가 계약(§20.3)과 달리 SAFE를 절대 반환하지 않음 | 해결 (2026-07-20) | Windows A |
 | 5 | `cmd` 계층이 명령마다 다른 구조를 씀 (application service 통과 여부) | 낮음 (구조 일관성) | Mac C 포함 전체 |
-| 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 이미 issue #22로 추적 중 | Windows B |
+| 6 | `DependencyAnalyzer`가 scan에 연결되지 않음 | 해결 (2026-07-20) | Windows B·Mac C·공동 |
 | 7 | `ScanService`(구 스캔 파이프라인)가 프로덕션에서 안 쓰이는 죽은 코드로 보임 | 해결 (2026-07-20) | Windows A |
-| 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 낮음 (일관성) | Mac C |
+| 8 | `cmd/projects.go`의 `--type` 필터만 대소문자 구분 (다른 필터는 무시) | 해결 (2026-07-20) | Mac C |
 
 1~3은 "어떻게 협업하는가"의 문제, 4~8은 "코드가 우리가 합의한 문서와 실제로 일치하는가 / 정리·일관성이 필요한가"의 문제로 나눴다.
 
@@ -225,13 +225,13 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 
 ---
 
-## 6. `DependencyAnalyzer`가 scan에 연결되지 않음 (참고용 재정리)
+## 6. `DependencyAnalyzer`가 scan에 연결되지 않음 (해결, 2026-07-20)
 
-이미 [issue #22](https://github.com/madcamp-official/26s-w3-c2-01/issues/22)로 등록했고 `docs/libra_integration_contracts.md` §29에도 기록해뒀다. 여기서는 "코드 구조상 이슈" 관점에서만 한 줄로 다시 짚는다:
+> app 중립 속성 전달 계약과 `ResourceIndex.ListByType`을 추가하고,
+> `MSBuildDependencyAnalyzer`를 실제 scan에 등록했다. CLI E2E 테스트는
+> seed 없이 dependency/Evidence 저장과 `explain`/`impact` 출력을 검증한다.
 
-- 위치: `cmd/scan.go`의 `WithDetectors(..., resourceDetectors(), nil)` — 세 번째 인자가 항상 `nil`.
-- `internal/app/project_detector_adapters.go`의 `MSBuildProjectDetector.Observe`가 `parsed[i].Declared`를 버림.
-- 담당: Windows B (`internal/adapter/msbuild` + 공동 소유 `internal/app` 계약 변경 필요).
+PR #30에서는 상속된 `Directory.Build.props`의 실제 SourcePath 보존까지 완료했다.
 
 ---
 
@@ -266,7 +266,9 @@ Day2에 `ScanService`로 스캔 파이프라인을 처음 만들었다가(PR #2)
 
 ### 제안
 
-`ScanService`/`ScanService.Run`과 그 전용 테스트 2개 파일만 삭제하는 걸 제안한다 (`ScanRecord`/`ScanRepository`/`ScanStatus*`는 유지). 다만 이건 A가 만든 영역이니 A 확인 후 진행하는 게 맞다고 봐서 여기 기록만 하고 직접 지우지 않았다.
+검토 결과 `ScanService`/`ScanService.Run`과 그 전용 테스트 2개 파일을 삭제하고,
+현재 orchestration이 사용하는 `ScanRecord`/`ScanRepository`/`ScanStatus*`는
+`scan_record.go`로 분리해 유지했다.
 
 ---
 

@@ -26,6 +26,8 @@ var resourceTypePrefixes = map[string]domain.ResourceType{
 	string(domain.ResourceTypeGlobalCache):  domain.ResourceTypeGlobalCache,
 	string(domain.ResourceTypeDockerCache):  domain.ResourceTypeDockerCache,
 	string(domain.ResourceTypeDockerVolume): domain.ResourceTypeDockerVolume,
+	string(domain.ResourceTypeXcodeInstall): domain.ResourceTypeXcodeInstall,
+	string(domain.ResourceTypePods):         domain.ResourceTypePods,
 }
 
 // ErrTargetNotFound is returned by resolveTarget when no resource or project

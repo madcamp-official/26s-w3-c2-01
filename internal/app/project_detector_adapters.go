@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 
+	cocoapodsadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/cocoapods"
 	condaadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
 	projectmarkeradapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/projectmarker"
 	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
+	swiftpmadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/swiftpm"
+	xcodeprojadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/xcodeproj"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
@@ -293,6 +296,107 @@ func (d MSBuildWorkspaceDetector) Observe(ctx context.Context, entry scanner.Ent
 	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
 		Workspace: &parsed.Workspace, WorkspaceProjectPaths: parsed.ProjectPaths,
 	}}}
+}
+
+// XcodeProjectDetector wraps internal/adapter/xcodeproj.Detector (the
+// .xcodeproj manifest) and internal/adapter/cocoapods.DetectArtifacts (the
+// project-owned Pods/ directory a sibling Podfile implies) the same way
+// NodeProjectDetector wraps node.go and its artifact detection.
+type XcodeProjectDetector struct{ Detector xcodeprojadapter.Detector }
+
+func (d XcodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	project, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("xcodeproj", entry.Path, "detect Xcode project", err)
+	}
+
+	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	var issues []Issue
+
+	artifacts, err := cocoapodsadapter.DetectArtifacts(project.RootPath)
+	if err != nil {
+		issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "cocoapods",
+			Path: project.RootPath, Operation: "detect CocoaPods artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
+		return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+	}
+	for _, resource := range artifacts {
+		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, project.RootPath, resource)
+		issues = append(issues, evidenceIssues...)
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath,
+			Resource:          resource,
+			Cleanup:           cleanup,
+		})
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+}
+
+// XcodeWorkspaceDetector wraps internal/adapter/xcodeproj.WorkspaceDetector
+// (.xcworkspace + its resolved member .xcodeproj references) the same way
+// MSBuildWorkspaceDetector wraps .sln parsing.
+type XcodeWorkspaceDetector struct {
+	Detector xcodeprojadapter.WorkspaceDetector
+}
+
+func (d XcodeWorkspaceDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	result, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("xcodeproj", entry.Path, "parse Xcode workspace", err)
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{
+		Workspace: &result.Workspace, WorkspaceProjectPaths: result.ProjectPaths,
+	}}}
+}
+
+// SwiftPMProjectDetector wraps internal/adapter/swiftpm's Package.swift
+// project detection and its project-owned .build/ artifact, plus the
+// declared swift-tools-version comment (carried through as a
+// ProjectProperty for XcodeDependencyAnalyzer, the same way MSBuild's
+// declared properties reach MSBuildDependencyAnalyzer).
+type SwiftPMProjectDetector struct{ Detector swiftpmadapter.Detector }
+
+func (d SwiftPMProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	project, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("swiftpm", entry.Path, "detect SwiftPM project", err)
+	}
+
+	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	if toolsVersion := swiftpmadapter.ToolsVersion(entry.Path); toolsVersion != "" {
+		candidate.ProjectProperties = append(candidate.ProjectProperties, ProjectProperty{
+			OwnerManifestPath: project.ManifestPath,
+			SourcePath:        entry.Path,
+			Name:              swiftpmadapter.ToolsVersionPropertyName,
+			Value:             toolsVersion,
+		})
+	}
+
+	var issues []Issue
+	artifacts, err := swiftpmadapter.DetectArtifacts(project.RootPath)
+	if err != nil {
+		issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "swiftpm",
+			Path: project.RootPath, Operation: "detect SwiftPM artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
+		return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+	}
+	for _, resource := range artifacts {
+		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, project.RootPath, resource)
+		issues = append(issues, evidenceIssues...)
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath,
+			Resource:          resource,
+			Cleanup:           cleanup,
+		})
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
 }
 
 // msbuildRegenerationCommand returns the command that rebuilds project,

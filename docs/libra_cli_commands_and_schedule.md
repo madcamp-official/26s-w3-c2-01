@@ -175,6 +175,9 @@ libra scan --full
 | `.csproj` | MSBuild .NET 프로젝트 |
 | `package.json` | Node.js 프로젝트 |
 | `.git` | Git 저장소 |
+| `.xcodeproj` | Xcode 프로젝트 (macOS) |
+| `.xcworkspace` | Xcode Workspace, `.xcodeproj` 그룹 (macOS) |
+| `Package.swift` | Swift Package (macOS) |
 
 ### 탐지할 프로젝트 산출물
 
@@ -330,6 +333,7 @@ libra resources --risk review
 | Android SDK·Gradle cache | IMPLEMENTED (read-only) |
 | Cargo·Maven cache | IMPLEMENTED (read-only) |
 | Xcode DerivedData, CocoaPods·SwiftPM·Homebrew·iOS Simulator cache (macOS) | IMPLEMENTED (read-only) |
+| Xcode 설치 자체(`xcode-install`), 프로젝트 소유 `Pods`/`.build` (macOS) | IMPLEMENTED |
 | Docker 이미지·컨테이너·빌드 캐시·Volume 용량 | IMPLEMENTED (read-only) |
 
 ### 출력 정보

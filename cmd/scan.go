@@ -26,6 +26,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/swiftpm"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/xcode"
+	xcodeprojadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/xcodeproj"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
@@ -64,6 +65,7 @@ func defaultResourceDetectors() []app.ResourceDetector {
 		app.EcosystemResourceDetector{Name: "swiftpm-cache", Lister: swiftpm.CacheLister{}},
 		app.EcosystemResourceDetector{Name: "homebrew-cache", Lister: homebrew.CacheLister{}},
 		app.EcosystemResourceDetector{Name: "simulator-cache", Lister: simulator.CacheLister{}},
+		app.EcosystemResourceDetector{Name: "xcode-install", Lister: xcode.InstallLister{}},
 		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
 		app.CondaResourceDetector{Lister: conda.CLIEnvLister{}},
 	}
@@ -117,9 +119,13 @@ scan. The daemon can invoke a root-scoped incremental scan. The legacy
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
 			app.PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}},
 			app.EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}},
+			app.XcodeProjectDetector{Detector: xcodeprojadapter.Detector{}},
+			app.XcodeWorkspaceDetector{Detector: xcodeprojadapter.WorkspaceDetector{}},
+			app.SwiftPMProjectDetector{Detector: swiftpm.Detector{}},
 		}, resourceDetectors(), []app.DependencyAnalyzer{
 			app.MSBuildDependencyAnalyzer{},
 			app.CondaDependencyAnalyzer{},
+			app.XcodeDependencyAnalyzer{},
 		})
 
 		var progressDisplay *scanProgressDisplay

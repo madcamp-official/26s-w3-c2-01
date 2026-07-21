@@ -28,6 +28,13 @@ var defaultExcludes = []string{
 	"__pycache__",
 	".pytest_cache",
 	".mypy_cache",
+	// macOS: CocoaPods' installed-pods directory and SwiftPM's build output
+	// -- both exact directory names, unlike .xcodeproj/.xcworkspace (a
+	// variable-named prefix + fixed suffix, which this exact-match exclude
+	// list can't express; those are walked into, but their contents are
+	// small IDE-only metadata, not a correctness concern).
+	"Pods",
+	".build",
 }
 
 type Config struct {

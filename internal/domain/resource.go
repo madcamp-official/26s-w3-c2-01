@@ -18,6 +18,16 @@ const (
 	ResourceTypeDotNetSDK    ResourceType = "dotnet-sdk"
 	ResourceTypeAndroidSDK   ResourceType = "android-sdk"
 	ResourceTypeNodeModules  ResourceType = "node-modules"
+	// ResourceTypeXcodeInstall is the installed Xcode.app itself (version +
+	// path via xcode-select/xcodebuild), the macOS analogue of
+	// ResourceTypeVisualStudio -- a system-managed dev tool, not a cache.
+	ResourceTypeXcodeInstall ResourceType = "xcode-install"
+	// ResourceTypePods is a project-owned CocoaPods `Pods/` directory
+	// (installed pods for one project), distinct from the global CocoaPods
+	// download cache (ResourceTypeGlobalCache, Version "cocoapods-cache") --
+	// same OWNS-vs-global-cache split as ResourceTypeNodeModules vs npm's
+	// global cache.
+	ResourceTypePods ResourceType = "cocoapods-pods"
 	// ResourceTypeBuildOutput covers bin, obj, build, dist, .next, out,
 	// Debug, Release, and (docs/libra_integration_contracts.md §19.4)
 	// Python's __pycache__, .pytest_cache, .mypy_cache, *.egg-info.

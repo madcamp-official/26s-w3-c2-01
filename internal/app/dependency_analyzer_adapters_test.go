@@ -147,3 +147,64 @@ func TestCondaDependencyAnalyzerNoDeclaration(t *testing.T) {
 func TestCondaDependencyAnalyzerSatisfiesDependencyAnalyzer(t *testing.T) {
 	var _ DependencyAnalyzer = CondaDependencyAnalyzer{}
 }
+
+func TestXcodeDependencyAnalyzerResolvesSwiftPMDeclaredToolsVersion(t *testing.T) {
+	install := domain.Resource{ID: "resource-xcode", Type: domain.ResourceTypeXcodeInstall, Version: "15.4"}
+	index := newMemoryResourceIndex([]domain.Resource{install})
+	collectedAt := time.Date(2026, 7, 22, 9, 0, 0, 0, time.UTC)
+
+	input := ProjectAnalysisInput{
+		Project: domain.BuildProject{ID: "project-1", Type: domain.ProjectTypeSwiftPM, ManifestPath: "/repo/Package.swift"},
+		Properties: []ProjectProperty{
+			{OwnerManifestPath: "/repo/Package.swift", SourcePath: "/repo/Package.swift", Name: "swift-tools-version", Value: "5.9"},
+		},
+	}
+
+	got := (XcodeDependencyAnalyzer{Now: func() time.Time { return collectedAt }}).Analyze(context.Background(), input, index)
+	if len(got.Items) != 1 {
+		t.Fatalf("Analyze() items = %#v, want one resolved dependency", got.Items)
+	}
+	bundle := got.Items[0]
+	if bundle.Dependency.SourceID != "project-1" || bundle.Dependency.TargetID != "resource-xcode" || bundle.Dependency.Relation != domain.RelationRequires {
+		t.Errorf("dependency = %#v", bundle.Dependency)
+	}
+	if len(bundle.Evidence) != 1 || bundle.Evidence[0].Kind != domain.EvidenceDeclared || bundle.Evidence[0].RawValue != "5.9" {
+		t.Errorf("evidence = %#v, want DECLARED with RawValue 5.9", bundle.Evidence)
+	}
+}
+
+func TestXcodeDependencyAnalyzerInfersPlainXcodeProject(t *testing.T) {
+	install := domain.Resource{ID: "resource-xcode", Type: domain.ResourceTypeXcodeInstall, Version: "15.4"}
+	index := newMemoryResourceIndex([]domain.Resource{install})
+
+	input := ProjectAnalysisInput{Project: domain.BuildProject{ID: "project-1", Type: domain.ProjectTypeXcode, ManifestPath: "/repo/App.xcodeproj/project.pbxproj"}}
+
+	got := (XcodeDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+	if len(got.Items) != 1 || got.Items[0].Evidence[0].Kind != domain.EvidenceInferred {
+		t.Fatalf("Analyze() = %#v, want one INFERRED dependency (no declared version marker for plain .xcodeproj)", got)
+	}
+}
+
+func TestXcodeDependencyAnalyzerReportsUnverifiedWhenNoXcodeInstalled(t *testing.T) {
+	index := newMemoryResourceIndex(nil)
+	input := ProjectAnalysisInput{Project: domain.BuildProject{ID: "project-1", Type: domain.ProjectTypeXcode, ManifestPath: "/repo/App.xcodeproj/project.pbxproj"}}
+
+	got := (XcodeDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+	if len(got.Items) != 0 || len(got.Unverified) != 1 {
+		t.Fatalf("Analyze() = %#v, want no dependency and one UnverifiedScope", got)
+	}
+}
+
+func TestXcodeDependencyAnalyzerIgnoresOtherProjectTypes(t *testing.T) {
+	index := newMemoryResourceIndex([]domain.Resource{{ID: "resource-xcode", Type: domain.ResourceTypeXcodeInstall}})
+	input := ProjectAnalysisInput{Project: domain.BuildProject{ID: "project-1", Type: domain.ProjectTypeNode}}
+
+	got := (XcodeDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+	if len(got.Items) != 0 || len(got.Unverified) != 0 {
+		t.Fatalf("Analyze() = %#v, want an empty result for a non-Xcode/SwiftPM project", got)
+	}
+}
+
+func TestXcodeDependencyAnalyzerSatisfiesDependencyAnalyzer(t *testing.T) {
+	var _ DependencyAnalyzer = XcodeDependencyAnalyzer{}
+}

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
@@ -25,7 +24,7 @@ type ResourcePathClassifier interface {
 type ResourceObservation struct {
 	Resource domain.Resource
 	Issues   []scanner.Issue
-	Reasons  []string
+	Reasons  []domain.RiskReason
 }
 
 // ResourceObservationInput keeps cleanup evidence separate from persisted
@@ -90,13 +89,16 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 	}
 	detected.SystemManaged = classification.SystemManaged
 	cleanup := enrichCleanupEvidence(ctx, displayPath, input.Cleanup)
+	detected.ConfidenceProfile = confidenceProfile(detected.Confidence, cleanup)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
 		Cleanup:       cleanup,
+		Confidence:    detected.ConfidenceProfile,
 	})
 	detected.Risk = assessment.Level
-	detected.Reason = strings.Join(assessment.Reasons, "; ")
+	detected.RiskReasons = assessment.Reasons()
+	detected.Confidence = detected.ConfidenceProfile.Overall()
 	switch detected.Risk {
 	case domain.RiskSafe:
 		detected.ReclaimableSize = detected.LogicalSize
@@ -110,7 +112,7 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 	return ResourceObservation{
 		Resource: detected,
 		Issues:   measured.Issues,
-		Reasons:  assessment.Reasons,
+		Reasons:  assessment.Reasons(),
 	}, nil
 }
 
@@ -157,11 +159,30 @@ func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID str
 
 	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
 	resource.Risk = assessment.Level
-	resource.Reason = strings.Join(assessment.Reasons, "; ")
 	resource.ReclaimableSize = 0
 
 	if err := s.repository.Upsert(ctx, resource); err != nil {
 		return ResourceObservation{}, fmt.Errorf("persist reclassified resource: %w", err)
 	}
-	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons}, nil
+	resource.RiskReasons = assessment.Reasons()
+	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons()}, nil
+}
+
+func confidenceProfile(classification int, cleanup CleanupEvidence) domain.ConfidenceProfile {
+	// Dependency and scan coverage are conservative compatibility baselines
+	// until the orchestrator maps its per-run UnverifiedScope collection into
+	// resource-specific scores. They meet, but never exceed, the auto-plan
+	// gate; any explicit lower score blocks automatic selection.
+	profile := domain.ConfidenceProfile{
+		Classification: classification,
+		Dependency:     minimumAutoDependencyConfidence,
+		ScanCoverage:   minimumAutoScanCoverage,
+	}
+	if cleanup.ProjectOwned {
+		profile.Ownership = 100
+	}
+	if cleanup.complete() {
+		profile.CleanupSafety = 100
+	}
+	return profile
 }

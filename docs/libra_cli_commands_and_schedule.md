@@ -320,7 +320,8 @@ libra resources --risk review
 - 연결 프로젝트 수
 - 재생성 가능 여부
 - 위험도
-- 분석 신뢰도
+- 분석 신뢰도 요약과 `Classification`/`Ownership`/`Dependency`/`CleanupSafety`/`ScanCoverage` 프로필
+- 구조화된 위험 사유(`BLOCKER`, `WARNING`, `SAFEGUARD`, `UNKNOWN`; JSON 출력)
 
 ### 우선순위
 
@@ -350,6 +351,7 @@ libra explain project:"D:\Projects\GameClient"
 - 삭제 예상 영향
 - 복구 방법
 - 위험도
+- 구조화된 위험 사유(code/severity/message; 텍스트는 message 요약)
 - 분석 신뢰도
 - 분석하지 못한 범위
 
@@ -449,6 +451,7 @@ libra plan --project D:\Projects\OldWeb
 - 예상 확보 용량 계산
 - 재생성 방법과 위험 근거 표시
 - 시스템 리소스 자동 제외
+- `SAFE`라도 Dependency 80, CleanupSafety 90, ScanCoverage 80 미만이면 자동 선택하지 않고 REVIEW로 표시
 - 계획 ID 생성
 
 ### 출력 예시

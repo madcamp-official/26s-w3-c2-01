@@ -33,6 +33,12 @@ type PlanResult struct {
 	Blocked []domain.Resource
 }
 
+const (
+	minimumAutoDependencyConfidence = 80
+	minimumAutoCleanupConfidence    = 90
+	minimumAutoScanCoverage         = 80
+)
+
 // PlanService selects cleanup candidates for `libra plan`. It does not
 // persist anything -- the caller (cmd/plan.go) owns calling
 // CleanupPlanRepository.Create with the returned Plan, matching this
@@ -53,8 +59,8 @@ func NewPlanService(resources ResourceRepository, projects ProjectRepository, sc
 // docs/libra_integration_contracts.md §23.1:
 //
 //  1. BLOCKED resources are excluded entirely.
-//  2. Only SAFE resources are auto-selected; REVIEW is never included by
-//     default.
+//  2. Only SAFE resources meeting the dependency, cleanup-safety, and scan
+//     coverage confidence gates are auto-selected; all others require review.
 //  3. SAFE candidates are ordered by Confidence desc, then ReclaimableSize
 //     desc, then stable Resource ID asc.
 //  4. Candidates are accepted in that order until TargetBytes is met (or
@@ -85,9 +91,16 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 
 	var safe, review, blocked []domain.Resource
 	for _, r := range all {
+		profile := effectiveConfidenceProfile(r)
 		switch r.Risk {
 		case domain.RiskSafe:
-			safe = append(safe, r)
+			if profile.Dependency >= minimumAutoDependencyConfidence &&
+				profile.CleanupSafety >= minimumAutoCleanupConfidence &&
+				profile.ScanCoverage >= minimumAutoScanCoverage {
+				safe = append(safe, r)
+			} else {
+				review = append(review, r)
+			}
 		case domain.RiskReview:
 			review = append(review, r)
 		default:
@@ -147,6 +160,18 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 	}
 
 	return PlanResult{Plan: plan, Review: review, Blocked: blocked}, nil
+}
+
+func effectiveConfidenceProfile(resource domain.Resource) domain.ConfidenceProfile {
+	profile := resource.ConfidenceProfile
+	if profile == (domain.ConfidenceProfile{}) && resource.Confidence > 0 {
+		return domain.ConfidenceProfile{
+			Classification: resource.Confidence, Ownership: resource.Confidence,
+			Dependency: resource.Confidence, CleanupSafety: resource.Confidence,
+			ScanCoverage: resource.Confidence,
+		}
+	}
+	return profile
 }
 
 func (s *PlanService) ownerProjectID(ctx context.Context, resourceID string) (string, error) {

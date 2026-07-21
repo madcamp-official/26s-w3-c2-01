@@ -52,6 +52,25 @@ func TestResourceRepositoryRoundTripsRegenerationCommand(t *testing.T) {
 	}
 }
 
+func TestResourceRepositoryRoundTripsConfidenceProfileAndRiskReasons(t *testing.T) {
+	repository := newTestResourceRepository(t)
+	resource := testResource(t, domain.ResourceTypeBuildOutput, "")
+	resource.ConfidenceProfile = domain.ConfidenceProfile{Classification: 90, Ownership: 100, Dependency: 80, CleanupSafety: 100, ScanCoverage: 80}
+	resource.Confidence = resource.ConfidenceProfile.Overall()
+	resource.RiskReasons = []domain.RiskReason{{Code: "CLEANUP_EVIDENCE_COMPLETE", Severity: domain.RiskReasonSafeguard, Message: "verified"}}
+	if err := repository.Upsert(context.Background(), resource); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repository.FindByID(context.Background(), resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.ConfidenceProfile, resource.ConfidenceProfile) || !reflect.DeepEqual(got.RiskReasons, resource.RiskReasons) {
+		t.Fatalf("FindByID() profile/reasons = %#v/%#v", got.ConfidenceProfile, got.RiskReasons)
+	}
+}
+
 func TestResourceRepositoryListsOnlyRequestedType(t *testing.T) {
 	repository := newTestResourceRepository(t)
 	windowsSDK := testResource(t, domain.ResourceTypeWindowsSDK, "10.0.22621.0")

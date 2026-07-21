@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -33,12 +34,18 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 	if resource.LastModifiedAt != nil {
 		lastModifiedAt = resource.LastModifiedAt.UTC().Format(time.RFC3339Nano)
 	}
-	_, err := r.db.ExecContext(ctx, `
+	riskReasons, err := json.Marshal(resource.RiskReasons)
+	if err != nil {
+		return fmt.Errorf("encode resource risk reasons: %w", err)
+	}
+	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO resources (
 			id, resource_type, name, version, path, normalized_path,
 			logical_size, size_known, reclaimable_size, regenerable, system_managed,
-			last_modified_at, last_observed_at, risk, confidence, regeneration_command, reason
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			last_modified_at, last_observed_at, risk, confidence, regeneration_command,
+			confidence_classification, confidence_ownership, confidence_dependency,
+			confidence_cleanup_safety, confidence_scan_coverage, risk_reasons
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -55,13 +62,21 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			risk = excluded.risk,
 			confidence = excluded.confidence,
 			regeneration_command = excluded.regeneration_command,
-			reason = excluded.reason
+			confidence_classification = excluded.confidence_classification,
+			confidence_ownership = excluded.confidence_ownership,
+			confidence_dependency = excluded.confidence_dependency,
+			confidence_cleanup_safety = excluded.confidence_cleanup_safety,
+			confidence_scan_coverage = excluded.confidence_scan_coverage,
+			risk_reasons = excluded.risk_reasons
 	`,
 		resource.ID, resource.Type, resource.Name, nullableString(resource.Version),
 		resource.DisplayPath, resource.NormalizedPath, resource.LogicalSize, boolInt(resource.SizeKnown),
 		resource.ReclaimableSize, boolInt(resource.Regenerable), boolInt(resource.SystemManaged),
 		lastModifiedAt, resource.LastObservedAt.UTC().Format(time.RFC3339Nano),
-		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand), resource.Reason,
+		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand),
+		resource.ConfidenceProfile.Classification, resource.ConfidenceProfile.Ownership,
+		resource.ConfidenceProfile.Dependency, resource.ConfidenceProfile.CleanupSafety,
+		resource.ConfidenceProfile.ScanCoverage, string(riskReasons),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert resource %q: %w", resource.ID, err)
@@ -127,7 +142,9 @@ func (r *ResourceRepository) List(ctx context.Context) ([]domain.Resource, error
 const resourceSelect = `
 	SELECT id, resource_type, name, version, path, normalized_path,
 		logical_size, size_known, reclaimable_size, regenerable, system_managed,
-		last_modified_at, last_observed_at, risk, confidence, regeneration_command, reason
+		last_modified_at, last_observed_at, risk, confidence, regeneration_command,
+		confidence_classification, confidence_ownership, confidence_dependency,
+		confidence_cleanup_safety, confidence_scan_coverage, risk_reasons
 	FROM resources`
 
 type rowScanner interface {
@@ -143,12 +160,16 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 	var systemManaged int
 	var sizeKnown int
 	var regenerationCommand sql.NullString
+	var riskReasons string
 	err := row.Scan(
 		&resource.ID, &resource.Type, &resource.Name, &version,
 		&resource.DisplayPath, &resource.NormalizedPath,
 		&resource.LogicalSize, &sizeKnown, &resource.ReclaimableSize,
 		&regenerable, &systemManaged, &lastModifiedAt, &lastObservedAt,
-		&resource.Risk, &resource.Confidence, &regenerationCommand, &resource.Reason,
+		&resource.Risk, &resource.Confidence, &regenerationCommand,
+		&resource.ConfidenceProfile.Classification, &resource.ConfidenceProfile.Ownership,
+		&resource.ConfidenceProfile.Dependency, &resource.ConfidenceProfile.CleanupSafety,
+		&resource.ConfidenceProfile.ScanCoverage, &riskReasons,
 	)
 	if err != nil {
 		return domain.Resource{}, err
@@ -162,6 +183,9 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 	resource.Regenerable = regenerable == 1
 	resource.SystemManaged = systemManaged == 1
 	resource.SizeKnown = sizeKnown == 1
+	if err := json.Unmarshal([]byte(riskReasons), &resource.RiskReasons); err != nil {
+		return domain.Resource{}, fmt.Errorf("decode resource risk reasons: %w", err)
+	}
 	if lastModifiedAt.Valid {
 		parsed, err := time.Parse(time.RFC3339Nano, lastModifiedAt.String)
 		if err != nil {
@@ -200,6 +224,9 @@ func validateResource(resource domain.Resource) error {
 	}
 	if resource.Confidence < 0 || resource.Confidence > 100 {
 		return errors.New("resource confidence must be between 0 and 100")
+	}
+	if !resource.ConfidenceProfile.Valid() {
+		return errors.New("resource confidence profile values must be between 0 and 100")
 	}
 	if resource.Risk != domain.RiskSafe && resource.Risk != domain.RiskReview && resource.Risk != domain.RiskBlocked {
 		return fmt.Errorf("invalid resource risk %q", resource.Risk)

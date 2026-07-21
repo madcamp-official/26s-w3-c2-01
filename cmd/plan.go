@@ -134,7 +134,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, resources app.Reso
 
 	if showRisk(domain.RiskSafe) {
 		for _, item := range result.Plan.Items {
-			// CleanupPlanItem's snapshot doesn't carry Reason (issue #40
+			// CleanupPlanItem's snapshot doesn't carry RiskReasons (issue #40
 			// decided this stays a Resource-only field, not duplicated onto
 			// the plan snapshot), so an extra lookup by stable ResourceID is
 			// required, same as cmd/resources.go's own N+1-by-design lookups.
@@ -142,7 +142,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, resources app.Reso
 			if err != nil {
 				return output.PlanView{}, fmt.Errorf("find resource %q: %w", item.ResourceID, err)
 			}
-			view.Safe = append(view.Safe, output.PlanCandidateLine{Size: item.ExpectedSize, Path: item.NormalizedPath, Reason: resource.Reason})
+			view.Safe = append(view.Safe, output.PlanCandidateLine{Size: item.ExpectedSize, Path: item.NormalizedPath, RiskReasons: resource.RiskReasons})
 		}
 	}
 	if showRisk(domain.RiskReview) {
@@ -153,7 +153,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, resources app.Reso
 			// here would print "0 B" for every REVIEW candidate regardless
 			// of its real size. SAFE lines below correctly use ExpectedSize
 			// (== ReclaimableSize == LogicalSize for a SAFE resource).
-			view.Review = append(view.Review, output.PlanCandidateLine{Size: r.LogicalSize, Path: r.NormalizedPath, Reason: r.Reason})
+			view.Review = append(view.Review, output.PlanCandidateLine{Size: r.LogicalSize, Path: r.NormalizedPath, RiskReasons: r.RiskReasons})
 		}
 	}
 	if showRisk(domain.RiskBlocked) {
@@ -161,7 +161,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, resources app.Reso
 			// Same reasoning as REVIEW above: BLOCKED resources have
 			// ReclaimableSize hard-forced to 0, so the real LogicalSize is
 			// what a user needs to judge whether it's worth reviewing.
-			line := output.PlanBlockedLine{Size: r.LogicalSize, Path: r.NormalizedPath, Reason: r.Reason}
+			line := output.PlanBlockedLine{Size: r.LogicalSize, Path: r.NormalizedPath, RiskReasons: r.RiskReasons}
 			edges, err := dependencies.FindProjectsByResource(cmd.Context(), r.ID)
 			if err != nil {
 				return output.PlanView{}, fmt.Errorf("find projects depending on %q: %w", r.ID, err)

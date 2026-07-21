@@ -16,6 +16,7 @@ const (
 	ResourceTypeVisualStudio ResourceType = "visual-studio"
 	ResourceTypeMSBuild      ResourceType = "msbuild"
 	ResourceTypeDotNetSDK    ResourceType = "dotnet-sdk"
+	ResourceTypeAndroidSDK   ResourceType = "android-sdk"
 	ResourceTypeNodeModules  ResourceType = "node-modules"
 	// ResourceTypeBuildOutput covers bin, obj, build, dist, .next, out,
 	// Debug, Release, and (docs/libra_integration_contracts.md §19.4)

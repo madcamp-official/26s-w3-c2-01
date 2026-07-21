@@ -329,7 +329,8 @@ REVIEW
 * `Directory.Build.props` 상위 경로 분석
 * MSBuild `-preprocess` 실행
 * MSBuild binary log 분석
-* npm·pnpm 전역 저장소 탐지
+* npm·pnpm 전역 저장소 탐지 (read-only 구현됨)
+* Android SDK·Gradle, Cargo, Maven 전역 저장소 탐지 (read-only 구현됨)
 * Docker 디스크 사용량 탐지 (`docker system df`, read-only 구현됨)
 * HTML 또는 Markdown 리포트
 * 삭제 전 프로젝트 빌드 검증 명령 생성
@@ -2020,7 +2021,7 @@ libra summary
 * NTFS USN Journal 기반 증분 인덱스
 * MSBuild binary log 자동 수집
 * `Libra trace -- <build command>`
-* pnpm·npm 전역 캐시 Adapter
+* pnpm·npm 전역 캐시 Adapter — 구현 완료 (read-only)
 * Docker Adapter
 * Git의 다른 로컬 브랜치 분석
 * SDK 제거 전 자동 빌드 검증
@@ -2029,8 +2030,8 @@ libra summary
 
 * ETW 기반 개발 프로세스 관찰
 * 프로젝트별 저장공간 증가 타임라인
-* Android SDK·Gradle Adapter
-* Cargo Adapter (Python/conda는 구현 완료 — `docs/libra_integration_contracts.md` §19.4/§19.5)
+* Android SDK·Gradle Adapter — 구현 완료 (read-only)
+* Cargo·Maven Adapter — 구현 완료 (read-only)
 * 로컬 웹 대시보드
 * GitHub Issue 또는 리포트 내보내기
 

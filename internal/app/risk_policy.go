@@ -60,6 +60,12 @@ type RiskPolicy interface {
 type DefaultRiskPolicy struct{}
 
 func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
+	if context.Resource.Type == domain.ResourceTypeAndroidSDK {
+		return RiskAssessment{
+			Level: domain.RiskBlocked, Confidence: context.Confidence,
+			Blockers: []domain.RiskReason{{Code: "ANDROID_SDK_MANAGED", Severity: domain.RiskReasonBlocker, Message: "Android SDK packages must be managed with sdkmanager or Android Studio"}},
+		}
+	}
 	if context.Resource.Type == domain.ResourceTypeDockerVolume {
 		return RiskAssessment{
 			Level: domain.RiskBlocked, Confidence: context.Confidence,

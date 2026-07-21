@@ -324,7 +324,9 @@ libra resources --risk review
 | .NET SDK | P0 |
 | 프로젝트 `node_modules` | P0 |
 | 프로젝트 `bin`, `obj`, `build`, `dist` | P0 |
-| npm·pnpm 전역 캐시 | P1 |
+| npm·pnpm 전역 캐시 | IMPLEMENTED (read-only) |
+| Android SDK·Gradle cache | IMPLEMENTED (read-only) |
+| Cargo·Maven cache | IMPLEMENTED (read-only) |
 | Docker 이미지·컨테이너·빌드 캐시·Volume 용량 | IMPLEMENTED (read-only) |
 
 ### 출력 정보
@@ -963,7 +965,7 @@ libra restore --transaction <transaction-id>
 1. MSBuild preprocess 분석
 2. Markdown report
 3. `Directory.Build.props` 조건 개선
-4. pnpm 전역 store 분석
+4. pnpm 전역 store 분석 — 완료 (read-only)
 5. Docker `system df` Adapter — 완료 (read-only, cleanup 제외)
 
 ---
@@ -1009,7 +1011,7 @@ libra restore --transaction <transaction-id>
 - MSBuild preprocess
 - `Directory.Build.props` 고급 분석
 - Markdown·JSON export
-- pnpm 전역 store
+- pnpm/npm 세부 package별 분석 (aggregate store 탐지는 완료)
 - 실제 빌드 검증 명령
 - 스캔 결과 증분 최적화
 

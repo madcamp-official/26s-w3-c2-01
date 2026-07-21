@@ -15,6 +15,13 @@ func TestDefaultRiskPolicyBlocksSystemManagedResource(t *testing.T) {
 	}
 }
 
+func TestDefaultRiskPolicyBlocksAndroidSDK(t *testing.T) {
+	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{Resource: domain.Resource{Type: domain.ResourceTypeAndroidSDK}})
+	if assessment.Level != domain.RiskBlocked || len(assessment.Blockers) != 1 || assessment.Blockers[0].Code != "ANDROID_SDK_MANAGED" {
+		t.Fatalf("assessment = %#v", assessment)
+	}
+}
+
 func TestDefaultRiskPolicyRequiresReviewWithoutSafetyEvidence(t *testing.T) {
 	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{})
 	if assessment.Level != domain.RiskReview {

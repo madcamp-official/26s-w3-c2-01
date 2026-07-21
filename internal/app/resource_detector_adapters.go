@@ -8,6 +8,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/docker"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/ecosystem"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
@@ -41,6 +42,22 @@ func (d DotNetSDKResourceDetector) Detect(ctx context.Context, _ Environment) De
 	resources, err := d.Lister.ListSDKs(ctx)
 	if err != nil {
 		return resourceDetectionFailure("dotnet", err)
+	}
+	return DetectionResult[domain.Resource]{Items: resources}
+}
+
+type EcosystemResourceDetector struct {
+	Name   string
+	Lister ecosystem.ResourceLister
+}
+
+func (d EcosystemResourceDetector) Detect(ctx context.Context, _ Environment) DetectionResult[domain.Resource] {
+	if d.Lister == nil {
+		return DetectionResult[domain.Resource]{}
+	}
+	resources, err := d.Lister.ListResources(ctx)
+	if err != nil {
+		return resourceDetectionFailure(d.Name, err)
 	}
 	return DetectionResult[domain.Resource]{Items: resources}
 }

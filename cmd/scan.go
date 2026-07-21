@@ -9,6 +9,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/docker"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/ecosystem"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
@@ -41,6 +42,11 @@ func defaultResourceDetectors() []app.ResourceDetector {
 		app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
 		app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
 		app.DockerResourceDetector{Lister: docker.CLILister{}},
+		app.EcosystemResourceDetector{Name: "android-gradle", Lister: ecosystem.AndroidGradleLister{}},
+		app.EcosystemResourceDetector{Name: "cargo", Lister: ecosystem.CargoLister{}},
+		app.EcosystemResourceDetector{Name: "maven", Lister: ecosystem.MavenLister{}},
+		app.EcosystemResourceDetector{Name: "npm-cache", Lister: ecosystem.NodeCacheLister{Tool: "npm"}},
+		app.EcosystemResourceDetector{Name: "pnpm-cache", Lister: ecosystem.NodeCacheLister{Tool: "pnpm"}},
 		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
 		app.CondaResourceDetector{Lister: conda.CLIEnvLister{}},
 	}

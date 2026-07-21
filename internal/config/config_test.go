@@ -33,7 +33,8 @@ exclude:
 }
 
 func TestDefaultExcludesGeneratedAndVendoredDirectories(t *testing.T) {
-	want := []string{"node_modules", ".next", "dist", "build", "bin", "obj", ".git", ".libra-quarantine"}
+	want := []string{"node_modules", ".next", "dist", "build", "bin", "obj", ".git", ".libra-quarantine",
+		".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache"}
 	got := Default().Exclude
 	if len(got) != len(want) {
 		t.Fatalf("Default().Exclude = %#v, want %#v", got, want)

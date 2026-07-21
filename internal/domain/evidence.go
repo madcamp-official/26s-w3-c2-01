@@ -13,6 +13,12 @@ const (
 	EvidenceDeclared EvidenceKind = "DECLARED"
 	EvidenceResolved EvidenceKind = "RESOLVED"
 	EvidenceObserved EvidenceKind = "OBSERVED"
+	// EvidencePinned sits between DECLARED and INFERRED
+	// (docs/libra_integration_contracts.md §19.4 결정 2): a requirements.txt
+	// with every entry version-pinned ("==") is stronger evidence than an
+	// unpinned one, but weaker than an actual lockfile (poetry.lock/
+	// Pipfile.lock/uv.lock, which stay DECLARED like Node's lockfiles).
+	EvidencePinned   EvidenceKind = "PINNED"
 	EvidenceInferred EvidenceKind = "INFERRED"
 	EvidenceUnknown  EvidenceKind = "UNKNOWN"
 )
@@ -34,6 +40,7 @@ var DefaultConfidence = map[EvidenceKind]int{
 	EvidenceResolved: 90,
 	EvidenceObserved: 85,
 	EvidenceDeclared: 75,
+	EvidencePinned:   60,
 	EvidenceInferred: 40,
 	EvidenceUnknown:  10,
 }

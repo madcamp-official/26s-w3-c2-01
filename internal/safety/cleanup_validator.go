@@ -16,6 +16,27 @@ import (
 var allowedArtifactNames = map[string]struct{}{
 	"node_modules": {}, "bin": {}, "obj": {}, "build": {}, "dist": {},
 	".next": {}, "out": {}, "debug": {}, "release": {},
+	// Python (docs/libra_integration_contracts.md §19.4 결정 6): venv is
+	// still gated on RiskPolicy/Regenerable elsewhere (only DECLARED/PINNED
+	// lockfile evidence sets Regenerable=true for it) -- this list only
+	// controls which basenames are structurally eligible at all. conda
+	// environments (python-venv's sibling ResourceTypeCondaEnv) are
+	// deliberately never added here: 결정 4 keeps them out of the cleanup
+	// path entirely, regardless of basename.
+	".venv": {}, "venv": {}, "env": {},
+	"__pycache__": {}, ".pytest_cache": {}, ".mypy_cache": {},
+}
+
+// eggInfoSuffix matches Python's *.egg-info build metadata directories,
+// whose prefix is the package's own name and so can't be listed as a fixed
+// basename the way the exact-match names above can (결정 6).
+const eggInfoSuffix = ".egg-info"
+
+func isAllowedArtifactName(basename string) bool {
+	if _, ok := allowedArtifactNames[basename]; ok {
+		return true
+	}
+	return strings.HasSuffix(basename, eggInfoSuffix)
 }
 
 type CleanupValidation struct {
@@ -35,7 +56,7 @@ func (v CleanupValidator) Validate(ctx context.Context, item domain.CleanupPlanI
 	if resource.NormalizedPath != item.NormalizedPath || resource.Type != item.ExpectedType || resource.Risk != domain.RiskSafe || !resource.Regenerable {
 		return CleanupValidation{}, fmt.Errorf("resource snapshot is no longer SAFE and regenerable")
 	}
-	if _, ok := allowedArtifactNames[strings.ToLower(filepath.Base(item.NormalizedPath))]; !ok {
+	if !isAllowedArtifactName(strings.ToLower(filepath.Base(item.NormalizedPath))) {
 		return CleanupValidation{}, fmt.Errorf("path basename is not in the cleanup allowlist")
 	}
 	if ownerRoot == "" {

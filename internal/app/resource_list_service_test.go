@@ -31,6 +31,29 @@ func TestResourceListServiceFiltersAndCountsProjects(t *testing.T) {
 	}
 }
 
+// TestResourceListServiceCountsOwnedResourcesToo covers a project-owned
+// artifact (node_modules/.next/dist/...), whose dependency edge is
+// RelationOwns rather than RelationRequires -- ProjectCount must still
+// reflect its owner, matching ProjectListService.ResourceCount's symmetric
+// (relation-agnostic) count on the project side.
+func TestResourceListServiceCountsOwnedResourcesToo(t *testing.T) {
+	resources := fakeResourceRepository{resources: []domain.Resource{
+		{ID: "r1", Name: "node_modules", Type: domain.ResourceTypeNodeModules},
+	}}
+	dependencies := &dependencyRepositoryStub{byResource: map[string][]domain.Dependency{
+		"r1": {{SourceID: "p1", TargetID: "r1", Relation: domain.RelationOwns}},
+	}}
+
+	service := NewResourceListService(resources, dependencies)
+	got, err := service.List(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ProjectCount != 1 {
+		t.Fatalf("List() = %#v, want one resource with ProjectCount = 1", got)
+	}
+}
+
 func TestResourceListServiceNilFilterReturnsEverything(t *testing.T) {
 	resources := fakeResourceRepository{resources: []domain.Resource{{ID: "r1"}, {ID: "r2"}}}
 	dependencies := &dependencyRepositoryStub{byResource: map[string][]domain.Dependency{}}

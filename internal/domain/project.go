@@ -45,6 +45,10 @@ const (
 	ProjectTypeMSBuildDotNet ProjectType = "msbuild-dotnet" // .csproj
 	ProjectTypeNode          ProjectType = "node"           // package.json
 	ProjectTypeGit           ProjectType = "git"            // .git
+	// ProjectTypePython covers pyproject.toml/Pipfile/setup.py/requirements.txt
+	// roots -- see docs/libra_integration_contracts.md §19.4 for the marker
+	// priority (internal/adapter/python.FilesystemDetector).
+	ProjectTypePython ProjectType = "python"
 )
 
 // ProjectStatus describes the activity state of a project.

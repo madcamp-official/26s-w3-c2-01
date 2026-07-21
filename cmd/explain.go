@@ -100,7 +100,7 @@ func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, 
 	for _, usage := range explanation.UsedBy {
 		view.UsedBy = append(view.UsedBy, output.ExplainUsage{
 			Name: usage.ProjectName, Path: usage.ProjectPath,
-			Evidence: toEvidenceLines(usage.Evidence),
+			Relation: usage.Relation, Evidence: toEvidenceLines(usage.Evidence),
 		})
 	}
 	for _, scope := range impactScopes {
@@ -121,8 +121,8 @@ func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, 
 
 // renderProjectExplanation builds the project-shaped half of ExplainView.
 // Unlike the resource case, there's no fixed set of scopes to render here --
-// a project's "Requires" list is just whatever dependency edges exist for
-// it, in whatever order ExplainProject's own query returns them.
+// a project's "Uses" list is just whatever dependency edges exist for it, in
+// whatever order ExplainProject's own query returns them.
 func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, projectID string) (output.ExplainView, error) {
 	explanation, err := service.ExplainProject(cmd.Context(), projectID)
 	if err != nil {
@@ -143,7 +143,7 @@ func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, p
 	}
 	for _, usage := range explanation.Requires {
 		view.Requires = append(view.Requires, output.ExplainUsage{
-			Name: usage.ResourceName, Evidence: toEvidenceLines(usage.Evidence),
+			Name: usage.ResourceName, Relation: usage.Relation, Evidence: toEvidenceLines(usage.Evidence),
 		})
 	}
 	return view, nil

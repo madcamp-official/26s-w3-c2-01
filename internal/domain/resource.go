@@ -17,9 +17,21 @@ const (
 	ResourceTypeMSBuild      ResourceType = "msbuild"
 	ResourceTypeDotNetSDK    ResourceType = "dotnet-sdk"
 	ResourceTypeNodeModules  ResourceType = "node-modules"
-	ResourceTypeBuildOutput  ResourceType = "build-output" // bin, obj, build, dist, .next, out, Debug, Release
-	ResourceTypeGlobalCache  ResourceType = "global-cache" // npm/pnpm global cache
-	ResourceTypeDockerCache  ResourceType = "docker-cache"
+	// ResourceTypeBuildOutput covers bin, obj, build, dist, .next, out,
+	// Debug, Release, and (docs/libra_integration_contracts.md §19.4)
+	// Python's __pycache__, .pytest_cache, .mypy_cache, *.egg-info.
+	ResourceTypeBuildOutput ResourceType = "build-output"
+	ResourceTypeGlobalCache ResourceType = "global-cache" // npm/pnpm global cache
+	ResourceTypeDockerCache ResourceType = "docker-cache"
+	// ResourceTypeVenv is a Python virtual environment (.venv/venv/env),
+	// confirmed only after pyvenv.cfg is found inside it (§19.4 결정 3).
+	ResourceTypeVenv ResourceType = "python-venv"
+	// ResourceTypeCondaEnv is a conda environment. It carries a REQUIRES edge
+	// when it is a globally registered named environment, or an OWNS edge
+	// when it is a local prefix environment created under a project root
+	// (§19.4/§19.5 결정 4·5) -- the relation, not the resource type, is what
+	// distinguishes the two cases.
+	ResourceTypeCondaEnv ResourceType = "conda-env"
 )
 
 // RiskLevel indicates how safe a resource is to clean up.
@@ -50,6 +62,10 @@ type Resource struct {
 	// Confidence is analysis-coverage confidence (0-100), not a real
 	// probability. See EvidenceKind weighting in evidence.go.
 	Confidence int
+	// ConfidenceProfile is the decision-specific breakdown. Confidence is
+	// retained as the minimum-axis summary for CLI/schema compatibility.
+	ConfidenceProfile ConfidenceProfile
+	RiskReasons       []RiskReason
 	// RegenerationCommand is the command a developer would run to recreate
 	// this resource (e.g. "npm ci", "dotnet build App.csproj"), set by the
 	// detecting adapter at the same time it determines Regenerable -- it

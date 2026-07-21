@@ -146,6 +146,21 @@ func TestPlanServiceRequiresAScan(t *testing.T) {
 	}
 }
 
+func TestPlanServiceDoesNotAutoSelectSafeResourceBelowCoverageGate(t *testing.T) {
+	resource := safeResource("low-coverage", 90, 100)
+	resource.ConfidenceProfile.ScanCoverage = minimumAutoScanCoverage - 1
+	resources := &planResourceRepositoryStub{resources: []domain.Resource{resource}}
+
+	result, err := NewPlanService(resources, &planProjectRepositoryStub{}, &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}, planOwnershipStub(resources.resources)).
+		Build(context.Background(), PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Plan.Items) != 0 || len(result.Review) != 1 || result.Review[0].ID != resource.ID {
+		t.Fatalf("result = %#v, want low-coverage SAFE resource routed to review", result)
+	}
+}
+
 func newTestScanRecord(id string) ScanRecord {
 	return ScanRecord{ID: id, StartedAt: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC), Roots: []string{"/projects"}, Status: ScanStatusCompleted}
 }
@@ -157,6 +172,10 @@ func safeResource(id string, confidence int, reclaimable int64) domain.Resource 
 		ReclaimableSize: reclaimable, Regenerable: true,
 		LastObservedAt: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
 		Risk:           domain.RiskSafe, Confidence: confidence,
+		ConfidenceProfile: domain.ConfidenceProfile{
+			Classification: confidence, Ownership: 100, Dependency: 80,
+			CleanupSafety: 100, ScanCoverage: 80,
+		},
 	}
 }
 

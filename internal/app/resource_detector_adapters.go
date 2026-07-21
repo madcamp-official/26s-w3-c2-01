@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
@@ -54,6 +55,23 @@ func (d VisualStudioResourceDetector) Detect(ctx context.Context, _ Environment)
 	resources, err := d.Locator.Locate(ctx)
 	if err != nil {
 		return resourceDetectionFailure("msbuild", err)
+	}
+	return DetectionResult[domain.Resource]{Items: resources}
+}
+
+// CondaResourceDetector adapts conda.EnvLister to ResourceDetector. It only
+// reports globally registered environments -- local prefix environments
+// under a project root come through PythonProjectDetector instead (§19.4/
+// §19.5 결정 4·5).
+type CondaResourceDetector struct{ Lister conda.EnvLister }
+
+func (d CondaResourceDetector) Detect(ctx context.Context, _ Environment) DetectionResult[domain.Resource] {
+	if d.Lister == nil {
+		return DetectionResult[domain.Resource]{}
+	}
+	resources, err := d.Lister.ListEnvs(ctx)
+	if err != nil {
+		return resourceDetectionFailure("conda", err)
 	}
 	return DetectionResult[domain.Resource]{Items: resources}
 }

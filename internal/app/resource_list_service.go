@@ -29,7 +29,10 @@ func NewResourceListService(resources ResourceRepository, dependencies Dependenc
 }
 
 // List returns every resource filter accepts (all of them if filter is
-// nil), each paired with how many projects depend on it.
+// nil), each paired with how many projects are connected to it -- via
+// either RelationRequires (build/run dependency) or RelationOwns
+// (cleanup ownership); see docs/libra_integration_contracts.md's Graph
+// section for the distinction.
 func (s *ResourceListService) List(ctx context.Context, filter func(domain.Resource) bool) ([]ResourceListing, error) {
 	resources, err := s.resources.List(ctx)
 	if err != nil {
@@ -45,13 +48,7 @@ func (s *ResourceListService) List(ctx context.Context, filter func(domain.Resou
 		if err != nil {
 			return nil, fmt.Errorf("count projects for resource %q: %w", resource.ID, err)
 		}
-		count := 0
-		for _, project := range projects {
-			if project.Relation == domain.RelationRequires {
-				count++
-			}
-		}
-		listings = append(listings, ResourceListing{Resource: resource, ProjectCount: count})
+		listings = append(listings, ResourceListing{Resource: resource, ProjectCount: len(projects)})
 	}
 	return listings, nil
 }

@@ -30,7 +30,7 @@
 | 2026-07-18 (Day 2~4) | 경계 검증이 있는 병렬 파일 스캐너, 경로 정규화, cross-team 통합 계약 문서화, Windows SDK·.NET SDK·Visual Studio(vswhere) 리소스 탐지와 시스템 경로 차단(safety), Node 프로젝트·산출물 탐지, 프로젝트/리소스/의존성 그래프(evidence 포함)를 SQLite에 저장, `scan`이 실제 분석 파이프라인(AnalysisOrchestrator)에 연결되어 `projects`/`summary`가 실제 데이터를 조회하도록 완성, golden test 도입 |
 | 2026-07-19 | `resources`/`explain`/`impact` 명령 구현 완료, README·명령어 상태표 동기화 |
 | 2026-07-20 (Day 4 리뷰 · Day 5) | Day 4 코드 리뷰(협업/계약/구조적 이슈 정리), cleanup evidence·위험도 정책(risk policy) 도입, cleanup plan snapshot 저장, `plan --target`/`clean`(dry-run) 구현, 같은 볼륨 quarantine·복구 transaction(`clean --execute`, `restore`) 완성 |
-| 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정 |
+| 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가 |
 
 ---
 
@@ -180,6 +180,8 @@ libra init --config .libra.yaml
 ```
 결과물: `.libra.yaml`, `.libra.db`. `init` 실행 후에는 `.libra.yaml`의 `project_roots`가 비어 있으므로 직접 스캔할 경로를 채워 넣어야 한다(또는 매번 `scan --root`로 지정).
 
+`init`을 아직 실행하지 않은 디렉터리에서는 `init`/`help`/`completion`을 제외한 모든 명령이 전역 가드(`cmd/root.go`의 `requireInit`, `PersistentPreRunE`)에 의해 즉시 차단되고 `libra is not initialized here`와 함께 `libra init`을 먼저 실행하라는 안내가 출력된다. 이 검사는 `daemon start`/`config show`처럼 하위 명령(subcommand)에도 동일하게 적용된다.
+
 **2. `libra config show|validate|set`** — 유효 설정을 확인·검증하거나 안전하게 수정한다. `set`은 `project_roots`/`exclude`(쉼표 구분), `scan.max_depth`/`scan.stale_days`/`scan.follow_reparse_points`, `cleanup.quarantine_days`를 지원하고 저장 전에 전체 설정을 검증한다.
 ```bash
 libra config show
@@ -194,6 +196,8 @@ libra scan
 libra scan --root D:\Projects
 ```
 결과물: `Roots scanned / Projects found / Resources found / Files inspected` 요약과 발견된 warning 일부(`--verbose`로 전체), 마지막 줄에 다음 단계 안내(`Next: libra summary`). 데몬은 변경된 root에 `--root`를 적용해 증분 갱신한다.
+
+`--json`이 아닐 때는 스캔 도중 stderr에 실시간 진행률 바(`cmd/scan_progress.go`)가 표시된다. 파일 탐색 단계는 `Scanning... [====------] 42%`처럼 채워지는 바와 `files: N, directories: N` 카운트를 보여주는데, 같은 root 조합으로 완료된 직전 scan이 있으면 그 파일 수를 목표치로 삼아 퍼센트를 계산하고(determinate), 그런 기준이 없으면 좌우로 움직이는 bar로 "동작 중"만 표시한다(indeterminate). 탐색이 끝나면 `Scan 100%`로 고정되고, 이후 프로젝트 분석·리소스 탐지·의존성 해석·위험도 계산·저장 등 각 단계가 시작될 때마다 이전 단계는 `<단계명> 100%`로 확정되어 아래에 쌓이고 다음 단계 라벨이 새로 뜬다. ANSI 커서 이동으로 같은 자리에 다시 그리는 방식이라 Windows 10 1511+ 등 ANSI를 지원하는 터미널이 필요하며, 스캔이 끝나면 이 블록 전체가 지워지고 최종 요약이 출력된다.
 
 **4. 저장된 스캔 결과 조회** — 아래 5개는 모두 read-only이며 직전 `scan`이 채운 SQLite만 읽는다.
 

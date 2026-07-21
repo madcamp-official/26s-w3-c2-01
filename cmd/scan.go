@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -81,7 +82,7 @@ not exist yet, so --full has no effect (see --help).`,
 			sqlite.NewWorkspaceRepository(db),
 			resources,
 			sqlite.NewDependencyRepository(db),
-		).WithDetectors([]app.ProjectDetector{
+		).WithIssueRepository(sqlite.NewScanIssueRepository(db)).WithDetectors([]app.ProjectDetector{
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
@@ -109,8 +110,54 @@ not exist yet, so --full has no effect (see --help).`,
 				Path: issue.Path, Operation: issue.Operation, Message: issue.Message,
 			})
 		}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		if err := output.New(cmd.OutOrStdout(), jsonOutput).Print(view); err != nil {
+			return err
+		}
+		if !jsonOutput {
+			printScanIssues(cmd.OutOrStdout(), result.Issues, verbose)
+		}
+		return nil
 	},
+}
+
+// scanIssueSummaryLimit is how many of result.Issues print by default
+// (issue #37): the prior behavior showed only the count ("Warnings: N"),
+// leaving the user unable to tell whether "Safely reclaimable" reflects a
+// complete scan or one that silently skipped unreadable paths. This is
+// display-only -- result.Issues is also persisted by the orchestrator for
+// the separate `libra issues` command, while this helper controls only how
+// much detail the immediate text response shows.
+const scanIssueSummaryLimit = 3
+
+// printScanIssues prints up to scanIssueSummaryLimit issues, or every issue
+// when full is true (the --verbose flag). Prints nothing when there are no
+// issues, matching Warnings: 0 above.
+func printScanIssues(w io.Writer, issues []app.Issue, full bool) {
+	if len(issues) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+
+	shown := issues
+	if !full && len(issues) > scanIssueSummaryLimit {
+		shown = issues[:scanIssueSummaryLimit]
+	}
+	for _, issue := range shown {
+		fmt.Fprintf(w, "[%s] %s\n", issue.Code, formatIssueDetail(issue))
+	}
+	if hidden := len(issues) - len(shown); hidden > 0 {
+		fmt.Fprintf(w, "...and %d more (use --verbose to see all)\n", hidden)
+	}
+}
+
+// formatIssueDetail renders one app.Issue as "operation path: message", or
+// "operation: message" when Issue has no Path (some issue codes, like
+// IssueCancelled, are not tied to a single filesystem path).
+func formatIssueDetail(issue app.Issue) string {
+	if issue.Path == "" {
+		return fmt.Sprintf("%s: %s", issue.Operation, issue.Message)
+	}
+	return fmt.Sprintf("%s %s: %s", issue.Operation, issue.Path, issue.Message)
 }
 
 func init() {

@@ -51,5 +51,6 @@ var ErrNoScans = errors.New("no scan has been recorded yet")
 
 type ScanRepository interface {
 	Save(context.Context, ScanRecord) error
+	Find(context.Context, string) (ScanRecord, error)
 	FindLatest(context.Context) (ScanRecord, error)
 }

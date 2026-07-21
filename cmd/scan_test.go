@@ -3,7 +3,10 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
@@ -128,6 +131,84 @@ func TestScanCommandSupportsJSON(t *testing.T) {
 	}
 	if view.Warnings[0].Code != "MALFORMED_MANIFEST" || view.Warnings[0].Path == "" || view.Warnings[0].Message == "" {
 		t.Fatalf("warnings[0] = %#v, want a populated MALFORMED_MANIFEST issue", view.Warnings[0])
+	}
+}
+
+// TestScanCommandSummarizesIssuesByDefaultAndShowsAllWithVerbose covers
+// issue #37: `scan` used to print only "Warnings: N", never the underlying
+// path or cause, leaving the user unable to tell whether a result like
+// "Safely reclaimable" reflects a complete scan. This exercises the fix
+// entirely through the real scan -> in-memory result.Issues -> stdout path
+// (no new persistence).
+//
+// The fixture builds 4 malformed package.json directories itself, rather
+// than reusing testdata/node's single malformed-package-json fixture,
+// specifically to control the issue *count* past scanIssueSummaryLimit (3)
+// deterministically -- testdata/node's own warning count is platform
+// dependent (Windows SDK/.NET/Visual Studio detection only run on Windows;
+// see internal/adapter/windowsdk, dotnet, msbuild), so asserting "more than
+// 3 warnings" against it would pass on macOS and fail in Windows CI.
+func TestScanCommandSummarizesIssuesByDefaultAndShowsAllWithVerbose(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+	verbose = false
+	t.Cleanup(func() { verbose = false })
+
+	// Stub out system resource detection (Windows SDK/.NET/Visual Studio):
+	// on a non-Windows dev machine these each add their own UNSUPPORTED_
+	// PLATFORM issue, which would make the total issue count -- and so which
+	// issues fall inside/outside scanIssueSummaryLimit -- depend on the OS
+	// running the test. See cmd/resources_test.go for the same pattern.
+	previousResourceDetectors := resourceDetectors
+	resourceDetectors = func() []app.ResourceDetector { return nil }
+	t.Cleanup(func() { resourceDetectors = previousResourceDetectors })
+	root := t.TempDir()
+	for i := 1; i <= 4; i++ {
+		dir := filepath.Join(root, fmt.Sprintf("malformed-%d", i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte("{ not valid json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	summary := run("scan", "--root", root)
+	if !bytes.Contains(summary.Bytes(), []byte("Warnings:        4")) {
+		t.Fatalf("scan output missing warning count:\n%s", summary)
+	}
+	if got := strings.Count(summary.String(), "MALFORMED_MANIFEST"); got != scanIssueSummaryLimit {
+		t.Fatalf("default scan output shows %d issue lines, want the %d-issue summary limit:\n%s", got, scanIssueSummaryLimit, summary)
+	}
+	if !bytes.Contains(summary.Bytes(), []byte("...and 1 more (use --verbose to see all)")) {
+		t.Fatalf("default scan output missing the hidden-issue count:\n%s", summary)
+	}
+	// The path of the surfaced issue must actually be visible -- the whole
+	// point of #37 is that "Warnings: N" alone doesn't say where.
+	if !bytes.Contains(summary.Bytes(), []byte(filepath.Join(root, "malformed-1"))) {
+		t.Fatalf("default scan output missing the offending path:\n%s", summary)
+	}
+
+	verbose = true
+	full := run("scan", "--root", root)
+	if got := strings.Count(full.String(), "MALFORMED_MANIFEST"); got != 4 {
+		t.Fatalf("--verbose scan output shows %d issue lines, want all 4:\n%s", got, full)
+	}
+	if bytes.Contains(full.Bytes(), []byte("more (use --verbose")) {
+		t.Fatalf("--verbose scan output should not truncate:\n%s", full)
 	}
 }
 

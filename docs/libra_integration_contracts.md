@@ -186,14 +186,27 @@ type Requirement struct {
 
 Configuration·Platform을 분석하지 않았으면 반드시 `UnverifiedScope`를 남긴다. `Latest`, `10.0`, 미설치 SDK, Debug/Release 차이 및 조건별 dependency 표현은 B가 구현 전에 확정한다.
 
-### 19.2 Node workspace (`CONFIRMED`, MVP 범위 — 2026-07-18 재결정)
+### 19.2 Node workspace (`CONFIRMED`, Option C — 2026-07-21)
 
 ```text
-각 package.json  → BuildProject 후보
-workspace root   → Workspace
+workspace 경계 밖 package.json → 독립 BuildProject 후보
+workspace root              → Workspace + BuildProject
+명시적으로 선언된 member     → BuildProject + WorkspaceProject
+workspace 내부 미선언 package → 프로젝트 후보에서 제외
 root node_modules → workspace 소유 Resource
 하위 node_modules → 해당 package 소유 Resource
 ```
+
+Option C의 프로젝트 선택 규칙은 다음으로 고정한다.
+
+1. Node workspace 경계 밖에서 발견된 `package.json`은 독립 프로젝트로 유지한다. 넓은 상위 디렉터리를 scan root로 사용하는 기존 동작을 깨지 않기 위해 scan root의 직계 경로만으로 제한하지 않는다.
+2. `package.json#workspaces` 또는 `pnpm-workspace.yaml`을 선언한 디렉터리는 workspace root이자 직접 빌드 가능한 Node `BuildProject`다.
+3. workspace root 아래에서는 `ResolveMembers`가 해당 workspace 선언으로 실제 해석한 member만 `BuildProject`로 인정한다. 단순히 중첩된 `package.json`이 있다는 이유만으로 프로젝트가 되지 않는다.
+4. 미선언 하위 프로젝트의 project property, 소유 Resource, OWNS edge도 함께 제외한다. 필터링은 DB 영속화와 resource 측정 전에 수행한다.
+5. workspace는 `WorkspaceTypeNode`로 저장하고, npm/Yarn은 root `package.json`, pnpm은 `pnpm-workspace.yaml`을 안정 ID의 manifest로 사용한다. member 관계는 기존 `WorkspaceProject` 다대다 저장소를 재사용한다.
+6. 중첩 workspace는 기존 MVP 범위대로 재귀 확장하지 않는다. 바깥 workspace가 member로 명시한 root까지만 인정하며, 중첩 workspace 재귀 지원은 추후 별도 합의한다.
+
+이 규칙은 Option D의 `Origin` 필드를 도입하지 않는다. 화면 표시용 origin은 별도 기능이며, 프로젝트/DB/그래프 오염을 막는 Option C의 정확성 계약과 분리한다.
 
 > 갱신(2026-07-21, issue #36): `node_modules` 하위(또는 내부)의 `package.json`은
 > 설치된 third-party 의존성이지 개발자 프로젝트가 아니므로 BuildProject으로

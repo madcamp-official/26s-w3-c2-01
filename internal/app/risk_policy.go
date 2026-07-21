@@ -122,6 +122,16 @@ func officialCacheCleanupGuidance(version string) string {
 		return "Cargo has no built-in global cache purge; use `cargo clean` only for project target artifacts"
 	case "gradle":
 		return "Gradle manages cache cleanup automatically; configure retention in Gradle User Home init scripts"
+	case "xcode-deriveddata":
+		return "safe to delete entirely; Xcode regenerates it on the next build (`rm -rf ~/Library/Developer/Xcode/DerivedData`, or Xcode > Settings > Locations > the arrow next to Derived Data)"
+	case "cocoapods-cache":
+		return "use `pod cache clean --all` to clear CocoaPods' download cache"
+	case "swiftpm-cache":
+		return "use `rm -rf ~/Library/Caches/org.swift.swiftpm`, or `swift package purge-cache` on toolchains that support it"
+	case "homebrew-cache":
+		return "use `brew cleanup` to remove old downloads, or `brew cleanup -s` to also clear the cache directory"
+	case "simulator-cache":
+		return "safe to delete; Simulator regenerates it automatically. Manage installed runtimes and devices separately via Xcode > Settings > Platforms or `xcrun simctl`"
 	default:
 		return "use the owning package manager's official cleanup workflow"
 	}

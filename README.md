@@ -30,7 +30,7 @@
 | 2026-07-18 (Day 2~4) | 경계 검증이 있는 병렬 파일 스캐너, 경로 정규화, cross-team 통합 계약 문서화, Windows SDK·.NET SDK·Visual Studio(vswhere) 리소스 탐지와 시스템 경로 차단(safety), Node 프로젝트·산출물 탐지, 프로젝트/리소스/의존성 그래프(evidence 포함)를 SQLite에 저장, `scan`이 실제 분석 파이프라인(AnalysisOrchestrator)에 연결되어 `projects`/`summary`가 실제 데이터를 조회하도록 완성, golden test 도입 |
 | 2026-07-19 | `resources`/`explain`/`impact` 명령 구현 완료, README·명령어 상태표 동기화 |
 | 2026-07-20 (Day 4 리뷰 · Day 5) | Day 4 코드 리뷰(협업/계약/구조적 이슈 정리), cleanup evidence·위험도 정책(risk policy) 도입, cleanup plan snapshot 저장, `plan --target`/`clean`(dry-run) 구현, 같은 볼륨 quarantine·복구 transaction(`clean --execute`, `restore`) 완성 |
-| 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가 |
+| 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가, macOS 전용 개발 캐시 어댑터 5종(Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator, analysis-only) 추가, macOS 시스템 경로(`/System`/`/Library`/`/usr` 등) 보호 분류 추가, 실제 별도 APFS 볼륨과 권한 오류(chmod 000) 시나리오로 clean/restore 안전성 검증 |
 
 ---
 
@@ -59,9 +59,10 @@
 | Node `node_modules`, 빌드 산출물(`bin`/`obj`/`build`/`dist`/`.next`/`out`/`Debug`/`Release`, Python `__pycache__`/`.pytest_cache`/`.mypy_cache` 포함) | ✅ |
 | Docker 리소스 사용량 | ✅ `docker system df --format '{{json .}}'` 결과를 읽어 Images/Containers/Build Cache/Volumes 집계 (read-only) |
 | Android SDK, Gradle 캐시, Cargo 레지스트리/git 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
+| Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행. Simulator의 `Devices/`(기기별 설치 앱·데이터)와 runtime 이미지는 순수 캐시가 아니라 별도 위험도 판단이 필요해 이번 범위에서 제외 |
 | Conda 환경 | ✅ 전역 named 환경은 정보 제공용(REQUIRES 관계), 프로젝트 내부 prefix 환경은 OWNS 관계로 구분 |
 | Docker Volume | ⚠️ 탐지는 되지만 사용자 데이터일 수 있어 항상 `BLOCKED`, 자동/수동 삭제 명령 모두 미제공 |
-| Homebrew/apt 등 macOS/Linux 패키지 매니저, 커널 드라이버/파일시스템 minifilter | ❌ 미지원 |
+| apt 등 macOS 외 패키지 매니저, 커널 드라이버/파일시스템 minifilter | ❌ 미지원 |
 | 완전한 block-level 중복 파일(dedup) 탐지 | ❌ 미지원 |
 
 ### 의존성 분석
@@ -74,7 +75,8 @@
 | 조건 | 결과 |
 |---|---|
 | Android SDK | `BLOCKED` — `sdkmanager --uninstall` 또는 Android Studio SDK Manager 안내 |
-| 전역 패키지 캐시(npm/pnpm/Maven/Cargo/Gradle) | `REVIEW` — 공식 정리 명령 안내 |
+| 전역 패키지 캐시(npm/pnpm/Maven/Cargo/Gradle/Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator) | `REVIEW` — 공식 정리 명령 안내 |
+| macOS 시스템 경로(`/System`/`/Library`/`/usr`/`/bin`/`/sbin`/`/Applications`) | `BLOCKED` — Windows의 `WINDIR`/`ProgramFiles` 보호와 동일한 역할, `~/Library`는 제외(그 아래에서 위 macOS 캐시들을 탐지하므로) |
 | Docker Volume | `BLOCKED` — 사용자 데이터 가능성 |
 | Docker 캐시(이미지/컨테이너/빌드 캐시) | `REVIEW` — Docker 공식 명령으로 정리 필요 |
 | 시스템 관리 경로 또는 `system_managed` 리소스 | `BLOCKED` |
@@ -131,7 +133,7 @@
 
 ### 그 외 명시적으로 다루지 않는 범위
 
-macOS/Linux 지원, 커널 드라이버·파일시스템 minifilter 구현, 모든 파일 읽기/쓰기 이벤트 추적, 시스템 구성요소(Windows SDK/Visual Studio/.NET Runtime 등) 강제 삭제, 사용자 문서·데이터베이스·Docker Volume의 자동 삭제, GUI 애플리케이션.
+macOS 프로젝트 타입(Xcode/SwiftPM) 탐지·의존성 그래프·clean/execute 확장(읽기 전용 캐시 탐지는 지원, 위 리소스 탐지 표 참고) 및 Linux 전체 지원, 커널 드라이버·파일시스템 minifilter 구현, 모든 파일 읽기/쓰기 이벤트 추적, 시스템 구성요소(Windows SDK/Visual Studio/.NET Runtime 등) 강제 삭제, 사용자 문서·데이터베이스·Docker Volume의 자동 삭제, GUI 애플리케이션.
 
 ---
 

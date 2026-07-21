@@ -132,7 +132,7 @@ func TestResourceServiceReclassifyRequiredLeavesAlreadyBlockedResourceAlone(t *t
 	if _, err := service.ReclassifyRequired(context.Background(), "resource-1"); err != nil {
 		t.Fatalf("ReclassifyRequired() error = %v", err)
 	}
-	if repository.saved != (domain.Resource{}) {
+	if repository.saved.ID != "" {
 		t.Fatalf("ReclassifyRequired() re-persisted an already-BLOCKED resource: %#v", repository.saved)
 	}
 }

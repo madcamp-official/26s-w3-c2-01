@@ -50,6 +50,10 @@ type Resource struct {
 	// Confidence is analysis-coverage confidence (0-100), not a real
 	// probability. See EvidenceKind weighting in evidence.go.
 	Confidence int
+	// ConfidenceProfile is the decision-specific breakdown. Confidence is
+	// retained as the minimum-axis summary for CLI/schema compatibility.
+	ConfidenceProfile ConfidenceProfile
+	RiskReasons       []RiskReason
 	// RegenerationCommand is the command a developer would run to recreate
 	// this resource (e.g. "npm ci", "dotnet build App.csproj"), set by the
 	// detecting adapter at the same time it determines Regenerable -- it

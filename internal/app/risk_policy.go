@@ -13,6 +13,8 @@ type ResourceContext struct {
 	// AnalysisOrchestrator.Run/ResourceService.ReclassifyRequired.
 	RequiredByProject bool
 	Cleanup           CleanupEvidence
+	Confidence        domain.ConfidenceProfile
+	CriticalUnknowns  []domain.RiskReason
 }
 
 // CleanupEvidence records the independent safety facts required before a
@@ -30,8 +32,21 @@ func (e CleanupEvidence) complete() bool {
 }
 
 type RiskAssessment struct {
-	Level   domain.RiskLevel
-	Reasons []string
+	Level      domain.RiskLevel
+	Confidence domain.ConfidenceProfile
+	Blockers   []domain.RiskReason
+	Warnings   []domain.RiskReason
+	Safeguards []domain.RiskReason
+	Unknowns   []domain.RiskReason
+}
+
+func (a RiskAssessment) Reasons() []domain.RiskReason {
+	reasons := make([]domain.RiskReason, 0, len(a.Blockers)+len(a.Warnings)+len(a.Safeguards)+len(a.Unknowns))
+	reasons = append(reasons, a.Blockers...)
+	reasons = append(reasons, a.Warnings...)
+	reasons = append(reasons, a.Safeguards...)
+	reasons = append(reasons, a.Unknowns...)
+	return reasons
 }
 
 type RiskPolicy interface {
@@ -47,24 +62,27 @@ type DefaultRiskPolicy struct{}
 func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 	if context.ProtectedPath || context.Resource.SystemManaged {
 		return RiskAssessment{
-			Level:   domain.RiskBlocked,
-			Reasons: []string{"resource is inside an operating-system managed path"},
+			Level: domain.RiskBlocked, Confidence: context.Confidence,
+			Blockers: []domain.RiskReason{{Code: "SYSTEM_MANAGED", Severity: domain.RiskReasonBlocker, Message: "resource is inside an operating-system managed path"}},
 		}
 	}
 	if context.RequiredByProject {
 		return RiskAssessment{
-			Level:   domain.RiskBlocked,
-			Reasons: []string{"a scanned project currently depends on this resource"},
+			Level: domain.RiskBlocked, Confidence: context.Confidence,
+			Blockers: []domain.RiskReason{{Code: "REQUIRED_BY_PROJECT", Severity: domain.RiskReasonBlocker, Message: "a scanned project currently depends on this resource"}},
 		}
+	}
+	if len(context.CriticalUnknowns) > 0 {
+		return RiskAssessment{Level: domain.RiskReview, Confidence: context.Confidence, Unknowns: append([]domain.RiskReason(nil), context.CriticalUnknowns...)}
 	}
 	if context.Resource.Regenerable && context.Cleanup.complete() {
 		return RiskAssessment{
-			Level:   domain.RiskSafe,
-			Reasons: []string{"project artifact is regenerable and all cleanup evidence is verified"},
+			Level: domain.RiskSafe, Confidence: context.Confidence,
+			Safeguards: []domain.RiskReason{{Code: "CLEANUP_EVIDENCE_COMPLETE", Severity: domain.RiskReasonSafeguard, Message: "project artifact is regenerable and all cleanup evidence is verified"}},
 		}
 	}
 	return RiskAssessment{
-		Level:   domain.RiskReview,
-		Reasons: []string{"cleanup safety has not been fully verified"},
+		Level: domain.RiskReview, Confidence: context.Confidence,
+		Warnings: []domain.RiskReason{{Code: "SAFE_CONDITIONS_NOT_PROVEN", Severity: domain.RiskReasonWarning, Message: "cleanup safety has not been fully verified"}},
 	}
 }

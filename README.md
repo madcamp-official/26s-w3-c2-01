@@ -31,7 +31,7 @@ go build -o libra .
 | `libra scan` | 구현됨 — 프로젝트·리소스를 탐지해 SQLite에 저장합니다 (Windows SDK 등 시스템 리소스 탐지는 Windows 환경에서만 동작하고, 다른 플랫폼에서는 명시적인 미지원 경고로 표시됩니다) |
 | `libra summary` | 구현됨 — 실제 스캔 결과로 저장공간 현황을 요약합니다 (`--json` 지원) |
 | `libra projects` | 구현됨 — 발견된 프로젝트 목록과 활동 상태를 보여줍니다 |
-| `libra resources` | 구현됨 — 발견된 SDK·도구·빌드 산출물 목록을 보여줍니다 |
+| `libra resources` | 구현됨 — 발견된 SDK·도구·빌드 산출물과 다차원 confidence·구조화된 risk reason을 보여줍니다 |
 | `libra issues` | 구현됨 — 최신 또는 지정한 스캔의 경고·오류를 조회합니다 (`--scan`, `--code`, `--severity`, `--json` 지원) |
 | `libra explain <target>` | 구현됨 — 프로젝트 또는 리소스 하나를 설명합니다 |
 | `libra impact <target>` | 구현됨 — 리소스를 제거했을 때 영향받는 프로젝트를 보여줍니다 |

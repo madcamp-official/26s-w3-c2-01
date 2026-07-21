@@ -35,8 +35,15 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 9 {
-		t.Fatalf("migration count = %d, want 9", migrationCount)
+	if migrationCount != 10 {
+		t.Fatalf("migration count = %d, want 10", migrationCount)
+	}
+
+	for _, column := range []string{"confidence_classification", "confidence_ownership", "confidence_dependency", "confidence_cleanup_safety", "confidence_scan_coverage", "risk_reasons"} {
+		var found string
+		if err := db.QueryRow("SELECT name FROM pragma_table_info('resources') WHERE name = ?", column).Scan(&found); err != nil {
+			t.Fatalf("resources.%s was not created: %v", column, err)
+		}
 	}
 
 	var sizeKnownColumn string

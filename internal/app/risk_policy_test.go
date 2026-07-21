@@ -10,7 +10,7 @@ func TestDefaultRiskPolicyBlocksSystemManagedResource(t *testing.T) {
 	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{
 		Resource: domain.Resource{SystemManaged: true},
 	})
-	if assessment.Level != domain.RiskBlocked || len(assessment.Reasons) == 0 {
+	if assessment.Level != domain.RiskBlocked || len(assessment.Reasons()) == 0 {
 		t.Fatalf("Classify() = %#v, want BLOCKED with a reason", assessment)
 	}
 }
@@ -32,7 +32,7 @@ func TestDefaultRiskPolicyMarksFullyVerifiedRegenerableArtifactSafe(t *testing.T
 			GitTrackedOriginalsAbsent: true,
 		},
 	})
-	if assessment.Level != domain.RiskSafe || len(assessment.Reasons) == 0 {
+	if assessment.Level != domain.RiskSafe || len(assessment.Reasons()) == 0 {
 		t.Fatalf("Classify() = %#v, want SAFE with a reason", assessment)
 	}
 }
@@ -78,7 +78,7 @@ func TestDefaultRiskPolicyBlocksResourceRequiredByProjectDespiteCleanupEvidence(
 			GitTrackedOriginalsAbsent: true,
 		},
 	})
-	if assessment.Level != domain.RiskBlocked || len(assessment.Reasons) == 0 {
+	if assessment.Level != domain.RiskBlocked || len(assessment.Reasons()) == 0 {
 		t.Fatalf("Classify() = %#v, want BLOCKED with a reason (a project depends on this resource)", assessment)
 	}
 }
@@ -96,5 +96,19 @@ func TestDefaultRiskPolicyBlocksProtectedResourceDespiteCleanupEvidence(t *testi
 	})
 	if assessment.Level != domain.RiskBlocked {
 		t.Fatalf("Classify() level = %q, want BLOCKED", assessment.Level)
+	}
+}
+
+func TestDefaultRiskPolicyCriticalUnknownForcesReview(t *testing.T) {
+	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{
+		Resource: domain.Resource{Regenerable: true},
+		Cleanup:  CleanupEvidence{ProjectOwned: true, KnownOutputPath: true, ReparsePointFree: true, GitTrackedOriginalsAbsent: true},
+		CriticalUnknowns: []domain.RiskReason{{
+			Code: "SCAN_COVERAGE_INCOMPLETE", Severity: domain.RiskReasonUnknown,
+			Message: "one configured root could not be scanned",
+		}},
+	})
+	if assessment.Level != domain.RiskReview || len(assessment.Unknowns) != 1 {
+		t.Fatalf("Classify() = %#v, want REVIEW with structured unknown", assessment)
 	}
 }

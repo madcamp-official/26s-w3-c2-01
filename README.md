@@ -386,7 +386,14 @@ project_roots:
   - D:\Projects
 
 exclude:
-  - .git\objects
+  - node_modules
+  - .next
+  - dist
+  - build
+  - bin
+  - obj
+  - .git
+  - .libra-quarantine
   - AppData\Local\Temp
   - Windows
   - System Volume Information
@@ -399,6 +406,10 @@ cleanup:
   default_mode: dry-run
   quarantine_days: 7
 ```
+
+`libra init`은 생성물·vendored 디렉터리가 project로 오탐되거나 불필요하게
+순회되지 않도록 위 기본 exclude를 설정합니다. `exclude`를 직접 작성하면
+기본값을 대체하므로 유지할 기본 항목도 함께 적어야 합니다.
 
 ### 완료 조건
 

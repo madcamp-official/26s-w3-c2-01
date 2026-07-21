@@ -202,8 +202,10 @@ root node_modules → workspace 소유 Resource
 > → BuildProject 후보"는 vendored 경로를 제외한 뒤에 적용된다. 소유 프로젝트의
 > `node_modules`는 여전히 `DetectArtifacts`로 Resource로 잡히고
 > `scanner.MeasureResource`로 크기를 재는데, 둘 다 스캔 walk가 node_modules 안으로
-> 내려가는 것에 의존하지 않는다. 스캔 walk 자체의 가지치기와 기본 exclude(성능·
-> 시스템 일반화)는 Option B(별도 이슈, scanner/config = Windows A)로 남긴다.
+> 내려가는 것에 의존하지 않는다. issue #36의 Windows A 범위도 구현해 기본
+> exclude가 `node_modules`, `.next`, `dist`, `build`, `bin`, `obj`, `.git`,
+> `.libra-quarantine`을 어느 깊이에서든 path segment 단위로 가지치기한다.
+> 사용자가 config에 `exclude`를 명시하면 해당 목록으로 기본값을 대체한다.
 
 Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapter/node`
 (Mac C 소유 영역)에서 MVP 범위로 확정하고 구현했다. 처음에는 workspace

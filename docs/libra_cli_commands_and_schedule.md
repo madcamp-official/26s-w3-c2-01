@@ -108,6 +108,14 @@ project_roots:
   - D:\Projects
 
 exclude:
+  - node_modules
+  - .next
+  - dist
+  - build
+  - bin
+  - obj
+  - .git
+  - .libra-quarantine
   - C:\Windows
   - C:\Program Files
   - C:\Program Files (x86)
@@ -127,6 +135,11 @@ cleanup:
 ### 우선순위
 
 - **P0 필수**
+
+> 2026-07-21 issue #36: config 기본 exclude와 중첩 path-segment matcher를
+> 구현했다. project detector가 root에서 산출물을 직접 등록하므로 walk가
+> `node_modules`/`dist` 내부로 내려가지 않아도 소유 Resource와 크기 측정은
+> 유지된다.
 
 ---
 

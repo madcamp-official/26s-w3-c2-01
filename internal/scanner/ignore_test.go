@@ -33,3 +33,23 @@ func TestExcludeMatcherSupportsRootRelativeAndAbsolutePaths(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludeMatcherAppliesSingleDirectoryNamesAtAnyDepth(t *testing.T) {
+	root := t.TempDir()
+	matcher, err := newExcludeMatcher([]string{root}, []string{"node_modules", "dist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "node_modules"),
+		filepath.Join(root, "frontend", "node_modules", "react"),
+		filepath.Join(root, "packages", "app", "dist", "bundle.js"),
+	} {
+		if !matcher.Matches(path) {
+			t.Errorf("Matches(%q) = false, want true", path)
+		}
+	}
+	if matcher.Matches(filepath.Join(root, "frontend", "node_modules-cache")) {
+		t.Fatal("segment prefix was excluded")
+	}
+}

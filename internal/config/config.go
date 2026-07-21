@@ -12,6 +12,17 @@ import (
 
 const CurrentVersion = 1
 
+var defaultExcludes = []string{
+	"node_modules",
+	".next",
+	"dist",
+	"build",
+	"bin",
+	"obj",
+	".git",
+	".libra-quarantine",
+}
+
 type Config struct {
 	Version      int           `yaml:"version"`
 	ProjectRoots []string      `yaml:"project_roots"`
@@ -35,6 +46,7 @@ type CleanupConfig struct {
 func Default() Config {
 	return Config{
 		Version: CurrentVersion,
+		Exclude: append([]string(nil), defaultExcludes...),
 		Scan: ScanConfig{
 			MaxDepth:  20,
 			StaleDays: 90,

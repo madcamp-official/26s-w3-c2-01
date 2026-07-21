@@ -32,6 +32,34 @@ exclude:
 	}
 }
 
+func TestDefaultExcludesGeneratedAndVendoredDirectories(t *testing.T) {
+	want := []string{"node_modules", ".next", "dist", "build", "bin", "obj", ".git", ".libra-quarantine"}
+	got := Default().Exclude
+	if len(got) != len(want) {
+		t.Fatalf("Default().Exclude = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Default().Exclude[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	got[0] = "mutated"
+	if Default().Exclude[0] != "node_modules" {
+		t.Fatal("Default().Exclude shares mutable backing storage")
+	}
+}
+
+func TestLoadWithoutExcludeKeepsDefaultExcludes(t *testing.T) {
+	path := writeConfig(t, "version: 1\n")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Exclude) != len(defaultExcludes) || cfg.Exclude[0] != "node_modules" {
+		t.Fatalf("Exclude = %#v, want defaults", cfg.Exclude)
+	}
+}
+
 func TestLoadRejectsUnknownFields(t *testing.T) {
 	path := writeConfig(t, "version: 1\nunknown: true\n")
 

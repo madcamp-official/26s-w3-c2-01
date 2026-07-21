@@ -995,29 +995,13 @@ Libra
 
 ## 8.2 신뢰도 계산
 
-초기 버전은 다음 가중치를 사용한다.
+신뢰도는 `Classification`, `Ownership`, `Dependency`, `CleanupSafety`, `ScanCoverage`,
+`Freshness` 축으로 나누고 가장 약한 축을 요약값으로 사용한다. 숫자는 통계적 확률이 아니라
+**분석 범위 충족도**다.
 
-```text
-RESOLVED evidence       +35
-DECLARED evidence       +25
-OBSERVED evidence       +20
-Known adapter           +10
-Recent successful scan  +10
-```
-
-감점:
-
-```text
-Unscanned drive         -15
-Unresolved variable     -15
-Permission denied       -20
-Missing build tool      -10
-Unknown project type    -20
-```
-
-최종 값은 0~100으로 제한한다.
-
-신뢰도 숫자는 통계적 확률이 아니라 **분석 범위 충족도**라는 설명을 함께 표시한다.
+`Freshness`는 마지막 관측 후 7일까지 100, 30일까지 80, 90일까지 50, 그 이후 20이다.
+30일을 넘긴 `SAFE` 결과는 자동 정리 후보에서 제외하고 `EVIDENCE_STALE` 사유가 있는
+`REVIEW`로 표시한다. 새 scan을 실행하면 최신성 근거가 갱신된다.
 
 ---
 

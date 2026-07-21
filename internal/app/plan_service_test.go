@@ -161,6 +161,22 @@ func TestPlanServiceDoesNotAutoSelectSafeResourceBelowCoverageGate(t *testing.T)
 	}
 }
 
+func TestPlanServiceRoutesStaleSafeResourceToReview(t *testing.T) {
+	resource := safeResource("stale", 90, 100)
+	resource.LastObservedAt = time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	resources := &planResourceRepositoryStub{resources: []domain.Resource{resource}}
+	service := NewPlanService(resources, &planProjectRepositoryStub{}, &planScanRepositoryStub{record: newTestScanRecord("scan-latest")}, planOwnershipStub(resources.resources))
+	service.now = func() time.Time { return time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC) }
+
+	result, err := service.Build(context.Background(), PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Plan.Items) != 0 || len(result.Review) != 1 || result.Review[0].Risk != domain.RiskReview {
+		t.Fatalf("result = %#v, want stale SAFE resource routed to REVIEW", result)
+	}
+}
+
 func newTestScanRecord(id string) ScanRecord {
 	return ScanRecord{ID: id, StartedAt: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC), Roots: []string{"/projects"}, Status: ScanStatusCompleted}
 }
@@ -174,7 +190,7 @@ func safeResource(id string, confidence int, reclaimable int64) domain.Resource 
 		Risk:           domain.RiskSafe, Confidence: confidence,
 		ConfidenceProfile: domain.ConfidenceProfile{
 			Classification: confidence, Ownership: 100, Dependency: 80,
-			CleanupSafety: 100, ScanCoverage: 80,
+			CleanupSafety: 100, ScanCoverage: 80, Freshness: 100,
 		},
 	}
 }

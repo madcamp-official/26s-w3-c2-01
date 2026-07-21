@@ -91,12 +91,14 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 
 	var safe, review, blocked []domain.Resource
 	for _, r := range all {
+		r = ApplyFreshness(r, s.now().UTC())
 		profile := effectiveConfidenceProfile(r)
 		switch r.Risk {
 		case domain.RiskSafe:
 			if profile.Dependency >= minimumAutoDependencyConfidence &&
 				profile.CleanupSafety >= minimumAutoCleanupConfidence &&
-				profile.ScanCoverage >= minimumAutoScanCoverage {
+				profile.ScanCoverage >= minimumAutoScanCoverage &&
+				profile.Freshness >= minimumAutoFreshness {
 				safe = append(safe, r)
 			} else {
 				review = append(review, r)
@@ -168,7 +170,7 @@ func effectiveConfidenceProfile(resource domain.Resource) domain.ConfidenceProfi
 		return domain.ConfidenceProfile{
 			Classification: resource.Confidence, Ownership: resource.Confidence,
 			Dependency: resource.Confidence, CleanupSafety: resource.Confidence,
-			ScanCoverage: resource.Confidence,
+			ScanCoverage: resource.Confidence, Freshness: resource.Confidence,
 		}
 	}
 	return profile

@@ -321,7 +321,7 @@ libra resources --risk review
 - 연결 프로젝트 수
 - 재생성 가능 여부
 - 위험도
-- 분석 신뢰도 요약과 `Classification`/`Ownership`/`Dependency`/`CleanupSafety`/`ScanCoverage` 프로필
+- 분석 신뢰도 요약과 `Classification`/`Ownership`/`Dependency`/`CleanupSafety`/`ScanCoverage`/`Freshness` 프로필
 - 구조화된 위험 사유(`BLOCKER`, `WARNING`, `SAFEGUARD`, `UNKNOWN`; JSON 출력)
 
 ### 우선순위
@@ -677,6 +677,10 @@ libra daemon stop
 ## 4.3 신뢰도
 
 신뢰도는 실제 확률이 아니라 분석 범위 충족도를 나타낸다.
+
+구현된 모델은 각 축의 최솟값을 요약으로 사용한다. `Freshness`는 마지막 관측 후 7일/30일/90일
+구간에 따라 100/80/50/20으로 낮아지며, 30일을 넘긴 `SAFE`는 자동 plan에 포함하지 않고
+`EVIDENCE_STALE` 사유와 함께 `REVIEW`로 표시한다.
 
 예시 가중치:
 

@@ -88,8 +88,13 @@ INFERRED(근거 없음) 사이 — 버전이 전부 고정된 `requirements.txt`
 
 Confidence는 분석 coverage이지 실제 확률을 뜻하지 않는다. 단일 점수는 호환용 요약이며,
 새 resource 관측은 `Classification`, `Ownership`, `Dependency`, `CleanupSafety`,
-`ScanCoverage` 다섯 축의 `ConfidenceProfile`을 저장하고 최솟값을 요약값으로 사용한다
+`ScanCoverage`, `Freshness` 여섯 축의 `ConfidenceProfile`을 저장하고 최솟값을 요약값으로 사용한다
 (`IMPLEMENTED`). 기존 DB row는 migration 시 기존 confidence를 각 축에 복사한다.
+
+`Freshness`는 확률이 아니라 마지막 관측의 나이 등급이다. 7일 이하는 100, 30일 이하는
+80, 90일 이하는 50, 그 이후는 20이며 관측 시각이 없으면 0이다. 30일을 초과한 `SAFE`는
+현재 조회와 plan 생성 시 `REVIEW`로 낮추고 `EVIDENCE_STALE` unknown을 추가한다. 새 scan은
+관측 시각과 freshness를 다시 100으로 갱신한다 (`IMPLEMENTED`).
 
 `RiskAssessment`는 blocker/warning/safeguard/unknown으로 분류된 `RiskReason`을 반환하며
 critical unknown이 있으면 cleanup evidence가 완전해도 `REVIEW`다 (`IMPLEMENTED`). 수집된

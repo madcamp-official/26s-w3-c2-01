@@ -8,10 +8,11 @@ type ConfidenceProfile struct {
 	Dependency     int `json:"dependency"`
 	CleanupSafety  int `json:"cleanup_safety"`
 	ScanCoverage   int `json:"scan_coverage"`
+	Freshness      int `json:"freshness"`
 }
 
 func (p ConfidenceProfile) Overall() int {
-	values := []int{p.Classification, p.Ownership, p.Dependency, p.CleanupSafety, p.ScanCoverage}
+	values := []int{p.Classification, p.Ownership, p.Dependency, p.CleanupSafety, p.ScanCoverage, p.Freshness}
 	overall := values[0]
 	for _, value := range values[1:] {
 		if value < overall {
@@ -22,7 +23,7 @@ func (p ConfidenceProfile) Overall() int {
 }
 
 func (p ConfidenceProfile) Valid() bool {
-	for _, value := range []int{p.Classification, p.Ownership, p.Dependency, p.CleanupSafety, p.ScanCoverage} {
+	for _, value := range []int{p.Classification, p.Ownership, p.Dependency, p.CleanupSafety, p.ScanCoverage, p.Freshness} {
 		if value < 0 || value > 100 {
 			return false
 		}

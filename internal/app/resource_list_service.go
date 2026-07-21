@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
@@ -22,10 +23,11 @@ type ResourceListing struct {
 type ResourceListService struct {
 	resources    ResourceRepository
 	dependencies DependencyRepository
+	now          func() time.Time
 }
 
 func NewResourceListService(resources ResourceRepository, dependencies DependencyRepository) *ResourceListService {
-	return &ResourceListService{resources: resources, dependencies: dependencies}
+	return &ResourceListService{resources: resources, dependencies: dependencies, now: time.Now}
 }
 
 // List returns every resource filter accepts (all of them if filter is
@@ -41,6 +43,7 @@ func (s *ResourceListService) List(ctx context.Context, filter func(domain.Resou
 
 	listings := make([]ResourceListing, 0, len(resources))
 	for _, resource := range resources {
+		resource = ApplyFreshness(resource, s.now().UTC())
 		if filter != nil && !filter(resource) {
 			continue
 		}

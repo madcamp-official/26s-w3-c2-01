@@ -44,8 +44,8 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			logical_size, size_known, reclaimable_size, regenerable, system_managed,
 			last_modified_at, last_observed_at, risk, confidence, regeneration_command,
 			confidence_classification, confidence_ownership, confidence_dependency,
-			confidence_cleanup_safety, confidence_scan_coverage, risk_reasons
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			confidence_cleanup_safety, confidence_scan_coverage, confidence_freshness, risk_reasons
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -67,6 +67,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			confidence_dependency = excluded.confidence_dependency,
 			confidence_cleanup_safety = excluded.confidence_cleanup_safety,
 			confidence_scan_coverage = excluded.confidence_scan_coverage,
+			confidence_freshness = excluded.confidence_freshness,
 			risk_reasons = excluded.risk_reasons
 	`,
 		resource.ID, resource.Type, resource.Name, nullableString(resource.Version),
@@ -76,7 +77,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand),
 		resource.ConfidenceProfile.Classification, resource.ConfidenceProfile.Ownership,
 		resource.ConfidenceProfile.Dependency, resource.ConfidenceProfile.CleanupSafety,
-		resource.ConfidenceProfile.ScanCoverage, string(riskReasons),
+		resource.ConfidenceProfile.ScanCoverage, resource.ConfidenceProfile.Freshness, string(riskReasons),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert resource %q: %w", resource.ID, err)
@@ -144,7 +145,7 @@ const resourceSelect = `
 		logical_size, size_known, reclaimable_size, regenerable, system_managed,
 		last_modified_at, last_observed_at, risk, confidence, regeneration_command,
 		confidence_classification, confidence_ownership, confidence_dependency,
-		confidence_cleanup_safety, confidence_scan_coverage, risk_reasons
+		confidence_cleanup_safety, confidence_scan_coverage, confidence_freshness, risk_reasons
 	FROM resources`
 
 type rowScanner interface {
@@ -169,7 +170,7 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 		&resource.Risk, &resource.Confidence, &regenerationCommand,
 		&resource.ConfidenceProfile.Classification, &resource.ConfidenceProfile.Ownership,
 		&resource.ConfidenceProfile.Dependency, &resource.ConfidenceProfile.CleanupSafety,
-		&resource.ConfidenceProfile.ScanCoverage, &riskReasons,
+		&resource.ConfidenceProfile.ScanCoverage, &resource.ConfidenceProfile.Freshness, &riskReasons,
 	)
 	if err != nil {
 		return domain.Resource{}, err

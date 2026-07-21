@@ -177,6 +177,7 @@ func confidenceProfile(classification int, cleanup CleanupEvidence) domain.Confi
 		Classification: classification,
 		Dependency:     minimumAutoDependencyConfidence,
 		ScanCoverage:   minimumAutoScanCoverage,
+		Freshness:      100,
 	}
 	if cleanup.ProjectOwned {
 		profile.Ownership = 100

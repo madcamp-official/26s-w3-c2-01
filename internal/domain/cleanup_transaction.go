@@ -13,6 +13,7 @@ const (
 	TransactionRestored             CleanupTransactionStatus = "RESTORED"
 	TransactionPartiallyRestored    CleanupTransactionStatus = "PARTIALLY_RESTORED"
 	TransactionPurged               CleanupTransactionStatus = "PURGED"
+	TransactionPartiallyPurged      CleanupTransactionStatus = "PARTIALLY_PURGED"
 	TransactionFailed               CleanupTransactionStatus = "FAILED"
 
 	TransactionItemPending  CleanupTransactionItemStatus = "PENDING"
@@ -20,6 +21,7 @@ const (
 	TransactionItemSkipped  CleanupTransactionItemStatus = "SKIPPED"
 	TransactionItemFailed   CleanupTransactionItemStatus = "FAILED"
 	TransactionItemRestored CleanupTransactionItemStatus = "RESTORED"
+	TransactionItemPurged   CleanupTransactionItemStatus = "PURGED"
 )
 
 type CleanupTransaction struct {

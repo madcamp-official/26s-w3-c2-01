@@ -53,6 +53,7 @@ libra
 ├─ clean
 ├─ restore
 ├─ transactions
+├─ purge
 ├─ export
 └─ daemon
    ├─ start
@@ -572,7 +573,21 @@ libra transactions --status quarantined
 
 ---
 
-## 3.12 `libra export`
+## 3.12 `libra purge`
+
+보존기간을 지난 quarantine transaction을 검증하고 영구 삭제한다. 기본 동작은 dry-run이다.
+
+```bash
+libra purge --transaction <id>
+libra purge --transaction <id> --execute
+libra --yes purge --transaction <id> --execute
+```
+
+`--execute`에서도 manifest identity, item 경로, link/reparse point를 다시 검증한다. daemon은 purge를 호출하지 않는다.
+
+---
+
+## 3.13 `libra export`
 
 분석 결과를 외부 파일로 내보낸다.
 
@@ -601,7 +616,9 @@ libra export --format json --output report.json
 
 ---
 
-## 3.13 `libra daemon`
+구현 상태: **IMPLEMENTED**. 최신 scan의 project, resource, issue와 cleanup transaction을 내보낸다.
+
+## 3.14 `libra daemon`
 
 설정된 프로젝트 루트의 변경 사항을 감시하고 인덱스를 증분 갱신한다.
 
@@ -610,6 +627,8 @@ libra daemon start
 libra daemon status
 libra daemon stop
 ```
+
+구현 상태: **IMPLEMENTED (polling MVP)**. 설정 root의 snapshot이 바뀌면 기존 `scan`을 실행한다. state와 event log는 scan 대상에서 제외하며 자동 clean/purge는 수행하지 않는다. OS-native watcher와 event 병합은 후속 범위다.
 
 ### 감시할 이벤트
 

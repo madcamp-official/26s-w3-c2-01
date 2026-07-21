@@ -97,6 +97,10 @@ critical unknown이 있으면 cleanup evidence가 완전해도 `REVIEW`다 (`IMP
 `CONFIRMED`이며 후속 구현 범위다. 복수 Evidence 결합 공식과 운영 결과 기반 점수 보정은
 P2로 남기며 이번 변경 범위에 포함하지 않는다.
 
+`resources --json`, resource `explain`, `plan`은 저장된 `RiskReason`을 그대로 노출한다.
+JSON은 code/severity/message 구조를 보존하고 텍스트 출력은 message를 `Reason:`으로 요약한다
+(`IMPLEMENTED`, issue #40). 별도 문자열 reason column은 두지 않는다.
+
 ## 5. Scanner와 분석 pipeline (`IMPLEMENTED`)
 
 ```text

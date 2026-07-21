@@ -7,7 +7,12 @@ SAFE
 
 REVIEW
 [1] <size> <NODE_FIXTURE>/basic/dist
+    Reason: cleanup safety has not been fully verified
 [2] <size> <NODE_FIXTURE>/basic/node_modules
+    Reason: cleanup safety has not been fully verified
 [3] <size> <NODE_FIXTURE>/missing-lockfile/node_modules
+    Reason: cleanup safety has not been fully verified
 [4] <size> <NODE_FIXTURE>/workspace-npm/node_modules
+    Reason: cleanup safety has not been fully verified
 [5] <size> <NODE_FIXTURE>/workspace-npm/packages/app-b/node_modules
+    Reason: cleanup safety has not been fully verified

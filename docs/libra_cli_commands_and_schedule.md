@@ -351,6 +351,7 @@ libra explain project:"D:\Projects\GameClient"
 - 삭제 예상 영향
 - 복구 방법
 - 위험도
+- 구조화된 위험 사유(code/severity/message; 텍스트는 message 요약)
 - 분석 신뢰도
 - 분석하지 못한 범위
 

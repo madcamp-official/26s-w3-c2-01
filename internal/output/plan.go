@@ -24,18 +24,23 @@ type PlanView struct {
 	Blocked  []PlanBlockedLine        `json:"blocked,omitempty"`
 }
 
-// PlanCandidateLine is one SAFE or REVIEW row.
+// PlanCandidateLine is one SAFE or REVIEW row. RiskReasons explain why RiskPolicy
+// classified it at this risk level (issue #40) --
+// without it, `plan` was just a list of paths with no indication of why a
+// SAFE candidate was trusted or a REVIEW one wasn't.
 type PlanCandidateLine struct {
-	Size int64  `json:"size_bytes"`
-	Path string `json:"path"`
+	Size        int64               `json:"size_bytes"`
+	Path        string              `json:"path"`
+	RiskReasons []domain.RiskReason `json:"risk_reasons,omitempty"`
 }
 
 // PlanBlockedLine is one BLOCKED row. UsedBy names the projects that
 // require it, when a dependency edge makes that known.
 type PlanBlockedLine struct {
-	Size   int64    `json:"size_bytes"`
-	Path   string   `json:"path"`
-	UsedBy []string `json:"used_by,omitempty"`
+	Size        int64               `json:"size_bytes"`
+	Path        string              `json:"path"`
+	RiskReasons []domain.RiskReason `json:"risk_reasons,omitempty"`
+	UsedBy      []string            `json:"used_by,omitempty"`
 }
 
 // RenderText implements Renderable. The numbered list continues across
@@ -62,6 +67,7 @@ func (v PlanView) RenderText(w io.Writer) error {
 	}
 	for _, line := range v.Safe {
 		fmt.Fprintf(w, "[%d] %s %s\n", index, humanize.Bytes(uint64(line.Size)), line.Path)
+		renderRiskReasonsIndented(w, line.RiskReasons)
 		index++
 	}
 
@@ -70,6 +76,7 @@ func (v PlanView) RenderText(w io.Writer) error {
 		fmt.Fprintln(w, "REVIEW")
 		for _, line := range v.Review {
 			fmt.Fprintf(w, "[%d] %s %s\n", index, humanize.Bytes(uint64(line.Size)), line.Path)
+			renderRiskReasonsIndented(w, line.RiskReasons)
 			index++
 		}
 	}
@@ -79,6 +86,7 @@ func (v PlanView) RenderText(w io.Writer) error {
 		fmt.Fprintln(w, "BLOCKED")
 		for _, line := range v.Blocked {
 			fmt.Fprintf(w, "[ ] %s %s\n", humanize.Bytes(uint64(line.Size)), line.Path)
+			renderRiskReasonsIndented(w, line.RiskReasons)
 			if len(line.UsedBy) > 0 {
 				fmt.Fprintf(w, "    Used by %s\n", strings.Join(line.UsedBy, ", "))
 			}

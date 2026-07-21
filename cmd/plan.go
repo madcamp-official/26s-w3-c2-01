@@ -78,7 +78,7 @@ see what was considered and why it was left out. Run "libra clean --plan
 			return fmt.Errorf("save plan: %w", err)
 		}
 
-		view, err := buildPlanView(cmd, result, dependencies, projects)
+		view, err := buildPlanView(cmd, result, resources, dependencies, projects)
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func validatePlanRiskFilter(raw string) error {
 // --risk display filter and resolving BLOCKED "used by" project names from
 // the dependency graph (only for BLOCKED, mirroring cmd/resources.go's
 // N+1-by-design tradeoff of only paying for a lookup a filter didn't drop).
-func buildPlanView(cmd *cobra.Command, result app.PlanResult, dependencies app.DependencyRepository, projects app.ProjectRepository) (output.PlanView, error) {
+func buildPlanView(cmd *cobra.Command, result app.PlanResult, resources app.ResourceRepository, dependencies app.DependencyRepository, projects app.ProjectRepository) (output.PlanView, error) {
 	view := output.PlanView{
 		PlanID:   result.Plan.ID,
 		Target:   result.Plan.TargetBytes,
@@ -134,7 +134,15 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, dependencies app.D
 
 	if showRisk(domain.RiskSafe) {
 		for _, item := range result.Plan.Items {
-			view.Safe = append(view.Safe, output.PlanCandidateLine{Size: item.ExpectedSize, Path: item.NormalizedPath})
+			// CleanupPlanItem's snapshot doesn't carry RiskReasons (issue #40
+			// decided this stays a Resource-only field, not duplicated onto
+			// the plan snapshot), so an extra lookup by stable ResourceID is
+			// required, same as cmd/resources.go's own N+1-by-design lookups.
+			resource, err := resources.FindByID(cmd.Context(), item.ResourceID)
+			if err != nil {
+				return output.PlanView{}, fmt.Errorf("find resource %q: %w", item.ResourceID, err)
+			}
+			view.Safe = append(view.Safe, output.PlanCandidateLine{Size: item.ExpectedSize, Path: item.NormalizedPath, RiskReasons: resource.RiskReasons})
 		}
 	}
 	if showRisk(domain.RiskReview) {
@@ -145,7 +153,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, dependencies app.D
 			// here would print "0 B" for every REVIEW candidate regardless
 			// of its real size. SAFE lines below correctly use ExpectedSize
 			// (== ReclaimableSize == LogicalSize for a SAFE resource).
-			view.Review = append(view.Review, output.PlanCandidateLine{Size: r.LogicalSize, Path: r.NormalizedPath})
+			view.Review = append(view.Review, output.PlanCandidateLine{Size: r.LogicalSize, Path: r.NormalizedPath, RiskReasons: r.RiskReasons})
 		}
 	}
 	if showRisk(domain.RiskBlocked) {
@@ -153,7 +161,7 @@ func buildPlanView(cmd *cobra.Command, result app.PlanResult, dependencies app.D
 			// Same reasoning as REVIEW above: BLOCKED resources have
 			// ReclaimableSize hard-forced to 0, so the real LogicalSize is
 			// what a user needs to judge whether it's worth reviewing.
-			line := output.PlanBlockedLine{Size: r.LogicalSize, Path: r.NormalizedPath}
+			line := output.PlanBlockedLine{Size: r.LogicalSize, Path: r.NormalizedPath, RiskReasons: r.RiskReasons}
 			edges, err := dependencies.FindProjectsByResource(cmd.Context(), r.ID)
 			if err != nil {
 				return output.PlanView{}, fmt.Errorf("find projects depending on %q: %w", r.ID, err)

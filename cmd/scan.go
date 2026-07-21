@@ -12,6 +12,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
@@ -96,14 +97,19 @@ not exist yet, so --full has no effect (see --help).`,
 			return fmt.Errorf("run scan: %w", err)
 		}
 
-		fmt.Fprintln(cmd.OutOrStdout(), "Scan completed")
-		fmt.Fprintln(cmd.OutOrStdout())
-		fmt.Fprintf(cmd.OutOrStdout(), "Roots scanned:   %d\n", result.Filesystem.RootsScanned)
-		fmt.Fprintf(cmd.OutOrStdout(), "Projects found:  %d\n", len(result.Projects))
-		fmt.Fprintf(cmd.OutOrStdout(), "Resources found: %d\n", len(result.Resources))
-		fmt.Fprintf(cmd.OutOrStdout(), "Files inspected: %d\n", result.Filesystem.FilesInspected)
-		fmt.Fprintf(cmd.OutOrStdout(), "Warnings:        %d\n", len(result.Issues))
-		return nil
+		view := output.ScanView{
+			RootsScanned:   result.Filesystem.RootsScanned,
+			ProjectsFound:  len(result.Projects),
+			ResourcesFound: len(result.Resources),
+			FilesInspected: result.Filesystem.FilesInspected,
+		}
+		for _, issue := range result.Issues {
+			view.Warnings = append(view.Warnings, output.ScanIssue{
+				Code: string(issue.Code), Phase: string(issue.Phase), Severity: string(issue.Severity),
+				Path: issue.Path, Operation: issue.Operation, Message: issue.Message,
+			})
+		}
+		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
 	},
 }
 

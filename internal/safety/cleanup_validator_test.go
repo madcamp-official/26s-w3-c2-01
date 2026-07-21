@@ -19,6 +19,8 @@ func TestIsAllowedArtifactName(t *testing.T) {
 		".mypy_cache":    true,
 		"mypkg.egg-info": true,
 		"a.egg-info":     true,
+		"pods":           true,  // CocoaPods Pods/ (§19.9), compared lowercased
+		".build":         true,  // SwiftPM .build/ (§19.9)
 		"envs":           false, // a conda local prefix env directory name
 		"conda-env":      false,
 		"random-folder":  false,

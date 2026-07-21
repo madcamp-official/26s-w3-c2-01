@@ -32,6 +32,13 @@ var allowedArtifactNames = map[string]struct{}{
 	// path entirely, regardless of basename.
 	".venv": {}, "venv": {}, "env": {},
 	"__pycache__": {}, ".pytest_cache": {}, ".mypy_cache": {},
+	// macOS (docs/libra_integration_contracts.md §19.9): project-owned
+	// CocoaPods Pods/ and SwiftPM .build/, the direct analogues of
+	// node_modules. Like every other name here they still pass RiskPolicy
+	// only when their regeneration evidence (Podfile.lock / Package.resolved)
+	// makes them Regenerable -- this list only controls structural
+	// eligibility. Basenames are compared lowercased, so "Pods" -> "pods".
+	"pods": {}, ".build": {},
 }
 
 // eggInfoSuffix matches Python's *.egg-info build metadata directories,

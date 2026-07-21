@@ -125,7 +125,13 @@ func (v ExplainView) renderResource(w io.Writer) error {
 func (v ExplainView) renderProject(w io.Writer) error {
 	fmt.Fprintf(w, "Project: %s (%s)\n", v.Name, v.ProjectType)
 	fmt.Fprintf(w, "Path: %s\n", v.Path)
-	fmt.Fprintf(w, "Size: %s\n", humanize.Bytes(uint64(v.LogicalSize)))
+	// Project size is never actually measured (issue #38, same root cause as
+	// ProjectsView.RenderText in projects.go) -- v.LogicalSize is always the
+	// domain.BuildProject zero value here, so render the same placeholder
+	// instead of humanize.Bytes(0), which would misread as "measured empty".
+	// The resource case above (renderResource) is a real measurement and is
+	// untouched.
+	fmt.Fprintf(w, "Size: %s\n", projectSizeDisplay)
 	fmt.Fprintf(w, "Status: %s\n", v.Status)
 	fmt.Fprintf(w, "Last modified: %s\n", formatTime(v.LastModifiedAt))
 	fmt.Fprintf(w, "Last observed: %s\n", formatTime(v.LastObservedAt))

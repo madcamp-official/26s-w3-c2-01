@@ -96,6 +96,7 @@ func init() {
 
 	cleanCmd.Flags().StringVar(&cleanPlanID, "plan", "", "ID of a plan created by \"libra plan\" (required)")
 	cleanCmd.Flags().BoolVar(&cleanExecute, "execute", false, "move revalidated SAFE items into quarantine")
+	cleanCmd.Flags().BoolVar(&assumeYes, "yes", false, "skip interactive confirmation prompts")
 }
 
 // previewCleanItem re-checks one plan item's snapshot against the

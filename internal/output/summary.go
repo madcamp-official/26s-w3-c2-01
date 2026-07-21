@@ -22,10 +22,12 @@ type SummaryView struct {
 	NeedsReview     int64         `json:"needs_review_bytes"`
 	Blocked         int64         `json:"blocked_bytes"`
 
-	// Scan freshness (issue #41): zero-value LastScanAt means no scan has
-	// run yet, in which case none of this section is rendered -- the counts
-	// above are already legitimately zero in that case (an empty database),
-	// not something this section needs to explain further.
+	// Scanned is explicit (rather than inferring "no scan yet" from
+	// LastScanAt.IsZero()) because encoding/json's omitempty does not omit
+	// a zero-value time.Time: without this field, a fresh database with no
+	// scan would still marshal last_scan_at as "0001-01-01T00:00:00Z",
+	// indistinguishable from a real timestamp to a JSON consumer.
+	Scanned       bool      `json:"scanned"`
 	LastScanAt    time.Time `json:"last_scan_at,omitempty"`
 	LastScanRoots []string  `json:"last_scan_roots,omitempty"`
 	// LastScanDurationMS is explicitly milliseconds, not a raw
@@ -37,7 +39,7 @@ type SummaryView struct {
 	FilesInspected     int64 `json:"files_inspected,omitempty"`
 	// Coverage is "Complete" or "Partial · N warning(s)" -- a human summary
 	// of ScanRecord.ErrorCount, not a machine-parsed field. Empty when
-	// LastScanAt is zero.
+	// Scanned is false.
 	Coverage string `json:"coverage,omitempty"`
 }
 
@@ -57,7 +59,7 @@ func (s SummaryView) RenderText(w io.Writer) error {
 	}
 	fmt.Fprintf(tw, "%s\n\n", title)
 
-	if !s.LastScanAt.IsZero() {
+	if s.Scanned {
 		fmt.Fprintf(tw, "Last scan\t%s\n", s.LastScanAt.Local().Format("2006-01-02 15:04:05"))
 		if len(s.LastScanRoots) > 0 {
 			fmt.Fprintf(tw, "Roots\t%s\n", strings.Join(s.LastScanRoots, ", "))
@@ -67,6 +69,9 @@ func (s SummaryView) RenderText(w io.Writer) error {
 		}
 		fmt.Fprintf(tw, "Coverage\t%s\n", s.Coverage)
 		fmt.Fprintf(tw, "Files inspected\t%s\n", humanize.Comma(s.FilesInspected))
+		fmt.Fprintf(tw, "\t\n")
+	} else {
+		fmt.Fprintf(tw, "Coverage\tNot scanned yet -- run `libra scan` first\n")
 		fmt.Fprintf(tw, "\t\n")
 	}
 

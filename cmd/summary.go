@@ -86,16 +86,19 @@ needs review, or is blocked from cleanup.`,
 			Blocked:         summary.Blocked,
 		}
 
-		// Scan freshness (issue #41): omitted, not an error, when no scan has
-		// run yet -- ScanRepository.FindLatest's ErrNoScans is exactly the
+		// Scan freshness (issue #41): not an error when no scan has run
+		// yet -- ScanRepository.FindLatest's ErrNoScans is exactly the
 		// "ran `libra summary` before `libra scan`" case, which the rest of
 		// this command already tolerates (an empty Summary, all zeros).
+		// view.Scanned stays false so the empty-state is explicit rather
+		// than inferred from zero-valued fields.
 		scan, err := sqlite.NewScanRepository(db).FindLatest(cmd.Context())
 		switch {
 		case errors.Is(err, app.ErrNoScans):
 		case err != nil:
 			return fmt.Errorf("find latest scan: %w", err)
 		default:
+			view.Scanned = true
 			view.LastScanAt = scan.StartedAt
 			view.LastScanRoots = scan.Roots
 			view.FilesInspected = scan.FileCount

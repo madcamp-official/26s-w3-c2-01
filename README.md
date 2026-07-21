@@ -166,8 +166,8 @@ go build -o libra .
 | `--json` | 결과를 표준 JSON envelope로 출력 |
 | `--verbose` | 추가 진단 정보 출력 (예: `scan`의 모든 warning) |
 | `--no-color` | 텍스트 출력에서 ANSI 색상 비활성화 |
-| `--dry-run` | 실제 변경 없이 무엇이 일어날지만 표시 |
-| `--yes` | 대화형 확인 프롬프트 생략 |
+
+`--yes`(대화형 확인 프롬프트 생략)는 전역이 아니라 실제로 확인 프롬프트가 있는 `clean --execute`, `purge --execute` 두 명령에만 로컬 플래그로 존재한다. `clean`/`purge`는 별도의 `--dry-run` 플래그 없이 `--execute`를 주지 않으면 항상 미리보기(dry-run) 모드로 동작한다.
 
 ### 명령어 실행 순서와 사용법
 
@@ -191,7 +191,7 @@ libra scan --root D:\Projects
 
 **4. 저장된 스캔 결과 조회** — 아래 5개는 모두 read-only이며 직전 `scan`이 채운 SQLite만 읽는다.
 
-- `libra summary [--drive C:] [--type node-modules]` — 리소스 타입/드라이브별 용량 합계와 안전하게 확보 가능(`SAFE`)/검토 필요(`REVIEW`)/차단(`BLOCKED`) 총량, 마지막 scan 시각과 완료 상태(`Complete`/`Partial · N warning(s)`/`Incomplete`)를 보여준다. 언제: 전체 현황을 한눈에 보거나 `plan --target`을 정할 근거가 필요할 때.
+- `libra summary [--drive C:] [--type node-modules]` — 리소스 타입/드라이브별 용량 합계와 안전하게 확보 가능(`SAFE`)/검토 필요(`REVIEW`)/차단(`BLOCKED`) 총량, 마지막 scan 시각과 완료 상태(`Complete`/`Partial · N warning(s)`/`Incomplete`)를 보여준다. `scan`을 한 번도 실행하지 않았다면 이 상태가 `Not scanned yet`으로 명시되어, "스캔 결과 0건"과 "아직 스캔 안 함"을 구분할 수 있다. 언제: 전체 현황을 한눈에 보거나 `plan --target`을 정할 근거가 필요할 때.
 ```bash
 libra summary
 libra summary --drive C:

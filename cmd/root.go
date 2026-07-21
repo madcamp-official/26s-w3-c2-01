@@ -13,8 +13,9 @@ var (
 	jsonOutput bool
 	verbose    bool
 	noColor    bool
-	dryRun     bool
-	assumeYes  bool
+	// assumeYes backs --yes, registered locally by clean.go and purge.go
+	// (the only commands that prompt for confirmation) rather than here.
+	assumeYes bool
 )
 
 var rootCmd = &cobra.Command{
@@ -46,6 +47,4 @@ func init() {
 	flags.BoolVar(&jsonOutput, "json", false, "output machine-readable JSON instead of text")
 	flags.BoolVar(&verbose, "verbose", false, "print additional diagnostic detail")
 	flags.BoolVar(&noColor, "no-color", false, "disable ANSI color in text output")
-	flags.BoolVar(&dryRun, "dry-run", false, "show what would happen without changing anything")
-	flags.BoolVar(&assumeYes, "yes", false, "skip interactive confirmation prompts")
 }

@@ -56,4 +56,5 @@ func init() {
 	rootCmd.AddCommand(purgeCmd)
 	purgeCmd.Flags().StringVar(&purgeTransactionID, "transaction", "", "quarantined transaction ID")
 	purgeCmd.Flags().BoolVar(&purgeExecute, "execute", false, "permanently delete validated quarantine items")
+	purgeCmd.Flags().BoolVar(&assumeYes, "yes", false, "skip interactive confirmation prompts")
 }

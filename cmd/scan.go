@@ -112,7 +112,7 @@ not exist yet, so --full has no effect (see --help).`,
 
 		var progressDisplay *scanProgressDisplay
 		if !jsonOutput {
-			estimatedTotal, _ := previousScanFileCount(cmd.Context(), scans)
+			estimatedTotal, _ := previousScanFileCount(cmd.Context(), scans, scanOpts.Roots)
 			progressDisplay = newScanProgressDisplay(cmd.ErrOrStderr(), estimatedTotal)
 			orchestrator = orchestrator.WithProgress(progressDisplay.Update).WithPhaseHook(progressDisplay.Phase)
 		}

@@ -117,6 +117,97 @@ func TestScanRepositoryFindLatestReturnsMostRecentlyStarted(t *testing.T) {
 	}
 }
 
+func TestScanRepositoryFindLatestByRootsMatchesOnRootSetNotRecency(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
+	repository := NewScanRepository(db)
+	base := time.Date(2026, 7, 18, 1, 0, 0, 0, time.UTC)
+	older := app.ScanRecord{
+		ID: "scan-older", StartedAt: base, Roots: []string{`D:\Projects`}, Status: "COMPLETED", FileCount: 13500,
+	}
+	// newest scan overall, but a different root -- must not be picked when
+	// looking up an estimate for a `D:\Projects` scan.
+	newerOtherRoot := app.ScanRecord{
+		ID: "scan-newer-other-root", StartedAt: base.Add(time.Hour), Roots: []string{`E:\Other`}, Status: "COMPLETED", FileCount: 99,
+	}
+	if err := repository.Save(context.Background(), older); err != nil {
+		t.Fatalf("Save(older) error = %v", err)
+	}
+	if err := repository.Save(context.Background(), newerOtherRoot); err != nil {
+		t.Fatalf("Save(newerOtherRoot) error = %v", err)
+	}
+
+	got, err := repository.FindLatestByRoots(context.Background(), []string{`D:\Projects`})
+	if err != nil {
+		t.Fatalf("FindLatestByRoots() error = %v", err)
+	}
+	if got.ID != older.ID {
+		t.Fatalf("FindLatestByRoots() = %q, want %q", got.ID, older.ID)
+	}
+}
+
+func TestScanRepositoryFindLatestByRootsMatchesRegardlessOfOrder(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
+	repository := NewScanRepository(db)
+	record := app.ScanRecord{
+		ID:        "scan-multi-root",
+		StartedAt: time.Date(2026, 7, 18, 1, 0, 0, 0, time.UTC),
+		Roots:     []string{`D:\Projects`, `C:\Users\user\source`},
+		Status:    "COMPLETED",
+		FileCount: 500,
+	}
+	if err := repository.Save(context.Background(), record); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	got, err := repository.FindLatestByRoots(context.Background(), []string{`C:\Users\user\source`, `D:\Projects`})
+	if err != nil {
+		t.Fatalf("FindLatestByRoots() error = %v", err)
+	}
+	if got.ID != record.ID {
+		t.Fatalf("FindLatestByRoots() = %q, want %q", got.ID, record.ID)
+	}
+}
+
+func TestScanRepositoryFindLatestByRootsReturnsErrNoScansWhenNoRootMatches(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
+	repository := NewScanRepository(db)
+	record := app.ScanRecord{
+		ID: "scan-unrelated", StartedAt: time.Now(), Roots: []string{`E:\Other`}, Status: "COMPLETED", FileCount: 500,
+	}
+	if err := repository.Save(context.Background(), record); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	_, err = repository.FindLatestByRoots(context.Background(), []string{`D:\Projects`})
+	if !errors.Is(err, app.ErrNoScans) {
+		t.Fatalf("FindLatestByRoots() error = %v, want app.ErrNoScans", err)
+	}
+}
+
 func TestScanRepositoryFindLatestReturnsErrNoScansWhenEmpty(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {

@@ -11,13 +11,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 )
 
-// previousScanFileCount looks up the file count of the most recent scan that
-// actually finished, for use as an estimated total on a new scan's progress
-// bar. ok is false when there is nothing usable to estimate from -- either
-// this is the first-ever scan, or the prior one never completed (its
-// FileCount would be zero or mid-scan, not a real total).
-func previousScanFileCount(ctx context.Context, scans app.ScanRepository) (total int64, ok bool) {
-	record, err := scans.FindLatest(ctx)
+// previousScanFileCount looks up the file count of the most recent finished
+// scan of these same roots, for use as an estimated total on a new scan's
+// progress bar. ok is false when there is nothing usable to estimate from --
+// no prior scan covered this exact set of roots, or the one that did never
+// completed (its FileCount would be zero or mid-scan, not a real total). In
+// either case the caller falls back to an indeterminate bar rather than
+// borrowing a total from an unrelated scan.
+func previousScanFileCount(ctx context.Context, scans app.ScanRepository, roots []string) (total int64, ok bool) {
+	record, err := scans.FindLatestByRoots(ctx, roots)
 	if err != nil {
 		return 0, false
 	}

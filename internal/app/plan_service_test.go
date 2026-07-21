@@ -302,3 +302,10 @@ func (s *planScanRepositoryStub) FindLatest(context.Context) (ScanRecord, error)
 	}
 	return s.record, nil
 }
+
+func (s *planScanRepositoryStub) FindLatestByRoots(context.Context, []string) (ScanRecord, error) {
+	if s.err != nil {
+		return ScanRecord{}, s.err
+	}
+	return s.record, nil
+}

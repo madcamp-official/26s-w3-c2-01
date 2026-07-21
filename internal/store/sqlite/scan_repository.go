@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
@@ -89,10 +90,63 @@ func (r *ScanRepository) FindLatest(ctx context.Context) (app.ScanRecord, error)
 	return record, nil
 }
 
+// FindLatestByRoots returns the most recently started scan whose Roots
+// exactly match the given roots (as a set, order-independent), regardless of
+// status. Used by `libra scan` to estimate a new scan's progress bar total
+// from a prior scan of the same roots, rather than whatever scan happened to
+// run last (which may have covered entirely different, differently sized
+// roots).
+func (r *ScanRepository) FindLatestByRoots(ctx context.Context, roots []string) (app.ScanRecord, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, started_at, finished_at, roots, file_count, error_count, status
+		FROM scans
+		ORDER BY started_at DESC
+	`)
+	if err != nil {
+		return app.ScanRecord{}, fmt.Errorf("find latest scan by roots: %w", err)
+	}
+	defer rows.Close()
+
+	want := sortedRoots(roots)
+	for rows.Next() {
+		record, err := scanFromRow(rows)
+		if err != nil {
+			return app.ScanRecord{}, fmt.Errorf("find latest scan by roots: %w", err)
+		}
+		if rootsEqual(sortedRoots(record.Roots), want) {
+			return record, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return app.ScanRecord{}, fmt.Errorf("find latest scan by roots: %w", err)
+	}
+	return app.ScanRecord{}, app.ErrNoScans
+}
+
+func sortedRoots(roots []string) []string {
+	sorted := append([]string(nil), roots...)
+	sort.Strings(sorted)
+	return sorted
+}
+
+func rootsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // scanFromRow decodes the shared scans-table column list into a ScanRecord.
-// It returns the row's raw error (including sql.ErrNoRows) unwrapped so
-// callers can apply their own not-found semantics.
-func scanFromRow(row *sql.Row) (app.ScanRecord, error) {
+// It accepts either *sql.Row or *sql.Rows (both satisfy rowScanner, declared
+// in resource_repository.go) and returns the row's raw error (including
+// sql.ErrNoRows) unwrapped so callers can apply their own not-found
+// semantics.
+func scanFromRow(row rowScanner) (app.ScanRecord, error) {
 	var record app.ScanRecord
 	var startedAt string
 	var finishedAt sql.NullString

@@ -80,7 +80,19 @@ func TestSummaryGoldenNodeFixture(t *testing.T) {
 
 var summaryByteValue = regexp.MustCompile(`(?m)(  )\d+(?:\.\d+)? [KMGT]?B$`)
 
+// summaryFreshnessLine matches the Last scan/Roots/Duration lines issue #41
+// added: all three are machine- and run-specific (wall-clock timestamp,
+// absolute fixture path, wall-clock elapsed time), so they're replaced with
+// a fixed placeholder rather than compared literally. Coverage and Files
+// inspected are left as real text -- both are deterministic for this fixed
+// fixture (one malformed-package-json issue; the exact file count is
+// deterministic for a given scan implementation, though it has already
+// shifted once as scan behavior changed -- see the golden file itself for
+// the current value, not this comment).
+var summaryFreshnessLine = regexp.MustCompile(`(?m)^(Last scan|Roots|Duration)\s+.*$`)
+
 func normalizeSummaryGolden(output string) string {
 	output = strings.ReplaceAll(output, "\r\n", "\n")
-	return summaryByteValue.ReplaceAllString(output, `${1}<size>`)
+	output = summaryByteValue.ReplaceAllString(output, `${1}<size>`)
+	return summaryFreshnessLine.ReplaceAllString(output, "$1 <redacted>")
 }

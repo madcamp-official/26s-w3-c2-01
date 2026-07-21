@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,41 @@ needs review, or is blocked from cleanup.`,
 			SafeReclaimable: summary.SafeReclaimable,
 			NeedsReview:     summary.NeedsReview,
 			Blocked:         summary.Blocked,
+		}
+
+		// Scan freshness (issue #41): omitted, not an error, when no scan has
+		// run yet -- ScanRepository.FindLatest's ErrNoScans is exactly the
+		// "ran `libra summary` before `libra scan`" case, which the rest of
+		// this command already tolerates (an empty Summary, all zeros).
+		scan, err := sqlite.NewScanRepository(db).FindLatest(cmd.Context())
+		switch {
+		case errors.Is(err, app.ErrNoScans):
+		case err != nil:
+			return fmt.Errorf("find latest scan: %w", err)
+		default:
+			view.LastScanAt = scan.StartedAt
+			view.LastScanRoots = scan.Roots
+			view.FilesInspected = scan.FileCount
+			if scan.FinishedAt != nil {
+				view.LastScanDurationMS = scan.FinishedAt.Sub(scan.StartedAt).Milliseconds()
+			}
+			switch {
+			case scan.FinishedAt == nil:
+				// AnalysisOrchestrator.Run saves a Status: RUNNING record
+				// before doing any work, then only updates it to a terminal
+				// status (with FinishedAt set) on success or failure -- see
+				// internal/app/analysis_orchestrator.go's Run/fail. A
+				// record still RUNNING here means the process that ran the
+				// scan died or was killed mid-scan without either path
+				// running, so ErrorCount (still its zero value) says
+				// nothing about how much of the scan actually completed --
+				// reporting "Complete" would be a lie.
+				view.Coverage = "Incomplete · scan did not finish"
+			case scan.ErrorCount > 0:
+				view.Coverage = fmt.Sprintf("Partial · %d warning(s)", scan.ErrorCount)
+			default:
+				view.Coverage = "Complete"
+			}
 		}
 		for _, line := range summary.ResourcesByType {
 			view.ResourcesByType = append(view.ResourcesByType, output.SummaryLine{

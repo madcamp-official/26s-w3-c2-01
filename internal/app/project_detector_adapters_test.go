@@ -32,6 +32,34 @@ func TestNodeProjectDetectorAdaptsProjectFact(t *testing.T) {
 	}
 }
 
+func TestNodeProjectDetectorReportsWorkspaceAndDeclaredMembers(t *testing.T) {
+	root := t.TempDir()
+	member := filepath.Join(root, "packages", "app")
+	if err := os.MkdirAll(member, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"web","workspaces":["packages/*"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(member, "package.json"), []byte(`{"name":"app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root})
+	if len(got.Items) != 1 || got.Items[0].Workspace == nil {
+		t.Fatalf("Observe() = %#v, want Node workspace", got)
+	}
+	workspace := got.Items[0].Workspace
+	if workspace.Type != domain.WorkspaceTypeNode || workspace.ManifestPath != filepath.Join(root, "package.json") {
+		t.Fatalf("Workspace = %#v", workspace)
+	}
+	wantMember := filepath.Join(member, "package.json")
+	if len(got.Items[0].WorkspaceProjectPaths) != 1 || got.Items[0].WorkspaceProjectPaths[0] != wantMember {
+		t.Fatalf("WorkspaceProjectPaths = %v, want [%s]", got.Items[0].WorkspaceProjectPaths, wantMember)
+	}
+}
+
 func TestNodeProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"web"}`), 0o644); err != nil {

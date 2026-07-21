@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
@@ -44,17 +45,22 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 
 	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
 	var issues []Issue
-	// DetectArtifacts, not DetectWorkspaceArtifacts: Observe runs once per
-	// project-root entry the scanner walks into, including every workspace
-	// member independently, so scoping to entry.Path's own directory avoids
-	// reporting a member's artifacts twice (once here, once from its own
-	// Observe call).
+	workspace, workspaceIssues, workspaceUnverified := detectNodeWorkspace(entry.Path, project)
+	if workspace != nil {
+		candidate.Workspace = &workspace.workspace
+		candidate.WorkspaceProjectPaths = workspace.memberManifestPaths
+	}
+	issues = append(issues, workspaceIssues...)
+	// Detect the root's own artifacts here. Declared workspace members are
+	// added below even when discovery pruning skipped their directory; the
+	// orchestrator deduplicates any member also seen by the regular walk.
 	artifacts, err := nodeadapter.DetectArtifacts(entry.Path)
 	if err != nil {
+		issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "node",
+			Path: entry.Path, Operation: "detect node artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
 		return DetectionResult[ProjectCandidate]{
-			Items: []ProjectCandidate{candidate},
-			Issues: []Issue{{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "node",
-				Path: entry.Path, Operation: "detect node artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err}},
+			Items:  []ProjectCandidate{candidate},
+			Issues: issues, Unverified: workspaceUnverified,
 		}
 	}
 	for _, resource := range artifacts {
@@ -66,7 +72,79 @@ func (d NodeProjectDetector) Observe(ctx context.Context, entry scanner.Entry) D
 			Cleanup:           cleanup,
 		})
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+	if workspace != nil {
+		for _, memberRoot := range workspace.memberRoots {
+			info, err := os.Stat(memberRoot)
+			if err != nil {
+				issues = append(issues, cleanupEvidenceIssue(memberRoot, "stat Node workspace member", err))
+				continue
+			}
+			memberEntry := scanner.Entry{Path: memberRoot, Kind: scanner.EntryDirectory, Mode: info.Mode(), ModifiedAt: info.ModTime()}
+			if !d.Detector.CanDetect(memberEntry) {
+				continue
+			}
+			memberProject, err := d.Detector.Detect(ctx, memberEntry)
+			if err != nil {
+				issues = append(issues, projectDetectionFailure("node", memberRoot, "parse workspace member package.json", err).Issues...)
+				workspaceUnverified = append(workspaceUnverified, UnverifiedScope{Path: memberRoot, Phase: PhaseDiscoverProjects, Reason: err.Error()})
+				continue
+			}
+			candidate.Projects = append(candidate.Projects, memberProject)
+			memberArtifacts, err := nodeadapter.DetectMemberArtifacts(memberRoot, entry.Path)
+			if err != nil {
+				issues = append(issues, cleanupEvidenceIssue(memberRoot, "detect workspace member artifacts", err))
+				continue
+			}
+			for _, resource := range memberArtifacts {
+				cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, memberRoot, resource)
+				issues = append(issues, evidenceIssues...)
+				candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+					OwnerManifestPath: memberProject.ManifestPath, Resource: resource, Cleanup: cleanup,
+				})
+			}
+		}
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues, Unverified: workspaceUnverified}
+}
+
+type nodeWorkspaceCandidate struct {
+	workspace           domain.Workspace
+	memberManifestPaths []string
+	memberRoots         []string
+}
+
+func detectNodeWorkspace(root string, project domain.BuildProject) (*nodeWorkspaceCandidate, []Issue, []UnverifiedScope) {
+	info, ok, err := nodeadapter.DetectWorkspace(root)
+	if err != nil {
+		issue := Issue{Code: IssueMalformedManifest, Phase: PhaseDiscoverProjects, Adapter: "node",
+			Path: root, Operation: "detect Node workspace", Severity: IssueWarning, Message: err.Error(), Cause: err}
+		return nil, []Issue{issue}, []UnverifiedScope{{Path: root, Phase: PhaseDiscoverProjects, Reason: err.Error()}}
+	}
+	if !ok {
+		return nil, nil, nil
+	}
+
+	members, err := nodeadapter.ResolveMembers(root, info)
+	if err != nil {
+		issue := Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "node",
+			Path: root, Operation: "resolve Node workspace members", Severity: IssueWarning, Message: err.Error(), Cause: err}
+		return nil, []Issue{issue}, []UnverifiedScope{{Path: root, Phase: PhaseDiscoverProjects, Reason: err.Error()}}
+	}
+	manifestPath := filepath.Join(root, "package.json")
+	if info.Kind == nodeadapter.WorkspaceKindPnpm {
+		manifestPath = filepath.Join(root, "pnpm-workspace.yaml")
+	}
+	memberManifests := make([]string, 0, len(members))
+	for _, member := range members {
+		memberManifests = append(memberManifests, filepath.Join(member, "package.json"))
+	}
+	return &nodeWorkspaceCandidate{
+		workspace: domain.Workspace{
+			Name: project.Name, Type: domain.WorkspaceTypeNode, ManifestPath: manifestPath,
+		},
+		memberManifestPaths: memberManifests,
+		memberRoots:         members,
+	}, nil, nil
 }
 
 type MSBuildProjectDetector struct{ Parser msbuild.BuildProjectParser }

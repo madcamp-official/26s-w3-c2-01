@@ -440,7 +440,7 @@ cleanup/retention 설정을 안내하고, Cargo는 전역 cache purge 명령이 
 
 구현은 `internal/adapter/xcode`, `cocoapods`, `swiftpm`, `homebrew`, `simulator` package로 분리하고 공통 `cachepath` helper를 재사용한다. `OFFICIAL_CLEANUP_GUIDANCE` reason으로 다음 안내만 제공한다: Xcode DerivedData는 통째로 삭제 가능(`rm -rf` 또는 Xcode Settings > Locations), CocoaPods는 `pod cache clean --all`, SwiftPM은 `rm -rf ~/Library/Caches/org.swift.swiftpm`(또는 `swift package purge-cache`), Homebrew는 `brew cleanup`/`brew cleanup -s`, iOS Simulator 캐시는 자동 재생성되며 설치된 runtime/device 관리는 Xcode Settings > Platforms 또는 `xcrun simctl`을 안내한다.
 
-**남은 범위** (README §2.2와 동일 원칙): Xcode/SwiftPM 프로젝트 타입 탐지(`.xcodeproj`/`Package.swift`)와 의존성 그래프, Simulator `Devices`/runtime 이미지의 위험도 분류, APFS 볼륨·외장 디스크·권한을 고려한 clean/execute 확장은 이번 결정에 포함하지 않는다 — 실제 Mac 하드웨어에서 symlink·권한·볼륨 경계를 검증하기 전에는 project-owned 산출물과 동일한 자동 정리 경로를 열지 않는다. (2026-07-21 갱신: symlink·APFS 별도 볼륨 경계는 실제 검증 완료 — §11 참고. 남은 건 macOS 고유 권한/TCC·SIP 보호 경로 검증뿐이다.)
+**남은 범위** (README §2.2와 동일 원칙): Xcode/SwiftPM 프로젝트 타입 탐지(`.xcodeproj`/`Package.swift`)와 의존성 그래프, Simulator `Devices`/runtime 이미지의 위험도 분류, APFS 볼륨·외장 디스크·권한을 고려한 clean/execute 확장은 이번 결정에 포함하지 않는다 — 실제 Mac 하드웨어에서 symlink·권한·볼륨 경계를 검증하기 전에는 project-owned 산출물과 동일한 자동 정리 경로를 열지 않는다. (2026-07-21 갱신: symlink·APFS 별도 볼륨 경계는 실제 검증 완료 — §11 참고. macOS 시스템 경로 보호와 권한 오류 처리도 검증 완료 — §8 참고.)
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 
@@ -592,6 +592,10 @@ restore manifest에 기록된 일반 directory만 처리
 ```
 
 OS 기본 보호 root는 `PathClassifier`가 판정한다. 사용자 문서·비밀 파일의 내용 기반 탐지는 아직 `PLANNED`이며, 자동 SAFE가 아닌 항목은 기본적으로 선택되지 않는다.
+
+Windows는 `WINDIR`/`ProgramFiles`/`ProgramFiles(x86)`/`ProgramData` 환경변수 기반 root를 쓴다(`internal/safety/roots_windows.go`). macOS는 2026-07-21까지 이 목록이 비어 있었다 — MVP 범위 결정으로 기록돼 있었을 뿐 버그는 아니었지만, 실제로는 잘못된 `project_roots` 설정이 `/System`·`/Library`·`/usr` 같은 시스템 경로를 가리켜도 `BLOCKED`가 아니라 `REVIEW`로만 표시되는 라벨링 공백이었다. `internal/safety/roots_other.go`에 `/System`, `/Library`, `/usr`, `/bin`, `/sbin`, `/Applications`를 darwin 전용으로 추가해 닫았다 — SIP가 이미 쓰기 자체를 막지만, 이건 `explain`/`plan` 표시가 실제 위험도를 정확히 반영하도록 만드는 라벨링 계층이다. `~/Library`는 의도적으로 제외한다 — §19.8의 macOS 개발 캐시 5종(Xcode/CocoaPods/SwiftPM/Homebrew/Simulator)이 전부 그 밑에서 리소스를 보고하므로, 포함하면 전부 `BLOCKED`로 잘못 표시된다. Linux 시스템 경로는 실제 Linux 환경에서 검증 전이라 여전히 `nil`(미분류)로 남겨뒀다.
+
+실제 macOS 권한 오류 처리도 검증했다: fixture 디렉터리를 `chmod 000`으로 막고 scan한 결과 `ACCESS_DENIED` structured issue로 기록되고 나머지 프로젝트(`readable-project`)는 정상적으로 계속 발견됐다 — 한 경로의 권한 오류가 전체 스캔을 중단시키지 않는다는 계약(§5)이 macOS 실제 권한 오류에서도 유지됨을 확인했다. TCC(Full Disk Access 등 macOS 고유 동의 프롬프트)로 인한 거부는 OS 레벨에서 동일한 `EPERM`/`EACCES`로 나타나므로 같은 경로로 처리되지만, 실제 TCC 프롬프트를 토글해 가며 검증하지는 않았다 — 필요하면 다음 범위로 남긴다.
 
 ## 9. Plan (`IMPLEMENTED`)
 

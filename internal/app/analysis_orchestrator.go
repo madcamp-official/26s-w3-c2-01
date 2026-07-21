@@ -125,6 +125,12 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 				result.Issues = append(result.Issues, structuredCandidateIssue(projectFact.ManifestPath, "prepare project", err))
 				continue
 			}
+			measured, err := scanner.MeasureResource(ctx, o.filesystem, project.RootPath)
+			if err != nil {
+				result.Issues = append(result.Issues, structuredCandidateIssue(project.RootPath, "measure project size", err))
+			} else {
+				project.LogicalSize = measured.LogicalSize
+			}
 			result.Projects = append(result.Projects, project)
 		}
 		projectResourceCandidates = append(projectResourceCandidates, candidate.ProjectResources...)

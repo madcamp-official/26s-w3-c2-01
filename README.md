@@ -62,7 +62,8 @@
 | Node `node_modules`, 빌드 산출물(`bin`/`obj`/`build`/`dist`/`.next`/`out`/`Debug`/`Release`, Python `__pycache__`/`.pytest_cache`/`.mypy_cache` 포함) | ✅ |
 | Docker 리소스 사용량 | ✅ `docker system df --format '{{json .}}'` 결과를 읽어 Images/Containers/Build Cache/Volumes 집계 (read-only) |
 | Android SDK, Gradle 캐시, Cargo 레지스트리/git 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
-| Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행. Simulator의 `Devices/`(기기별 설치 앱·데이터)와 runtime 이미지는 순수 캐시가 아니라 별도 위험도 판단이 필요해 이번 범위에서 제외 |
+| Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행 |
+| iOS Simulator `Devices/`(기기별 설치 앱·데이터, 보통 가장 큰 소비처) (macOS) | ✅ analysis-only — seed된 상태를 담을 수 있어 Docker Volume처럼 항상 `REVIEW`, 격리/숙청 대상 아님, `xcrun simctl delete unavailable` 안내. runtime 이미지는 시스템 구성요소라 제외 |
 | Conda 환경 | ✅ 전역 named 환경은 정보 제공용(REQUIRES 관계), 프로젝트 내부 prefix 환경은 OWNS 관계로 구분 |
 | 활성 Xcode 설치(`xcode-select`/`xcodebuild -version`), 프로젝트 소유 `Pods`/`.build` (macOS) | ✅ Xcode는 Visual Studio와 같은 급의 시스템 리소스(`BLOCKED`, 현재 활성 설치본만 — 비활성 Xcode는 미탐지), `Pods`/`.build`는 각각 `Podfile.lock`/`Package.resolved` 있으면 `node_modules`처럼 `SAFE` 후보 |
 | Docker Volume | ⚠️ 탐지는 되지만 사용자 데이터일 수 있어 항상 `BLOCKED`, 자동/수동 삭제 명령 모두 미제공 |
@@ -138,7 +139,7 @@
 
 ### 그 외 명시적으로 다루지 않는 범위
 
-Xcode DerivedData의 프로젝트별 소유권 연결(현재는 §macOS 캐시처럼 전역 집계만, `info.plist`의 `WorkspacePath` 기반 프로젝트별 분리는 이중 계산 위험 때문에 보류), iOS Simulator `Devices`/runtime 이미지의 위험도 분류, Linux 전체 지원, 커널 드라이버·파일시스템 minifilter 구현, 모든 파일 읽기/쓰기 이벤트 추적, 시스템 구성요소(Windows SDK/Visual Studio/.NET Runtime/Xcode 등) 강제 삭제, 사용자 문서·데이터베이스·Docker Volume의 자동 삭제, GUI 애플리케이션.
+Xcode DerivedData의 프로젝트별 소유권 연결(현재는 §macOS 캐시처럼 전역 집계만, `info.plist`의 `WorkspacePath` 기반 프로젝트별 분리는 이중 계산 위험 때문에 보류), iOS Simulator runtime 이미지의 위험도 분류와 `Devices/`의 available/unavailable 기기 구분(simctl 필요), Linux 전체 지원, 커널 드라이버·파일시스템 minifilter 구현, 모든 파일 읽기/쓰기 이벤트 추적, 시스템 구성요소(Windows SDK/Visual Studio/.NET Runtime/Xcode 등) 강제 삭제, 사용자 문서·데이터베이스·Docker Volume의 자동 삭제, GUI 애플리케이션.
 
 ---
 

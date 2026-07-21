@@ -23,7 +23,7 @@ func TestDefaultRiskPolicyBlocksAndroidSDK(t *testing.T) {
 }
 
 func TestDefaultRiskPolicyProvidesOfficialCacheCleanupGuidance(t *testing.T) {
-	for _, version := range []string{"gradle", "cargo-registry", "maven", "npm", "pnpm", "xcode-deriveddata", "cocoapods-cache", "swiftpm-cache", "homebrew-cache", "simulator-cache"} {
+	for _, version := range []string{"gradle", "cargo-registry", "maven", "npm", "pnpm", "xcode-deriveddata", "cocoapods-cache", "swiftpm-cache", "homebrew-cache", "simulator-cache", "simulator-devices"} {
 		assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{Resource: domain.Resource{Type: domain.ResourceTypeGlobalCache, Version: version}})
 		if assessment.Level != domain.RiskReview || len(assessment.Warnings) != 1 || assessment.Warnings[0].Code != "OFFICIAL_CLEANUP_GUIDANCE" {
 			t.Fatalf("%s assessment = %#v", version, assessment)

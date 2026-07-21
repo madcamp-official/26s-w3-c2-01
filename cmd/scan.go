@@ -78,11 +78,12 @@ not exist yet, so --full has no effect (see --help).`,
 			return fmt.Errorf("build path classifier: %w", err)
 		}
 
+		scans := sqlite.NewScanRepository(db)
 		filesystem := scanner.New(4)
 		resources := app.NewResourceService(filesystem, sqlite.NewResourceRepository(db), classifier, app.DefaultRiskPolicy{})
 		orchestrator := app.NewAnalysisOrchestrator(
 			filesystem,
-			sqlite.NewScanRepository(db),
+			scans,
 			sqlite.NewProjectRepository(db),
 			sqlite.NewWorkspaceRepository(db),
 			resources,
@@ -97,10 +98,20 @@ not exist yet, so --full has no effect (see --help).`,
 			app.CondaDependencyAnalyzer{},
 		})
 
+		var progressDisplay *scanProgressDisplay
+		if !jsonOutput {
+			estimatedTotal, _ := previousScanFileCount(cmd.Context(), scans)
+			progressDisplay = newScanProgressDisplay(cmd.ErrOrStderr(), estimatedTotal)
+			orchestrator = orchestrator.WithProgress(progressDisplay.Update).WithPhaseHook(progressDisplay.Phase)
+		}
+
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
 			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),
 			Scan:   scanOpts,
 		})
+		if progressDisplay != nil {
+			progressDisplay.Done()
+		}
 		if err != nil {
 			return fmt.Errorf("run scan: %w", err)
 		}

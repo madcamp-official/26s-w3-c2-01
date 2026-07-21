@@ -137,6 +137,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 				result.Issues = append(result.Issues, structuredCandidateIssue(project.RootPath, "measure project size", err))
 			} else {
 				project.LogicalSize = measured.LogicalSize
+				project.SizeKnown = measured.SizeKnown
 			}
 			result.Projects = append(result.Projects, project)
 		}

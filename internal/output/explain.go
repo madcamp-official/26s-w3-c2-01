@@ -41,6 +41,12 @@ type ExplainView struct {
 	Status         domain.ProjectStatus `json:"status,omitempty"`
 	LastModifiedAt time.Time            `json:"last_modified_at,omitempty"`
 	Requires       []ExplainUsage       `json:"requires,omitempty"`
+	// SizeKnown is nil for a resource-kind view (LogicalSize is always
+	// measured for a resource, per domain.Resource.SizeKnown's own
+	// semantics being out of scope here); non-nil for a project-kind view,
+	// where false means LogicalSize is 0 because measurement failed, not
+	// because the project is actually empty (issue #48).
+	SizeKnown *bool `json:"size_known,omitempty"`
 
 	// Shared.
 	LogicalSize    int64     `json:"logical_size_bytes"`
@@ -125,7 +131,7 @@ func (v ExplainView) renderResource(w io.Writer) error {
 func (v ExplainView) renderProject(w io.Writer) error {
 	fmt.Fprintf(w, "Project: %s (%s)\n", v.Name, v.ProjectType)
 	fmt.Fprintf(w, "Path: %s\n", v.Path)
-	fmt.Fprintf(w, "Size: %s\n", humanize.Bytes(uint64(v.LogicalSize)))
+	fmt.Fprintf(w, "Size: %s\n", formatProjectSize(v.LogicalSize, v.SizeKnown))
 	fmt.Fprintf(w, "Status: %s\n", v.Status)
 	fmt.Fprintf(w, "Last modified: %s\n", formatTime(v.LastModifiedAt))
 	fmt.Fprintf(w, "Last observed: %s\n", formatTime(v.LastObservedAt))

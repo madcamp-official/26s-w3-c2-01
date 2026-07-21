@@ -17,6 +17,7 @@ type ExplainedUsage struct {
 	ProjectPath  string
 	ResourceID   string
 	ResourceName string
+	Relation     domain.RelationType
 	Evidence     []domain.Evidence
 }
 
@@ -74,9 +75,6 @@ func (s *ExplainService) ExplainResource(ctx context.Context, resourceID string)
 
 	usages := make([]ExplainedUsage, 0, len(edges))
 	for _, edge := range edges {
-		if edge.Relation != domain.RelationRequires {
-			continue
-		}
 		project, err := s.projects.FindByID(ctx, edge.SourceID)
 		if err != nil {
 			return ResourceExplanation{}, fmt.Errorf("find project %q: %w", edge.SourceID, err)
@@ -87,7 +85,7 @@ func (s *ExplainService) ExplainResource(ctx context.Context, resourceID string)
 		}
 		usages = append(usages, ExplainedUsage{
 			ProjectID: project.ID, ProjectName: project.Name, ProjectPath: project.RootPath,
-			Evidence: evidence,
+			Relation: edge.Relation, Evidence: evidence,
 		})
 	}
 
@@ -124,7 +122,7 @@ func (s *ExplainService) ExplainProject(ctx context.Context, projectID string) (
 		}
 		usages = append(usages, ExplainedUsage{
 			ResourceID: resource.ID, ResourceName: resource.Name,
-			Evidence: evidence,
+			Relation: edge.Relation, Evidence: evidence,
 		})
 	}
 

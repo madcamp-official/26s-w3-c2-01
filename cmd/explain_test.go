@@ -76,7 +76,8 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 	out := run("explain", "project:"+project.RootPath)
 	for _, want := range []string{
 		"Project: GameClient",
-		"Requires:",
+		"Uses:",
+		"  Requires:",
 		"Windows SDK",
 		"Evidence: DECLARED",
 		"Property: WindowsTargetPlatformVersion",

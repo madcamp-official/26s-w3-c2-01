@@ -85,6 +85,13 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 			t.Fatalf("explain project output missing %q:\n%s", want, out)
 		}
 	}
+
+	// issue #38: project size is never actually measured (only resources
+	// are), so "Size: 0 B" would misreport an unmeasured value as a real
+	// zero-byte measurement.
+	if bytes.Contains(out.Bytes(), []byte("Size: 0 B")) {
+		t.Fatalf("explain project output must not render unmeasured size as \"Size: 0 B\":\n%s", out)
+	}
 }
 
 func TestExplainCommandUnknownTargetErrors(t *testing.T) {

@@ -53,6 +53,18 @@ func TestProjectsCommandListsAndFiltersScannedProjects(t *testing.T) {
 	if !bytes.Contains(caseInsensitive.Bytes(), []byte("sample-app")) {
 		t.Fatalf("projects --type Node = %s, want sample-app (case-insensitive match)", caseInsensitive)
 	}
+
+	// issue #38: no project detector ever measures BuildProject.LogicalSize,
+	// so it is always 0 -- rendering that as "0 B" reads as "measured empty"
+	// rather than "not measured", which is what it actually means. The SIZE
+	// column must show the "not measured" placeholder instead, for every
+	// project, with a footnote explaining why.
+	if bytes.Contains(all.Bytes(), []byte("0 B")) {
+		t.Fatalf("projects output must not render unmeasured project size as \"0 B\":\n%s", all)
+	}
+	if !bytes.Contains(all.Bytes(), []byte("not measured")) {
+		t.Fatalf("projects output missing a footnote explaining unmeasured SIZE:\n%s", all)
+	}
 }
 
 func TestProjectsCommandReportsNoProjectsBeforeScan(t *testing.T) {

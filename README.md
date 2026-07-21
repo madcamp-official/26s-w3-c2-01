@@ -42,7 +42,7 @@
 
 | 대상 | 지원 여부 |
 |---|---|
-| Git 저장소 (`.git`) | ✅ |
+| Git 저장소 (`.git`) | ✅ 다른 언어·빌드 매니페스트가 같은 root에 없을 때만 fallback 프로젝트로 탐지 |
 | Node.js (`package.json`) — npm/Yarn/pnpm workspace 관계 포함, `node_modules` 내부를 프로젝트로 오탐하지 않도록 경계 처리됨 | ✅ |
 | MSBuild C++ (`.vcxproj`) / .NET (`.csproj`) — XML에서 `WindowsTargetPlatformVersion` 등 속성 파싱 | ✅ |
 | Python (`pyproject.toml`/`Pipfile`/`setup.py`/`requirements.txt`) | ✅ |

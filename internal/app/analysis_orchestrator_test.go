@@ -294,6 +294,30 @@ func TestAnalysisOrchestratorKeepsOnlyDeclaredProjectsInsideNodeWorkspace(t *tes
 	}
 }
 
+func TestFilterFallbackGitProjectsForEverySemanticAdapter(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	child := filepath.Join(root, "child")
+	semanticTypes := []domain.ProjectType{
+		domain.ProjectTypeNode, domain.ProjectTypePython,
+		domain.ProjectTypeMSBuildCpp, domain.ProjectTypeMSBuildDotNet,
+		domain.ProjectTypeGradle, domain.ProjectTypeMaven, domain.ProjectTypeCargo,
+		domain.ProjectTypeGo, domain.ProjectTypeAndroid,
+	}
+	for _, projectType := range semanticTypes {
+		t.Run(string(projectType), func(t *testing.T) {
+			projects := []domain.BuildProject{
+				{ID: "root-git", Type: domain.ProjectTypeGit, NormalizedRootPath: root},
+				{ID: "semantic", Type: projectType, NormalizedRootPath: root},
+				{ID: "child-git", Type: domain.ProjectTypeGit, NormalizedRootPath: child},
+			}
+			got := filterFallbackGitProjects(projects)
+			if len(got) != 2 || got[0].ID != "semantic" || got[1].ID != "child-git" {
+				t.Fatalf("filterFallbackGitProjects() = %#v", got)
+			}
+		})
+	}
+}
+
 // projectResourceDetectorFake reports one project plus its own node_modules
 // as a ProjectResourceCandidate, exercising the project-owned-resource path.
 type projectResourceDetectorFake struct{ root, resourcePath string }

@@ -39,6 +39,20 @@ func (r *ProjectRepository) UpsertObserved(ctx context.Context, scanID string, p
 	}
 	defer tx.Rollback()
 	for _, project := range projects {
+		if project.Type == domain.ProjectTypeGit {
+			var strongerExists int
+			err := tx.QueryRowContext(ctx, `SELECT EXISTS(
+				SELECT 1 FROM projects WHERE normalized_root_path = ? AND project_type <> ?
+			)`, project.NormalizedRootPath, domain.ProjectTypeGit).Scan(&strongerExists)
+			if err != nil {
+				return fmt.Errorf("check Git fallback for %q: %w", project.RootPath, err)
+			}
+			if strongerExists == 1 {
+				continue
+			}
+		} else if err := removeGitFallbackAtRoot(ctx, tx, project.NormalizedRootPath); err != nil {
+			return err
+		}
 		var lastModified any
 		if !project.LastModifiedAt.IsZero() {
 			lastModified = project.LastModifiedAt.UTC().Format(time.RFC3339Nano)
@@ -72,6 +86,42 @@ func (r *ProjectRepository) UpsertObserved(ctx context.Context, scanID string, p
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit project transaction: %w", err)
+	}
+	return nil
+}
+
+// removeGitFallbackAtRoot also repairs databases created by older versions,
+// where a Git row and a language/build-system row could coexist at one root.
+func removeGitFallbackAtRoot(ctx context.Context, tx *sql.Tx, normalizedRoot string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM projects WHERE normalized_root_path = ? AND project_type = ?`, normalizedRoot, domain.ProjectTypeGit)
+	if err != nil {
+		return fmt.Errorf("find Git fallback at %q: %w", normalizedRoot, err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("read Git fallback at %q: %w", normalizedRoot, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close Git fallback rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("list Git fallback at %q: %w", normalizedRoot, err)
+	}
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM dependencies WHERE source_type = ? AND source_id = ?`, domain.NodeProject, id); err != nil {
+			return fmt.Errorf("delete Git fallback dependencies %q: %w", id, err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM workspace_projects WHERE project_id = ?`, id); err != nil {
+			return fmt.Errorf("delete Git fallback workspace memberships %q: %w", id, err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("delete Git fallback project %q: %w", id, err)
+		}
 	}
 	return nil
 }

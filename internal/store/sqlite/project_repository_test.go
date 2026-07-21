@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -51,6 +52,43 @@ func TestProjectRepositoryListReturnsAllObservedProjects(t *testing.T) {
 	}
 	if len(listed) != 2 {
 		t.Fatalf("List() returned %d projects, want 2", len(listed))
+	}
+}
+
+func TestProjectRepositoryReplacesAndSuppressesGitFallbackAtSameRoot(t *testing.T) {
+	db, scanID := newProjectStore(t)
+	repository := NewProjectRepository(db)
+	root := t.TempDir()
+	now := time.Now().UTC()
+	prepare := func(name string, projectType domain.ProjectType) domain.BuildProject {
+		manifest := filepath.Join(root, name)
+		if err := os.WriteFile(manifest, []byte("marker"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		project, err := app.PrepareBuildProject(domain.BuildProject{Name: "repo", Type: projectType, RootPath: root, ManifestPath: manifest}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		project.SizeKnown = true
+		return project
+	}
+	gitProject := prepare(".git", domain.ProjectTypeGit)
+	goProject := prepare("go.mod", domain.ProjectTypeGo)
+	if err := repository.UpsertObserved(context.Background(), scanID, []domain.BuildProject{gitProject}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpsertObserved(context.Background(), scanID, []domain.BuildProject{goProject}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.FindByID(context.Background(), gitProject.ID); !errors.Is(err, ErrProjectNotFound) {
+		t.Fatalf("Git fallback still exists: %v", err)
+	}
+	if err := repository.UpsertObserved(context.Background(), scanID, []domain.BuildProject{gitProject}); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := repository.List(context.Background())
+	if err != nil || len(listed) != 1 || listed[0].Type != domain.ProjectTypeGo {
+		t.Fatalf("List() = %#v, %v", listed, err)
 	}
 }
 

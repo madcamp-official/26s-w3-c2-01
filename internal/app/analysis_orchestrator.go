@@ -211,6 +211,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	workspaceCandidates = topLevelWorkspaceCandidates(workspaceCandidates)
 	result.Workspaces = workspacesFromCandidates(workspaceCandidates)
 	result.Projects = dedupeProjects(result.Projects)
+	result.Projects = filterFallbackGitProjects(result.Projects)
 	result.Projects = filterNodeProjectsByWorkspace(result.Projects, workspaceCandidates)
 	projectResourceCandidates = filterProjectResourcesByOwner(projectResourceCandidates, result.Projects)
 	projectResourceCandidates = dedupeProjectResources(projectResourceCandidates)
@@ -483,6 +484,29 @@ func dedupeProjects(projects []domain.BuildProject) []domain.BuildProject {
 		unique = append(unique, project)
 	}
 	return unique
+}
+
+// filterFallbackGitProjects keeps a Git repository as a project only when no
+// build-system/language detector found a project at that exact root. Nested
+// projects are intentionally unaffected: a repository root may legitimately
+// contain Node, Python, or other projects in child directories.
+func filterFallbackGitProjects(projects []domain.BuildProject) []domain.BuildProject {
+	strongRoots := make(map[string]struct{}, len(projects))
+	for _, project := range projects {
+		if project.Type != domain.ProjectTypeGit {
+			strongRoots[project.NormalizedRootPath] = struct{}{}
+		}
+	}
+	filtered := make([]domain.BuildProject, 0, len(projects))
+	for _, project := range projects {
+		if project.Type == domain.ProjectTypeGit {
+			if _, found := strongRoots[project.NormalizedRootPath]; found {
+				continue
+			}
+		}
+		filtered = append(filtered, project)
+	}
+	return filtered
 }
 
 func nodeProjectAllowedByWorkspaces(project domain.BuildProject, workspaces []workspaceCandidate) bool {

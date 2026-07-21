@@ -53,6 +53,13 @@ func TestProjectsCommandListsAndFiltersScannedProjects(t *testing.T) {
 	if !bytes.Contains(caseInsensitive.Bytes(), []byte("sample-app")) {
 		t.Fatalf("projects --type Node = %s, want sample-app (case-insensitive match)", caseInsensitive)
 	}
+
+	// issue #38: AnalysisOrchestrator now measures BuildProject.LogicalSize
+	// (see internal/app/analysis_orchestrator.go), so the SIZE column must
+	// show a real humanized value instead of the old "—" placeholder.
+	if bytes.Contains(all.Bytes(), []byte("—")) {
+		t.Fatalf("projects output must not render the unmeasured-size placeholder:\n%s", all)
+	}
 }
 
 func TestProjectsCommandReportsNoProjectsBeforeScan(t *testing.T) {

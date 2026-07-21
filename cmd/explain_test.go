@@ -85,6 +85,13 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 			t.Fatalf("explain project output missing %q:\n%s", want, out)
 		}
 	}
+
+	// issue #38: project size is now measured (see
+	// internal/app/analysis_orchestrator.go), so the line must show a real
+	// humanized value instead of the old "—" placeholder.
+	if bytes.Contains(out.Bytes(), []byte("Size: —")) {
+		t.Fatalf("explain project output must not render the unmeasured-size placeholder:\n%s", out)
+	}
 }
 
 func TestExplainCommandUnknownTargetErrors(t *testing.T) {

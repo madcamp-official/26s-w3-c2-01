@@ -653,6 +653,14 @@ libra daemon stop
 
 구현 상태: **IMPLEMENTED (polling MVP)**. 설정 root의 snapshot이 바뀌면 기존 `scan`을 실행한다. state와 event log는 scan 대상에서 제외하며 자동 clean/purge는 수행하지 않는다. OS-native watcher와 event 병합은 후속 범위다.
 
+```bash
+libra events
+libra events --kind RESOURCE_DIRTY --since 24h --limit 20
+libra --json events
+```
+
+`events`는 설정 파일 옆 `.libra-events.jsonl`을 읽으며 기본적으로 최근 50건을 시간순으로 출력한다 (`IMPLEMENTED`).
+
 ### 감시할 이벤트
 
 - 파일 생성

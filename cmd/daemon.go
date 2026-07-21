@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/eventlog"
 	"github.com/spf13/cobra"
 )
 
@@ -159,6 +160,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	if err := writeDaemonState(state); err != nil {
 		return err
 	}
+	appendDaemonEvent(now, "DAEMON_STARTED", "")
 	previous, err := snapshotRoots(cfg)
 	if err != nil {
 		state.LastError = err.Error()
@@ -269,10 +271,5 @@ func writeDaemonState(state daemonState) error {
 	return os.Rename(temporary, daemonStatePath())
 }
 func appendDaemonEvent(at time.Time, kind, eventErr string) {
-	file, err := os.OpenFile(daemonEventPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	_ = json.NewEncoder(file).Encode(map[string]any{"at": at, "kind": kind, "error": eventErr})
+	_ = eventlog.Append(daemonEventPath(), eventlog.Event{At: at, Kind: kind, Error: eventErr})
 }

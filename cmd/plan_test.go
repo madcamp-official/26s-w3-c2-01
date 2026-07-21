@@ -123,6 +123,11 @@ func TestPlanCommandDefaultsToUnlimitedTargetAndAllRiskTiers(t *testing.T) {
 	if !strings.Contains(got, "node_modules") {
 		t.Fatalf("plan output missing REVIEW node_modules candidate:\n%s", got)
 	}
+	// issue #40: plan used to be just a path/size list with no indication
+	// of *why* a candidate landed in its risk tier.
+	if !strings.Contains(got, "Reason: cleanup safety has not been fully verified") {
+		t.Fatalf("plan output missing REVIEW candidate's Reason:\n%s", got)
+	}
 }
 
 // TestPlanCommandReviewAndBlockedShowRealSizeNotZero is a regression test

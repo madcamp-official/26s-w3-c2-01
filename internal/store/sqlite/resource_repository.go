@@ -37,8 +37,8 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 		INSERT INTO resources (
 			id, resource_type, name, version, path, normalized_path,
 			logical_size, size_known, reclaimable_size, regenerable, system_managed,
-			last_modified_at, last_observed_at, risk, confidence, regeneration_command
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			last_modified_at, last_observed_at, risk, confidence, regeneration_command, reason
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -54,13 +54,14 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			last_observed_at = excluded.last_observed_at,
 			risk = excluded.risk,
 			confidence = excluded.confidence,
-			regeneration_command = excluded.regeneration_command
+			regeneration_command = excluded.regeneration_command,
+			reason = excluded.reason
 	`,
 		resource.ID, resource.Type, resource.Name, nullableString(resource.Version),
 		resource.DisplayPath, resource.NormalizedPath, resource.LogicalSize, boolInt(resource.SizeKnown),
 		resource.ReclaimableSize, boolInt(resource.Regenerable), boolInt(resource.SystemManaged),
 		lastModifiedAt, resource.LastObservedAt.UTC().Format(time.RFC3339Nano),
-		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand),
+		resource.Risk, resource.Confidence, nullableString(resource.RegenerationCommand), resource.Reason,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert resource %q: %w", resource.ID, err)
@@ -126,7 +127,7 @@ func (r *ResourceRepository) List(ctx context.Context) ([]domain.Resource, error
 const resourceSelect = `
 	SELECT id, resource_type, name, version, path, normalized_path,
 		logical_size, size_known, reclaimable_size, regenerable, system_managed,
-		last_modified_at, last_observed_at, risk, confidence, regeneration_command
+		last_modified_at, last_observed_at, risk, confidence, regeneration_command, reason
 	FROM resources`
 
 type rowScanner interface {
@@ -147,7 +148,7 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 		&resource.DisplayPath, &resource.NormalizedPath,
 		&resource.LogicalSize, &sizeKnown, &resource.ReclaimableSize,
 		&regenerable, &systemManaged, &lastModifiedAt, &lastObservedAt,
-		&resource.Risk, &resource.Confidence, &regenerationCommand,
+		&resource.Risk, &resource.Confidence, &regenerationCommand, &resource.Reason,
 	)
 	if err != nil {
 		return domain.Resource{}, err

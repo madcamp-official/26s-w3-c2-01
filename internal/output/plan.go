@@ -24,10 +24,14 @@ type PlanView struct {
 	Blocked  []PlanBlockedLine        `json:"blocked,omitempty"`
 }
 
-// PlanCandidateLine is one SAFE or REVIEW row.
+// PlanCandidateLine is one SAFE or REVIEW row. Reason is why RiskPolicy
+// classified it at this risk level (domain.Resource.Reason, issue #40) --
+// without it, `plan` was just a list of paths with no indication of why a
+// SAFE candidate was trusted or a REVIEW one wasn't.
 type PlanCandidateLine struct {
-	Size int64  `json:"size_bytes"`
-	Path string `json:"path"`
+	Size   int64  `json:"size_bytes"`
+	Path   string `json:"path"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // PlanBlockedLine is one BLOCKED row. UsedBy names the projects that
@@ -35,6 +39,7 @@ type PlanCandidateLine struct {
 type PlanBlockedLine struct {
 	Size   int64    `json:"size_bytes"`
 	Path   string   `json:"path"`
+	Reason string   `json:"reason,omitempty"`
 	UsedBy []string `json:"used_by,omitempty"`
 }
 
@@ -62,6 +67,9 @@ func (v PlanView) RenderText(w io.Writer) error {
 	}
 	for _, line := range v.Safe {
 		fmt.Fprintf(w, "[%d] %s %s\n", index, humanize.Bytes(uint64(line.Size)), line.Path)
+		if line.Reason != "" {
+			fmt.Fprintf(w, "    Reason: %s\n", line.Reason)
+		}
 		index++
 	}
 
@@ -70,6 +78,9 @@ func (v PlanView) RenderText(w io.Writer) error {
 		fmt.Fprintln(w, "REVIEW")
 		for _, line := range v.Review {
 			fmt.Fprintf(w, "[%d] %s %s\n", index, humanize.Bytes(uint64(line.Size)), line.Path)
+			if line.Reason != "" {
+				fmt.Fprintf(w, "    Reason: %s\n", line.Reason)
+			}
 			index++
 		}
 	}
@@ -79,6 +90,9 @@ func (v PlanView) RenderText(w io.Writer) error {
 		fmt.Fprintln(w, "BLOCKED")
 		for _, line := range v.Blocked {
 			fmt.Fprintf(w, "[ ] %s %s\n", humanize.Bytes(uint64(line.Size)), line.Path)
+			if line.Reason != "" {
+				fmt.Fprintf(w, "    Reason: %s\n", line.Reason)
+			}
 			if len(line.UsedBy) > 0 {
 				fmt.Fprintf(w, "    Used by %s\n", strings.Join(line.UsedBy, ", "))
 			}

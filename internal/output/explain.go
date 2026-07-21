@@ -32,6 +32,7 @@ type ExplainView struct {
 	Regenerable    *bool               `json:"regenerable,omitempty"`
 	Risk           domain.RiskLevel    `json:"risk,omitempty"`
 	Confidence     *int                `json:"confidence,omitempty"`
+	Reason         string              `json:"reason,omitempty"`
 	UsedBy         []ExplainUsage      `json:"used_by,omitempty"`
 	ExpectedImpact []ExplainImpactLine `json:"expected_impact,omitempty"`
 	Recovery       string              `json:"recovery,omitempty"`
@@ -116,6 +117,9 @@ func (v ExplainView) renderResource(w io.Writer) error {
 	fmt.Fprintf(w, "Risk: %s\n", v.Risk)
 	if v.Confidence != nil {
 		fmt.Fprintf(w, "Confidence: %d%%\n", *v.Confidence)
+	}
+	if v.Reason != "" {
+		fmt.Fprintf(w, "Reason: %s\n", v.Reason)
 	}
 	fmt.Fprintf(w, "Recovery: %s\n", v.Recovery)
 

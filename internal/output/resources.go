@@ -17,7 +17,8 @@ type ResourcesView struct {
 	Resources []ResourceLine `json:"resources"`
 }
 
-// ResourceLine is a single resource row in a ResourcesView.
+// ResourceLine is a single resource row in a ResourcesView. Reason is why
+// RiskPolicy classified it at Risk (domain.Resource.Reason, issue #40).
 type ResourceLine struct {
 	Name         string              `json:"name"`
 	Type         domain.ResourceType `json:"type"`
@@ -28,6 +29,7 @@ type ResourceLine struct {
 	Regenerable  bool                `json:"regenerable"`
 	Risk         domain.RiskLevel    `json:"risk"`
 	Confidence   int                 `json:"confidence"`
+	Reason       string              `json:"reason,omitempty"`
 }
 
 // RenderText implements Renderable.

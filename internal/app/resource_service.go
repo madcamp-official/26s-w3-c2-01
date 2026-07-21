@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
@@ -95,6 +96,7 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Cleanup:       cleanup,
 	})
 	detected.Risk = assessment.Level
+	detected.Reason = strings.Join(assessment.Reasons, "; ")
 	switch detected.Risk {
 	case domain.RiskSafe:
 		detected.ReclaimableSize = detected.LogicalSize
@@ -155,6 +157,7 @@ func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID str
 
 	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
 	resource.Risk = assessment.Level
+	resource.Reason = strings.Join(assessment.Reasons, "; ")
 	resource.ReclaimableSize = 0
 
 	if err := s.repository.Upsert(ctx, resource); err != nil {

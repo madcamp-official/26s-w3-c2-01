@@ -56,6 +56,11 @@ type Resource struct {
 	// already has the lockfile/project-type facts on hand right then. Empty
 	// when no specific command is known, even if Regenerable is true.
 	RegenerationCommand string
+	// Reason is why RiskPolicy.Classify assigned Risk its current value
+	// (e.g. "project artifact is regenerable and all cleanup evidence is
+	// verified"), taken from RiskAssessment.Reasons at classification time.
+	// See app.DefaultRiskPolicy.Classify.
+	Reason string
 }
 
 // ResourceID returns the stable identity shared by detectors and storage.

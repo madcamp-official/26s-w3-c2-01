@@ -67,6 +67,7 @@ the confidence of the analysis.`,
 				Regenerable:  resource.Regenerable,
 				Risk:         resource.Risk,
 				Confidence:   resource.Confidence,
+				Reason:       resource.Reason,
 			})
 		}
 

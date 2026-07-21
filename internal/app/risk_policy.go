@@ -60,6 +60,18 @@ type RiskPolicy interface {
 type DefaultRiskPolicy struct{}
 
 func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
+	if context.Resource.Type == domain.ResourceTypeDockerVolume {
+		return RiskAssessment{
+			Level: domain.RiskBlocked, Confidence: context.Confidence,
+			Blockers: []domain.RiskReason{{Code: "DOCKER_VOLUME_USER_DATA", Severity: domain.RiskReasonBlocker, Message: "Docker volumes may contain persistent user data and are never automatic cleanup targets"}},
+		}
+	}
+	if context.Resource.Type == domain.ResourceTypeDockerCache {
+		return RiskAssessment{
+			Level: domain.RiskReview, Confidence: context.Confidence,
+			Warnings: []domain.RiskReason{{Code: "DOCKER_OFFICIAL_CLEANUP_REQUIRED", Severity: domain.RiskReasonWarning, Message: "Docker-managed data must be reviewed and cleaned with Docker's official commands"}},
+		}
+	}
 	if context.ProtectedPath || context.Resource.SystemManaged {
 		return RiskAssessment{
 			Level: domain.RiskBlocked, Confidence: context.Confidence,

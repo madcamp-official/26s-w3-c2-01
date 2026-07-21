@@ -74,9 +74,15 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 	detected.NormalizedPath = normalizedPath
 	detected.ID = domain.ResourceID(detected.Type, detected.Version, normalizedPath)
 
-	measured, err := scanner.MeasureResource(ctx, s.filesystem, displayPath)
-	if err != nil {
-		return ResourceObservation{}, fmt.Errorf("measure resource %q: %w", displayPath, err)
+	measured := scanner.ResourceSize{
+		LogicalSize: detected.LogicalSize, SizeKnown: detected.SizeKnown,
+		LastModifiedAt: detected.LastModifiedAt,
+	}
+	if !detected.SizeKnown {
+		measured, err = scanner.MeasureResource(ctx, s.filesystem, displayPath)
+		if err != nil {
+			return ResourceObservation{}, fmt.Errorf("measure resource %q: %w", displayPath, err)
+		}
 	}
 	detected.LogicalSize = measured.LogicalSize
 	detected.SizeKnown = measured.SizeKnown

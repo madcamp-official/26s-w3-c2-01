@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/docker"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
@@ -39,6 +40,7 @@ func defaultResourceDetectors() []app.ResourceDetector {
 	return []app.ResourceDetector{
 		app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
 		app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
+		app.DockerResourceDetector{Lister: docker.CLILister{}},
 		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
 		app.CondaResourceDetector{Lister: conda.CLIEnvLister{}},
 	}

@@ -24,6 +24,7 @@ var resourceTypePrefixes = map[string]domain.ResourceType{
 	string(domain.ResourceTypeBuildOutput):  domain.ResourceTypeBuildOutput,
 	string(domain.ResourceTypeGlobalCache):  domain.ResourceTypeGlobalCache,
 	string(domain.ResourceTypeDockerCache):  domain.ResourceTypeDockerCache,
+	string(domain.ResourceTypeDockerVolume): domain.ResourceTypeDockerVolume,
 }
 
 // ErrTargetNotFound is returned by resolveTarget when no resource or project

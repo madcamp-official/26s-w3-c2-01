@@ -95,6 +95,31 @@ func TestResourceServiceSetsMeasuredSizeReclaimableForSafeArtifact(t *testing.T)
 	}
 }
 
+func TestResourceServiceUsesPremeasuredDockerUsageWithoutWalkingCLIPath(t *testing.T) {
+	dockerPath := filepath.Join(t.TempDir(), "docker")
+	if err := os.WriteFile(dockerPath, []byte("cli"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	classifier, err := safety.NewPathClassifier(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &resourceRepositoryStub{}
+	service := NewResourceService(nil, repository, classifier, DefaultRiskPolicy{})
+
+	got, err := service.Observe(context.Background(), ResourceObservationInput{Resource: domain.Resource{
+		Name: "Docker Build Cache", Type: domain.ResourceTypeDockerCache, Version: "build-cache",
+		DisplayPath: dockerPath, LogicalSize: 2_000, SizeKnown: true, ReclaimableSize: 1_500,
+		Confidence: domain.DefaultConfidence[domain.EvidenceResolved],
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Resource.LogicalSize != 2_000 || got.Resource.ReclaimableSize != 1_500 || got.Resource.Risk != domain.RiskReview {
+		t.Fatalf("resource = %#v, want premeasured REVIEW Docker usage", got.Resource)
+	}
+}
+
 func TestResourceServiceReclassifyRequiredBlocksAnUnclassifiedResource(t *testing.T) {
 	repository := &resourceRepositoryStub{
 		byID: domain.Resource{

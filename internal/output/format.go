@@ -57,17 +57,3 @@ func yesNo(b bool) string {
 	}
 	return "no"
 }
-
-// projectSizeDisplay/projectSizeFootnote (issue #38): no project detector
-// currently sets BuildProject.LogicalSize -- internal/app/resource_service.go
-// only measures Resource sizes, never a project's -- so the field is always
-// its zero value for every project, unconditionally, not just when a project
-// happens to be empty. Rendering that zero as "0 B" reads as a measurement
-// ("this project is empty") when it is really "not measured at all", so
-// ProjectsView and ExplainView's project case both show this placeholder
-// instead of humanize.Bytes(LogicalSize). Resource sizes (Resource.LogicalSize
-// via scanner.MeasureResource) are real measurements and are unaffected --
-// only the project-level SIZE column/line uses this.
-const projectSizeDisplay = "—"
-
-const projectSizeFootnote = "Project SIZE is not measured in this scan mode; see resource sizes (`libra resources`) instead."

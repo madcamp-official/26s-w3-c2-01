@@ -6,6 +6,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
@@ -18,15 +20,10 @@ type ProjectsView struct {
 
 // ProjectLine is a single project row in a ProjectsView.
 type ProjectLine struct {
-	Name  string             `json:"name"`
-	Path  string             `json:"path"`
-	Type  domain.ProjectType `json:"type"`
-	Drive string             `json:"drive,omitempty"`
-	// LogicalSize is always 0 today (issue #38): no project detector
-	// measures it. RenderText deliberately does not render this field --
-	// see projectSizeDisplay in format.go. Kept in the JSON shape unchanged
-	// pending a team decision on a size_known-style field (a CLI JSON schema
-	// change under docs/libra_collaboration_rules.md §9, out of scope here).
+	Name           string               `json:"name"`
+	Path           string               `json:"path"`
+	Type           domain.ProjectType   `json:"type"`
+	Drive          string               `json:"drive,omitempty"`
 	LogicalSize    int64                `json:"logical_size_bytes"`
 	LastModifiedAt time.Time            `json:"last_modified_at,omitempty"`
 	LastObservedAt time.Time            `json:"last_observed_at"`
@@ -45,15 +42,10 @@ func (v ProjectsView) RenderText(w io.Writer) error {
 	fmt.Fprintln(tw, "NAME\tTYPE\tDRIVE\tSIZE\tSTATUS\tRESOURCES\tMODIFIED\tPATH")
 	for _, p := range v.Projects {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
-			p.Name, p.Type, p.Drive, projectSizeDisplay,
+			p.Name, p.Type, p.Drive, humanize.Bytes(uint64(p.LogicalSize)),
 			p.Status, p.ResourceCount, formatTime(p.LastModifiedAt), p.Path)
 	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, projectSizeFootnote)
-	return nil
+	return tw.Flush()
 }
 
 // formatTime is shared by every view in this package that renders a

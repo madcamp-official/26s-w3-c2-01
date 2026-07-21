@@ -9,14 +9,11 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
-// TestProjectsViewRenderText_SizeIsNeverRenderedAsBytes covers issue #38: no
-// project detector measures BuildProject.LogicalSize (only Resource sizes
-// are measured, in internal/app/resource_service.go), so it is always 0 for
-// every project -- not just when a project happens to be empty. Rendering
-// "0 B" would misreport "not measured" as "measured empty". LogicalSize is
-// deliberately set non-zero here to prove RenderText ignores it entirely,
-// not merely special-cases 0.
-func TestProjectsViewRenderText_SizeIsNeverRenderedAsBytes(t *testing.T) {
+// TestProjectsViewRenderText_RendersLogicalSizeAsBytes covers issue #38's
+// fix: AnalysisOrchestrator now measures BuildProject.LogicalSize via
+// scanner.MeasureResource, so RenderText should humanize it like every other
+// size column (ResourcesView) instead of hiding it behind a placeholder.
+func TestProjectsViewRenderText_RendersLogicalSizeAsBytes(t *testing.T) {
 	view := ProjectsView{Projects: []ProjectLine{
 		{Name: "frontend", Type: domain.ProjectTypeNode, Status: domain.ProjectStatusActive, LogicalSize: 123456},
 	}}
@@ -27,22 +24,13 @@ func TestProjectsViewRenderText_SizeIsNeverRenderedAsBytes(t *testing.T) {
 	}
 	out := buf.String()
 
-	if strings.Contains(out, "123456") || strings.Contains(out, "0 B") {
-		t.Errorf("RenderText must not render project LogicalSize as a byte count, got:\n%s", out)
-	}
-	if !strings.Contains(out, projectSizeDisplay) {
-		t.Errorf("RenderText missing the %q placeholder, got:\n%s", projectSizeDisplay, out)
-	}
-	if !strings.Contains(out, "not measured") {
-		t.Errorf("RenderText missing a footnote explaining unmeasured SIZE, got:\n%s", out)
+	if !strings.Contains(out, "124 kB") {
+		t.Errorf("RenderText must render project LogicalSize as a humanized byte count, got:\n%s", out)
 	}
 }
 
-// TestProjectsViewJSON_StillCarriesLogicalSize confirms this display fix is
-// text-only: the JSON contract (logical_size_bytes) is intentionally left
-// unchanged here. Adding a size_known-style field would be a CLI JSON schema
-// change requiring team agreement (docs/libra_collaboration_rules.md §9),
-// which is out of scope for issue #38's display-only fix.
+// TestProjectsViewJSON_StillCarriesLogicalSize confirms logical_size_bytes
+// round-trips through the JSON contract unchanged.
 func TestProjectsViewJSON_StillCarriesLogicalSize(t *testing.T) {
 	view := ProjectsView{Projects: []ProjectLine{{Name: "frontend", LogicalSize: 0}}}
 

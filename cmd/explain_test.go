@@ -86,11 +86,11 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 		}
 	}
 
-	// issue #38: project size is never actually measured (only resources
-	// are), so "Size: 0 B" would misreport an unmeasured value as a real
-	// zero-byte measurement.
-	if bytes.Contains(out.Bytes(), []byte("Size: 0 B")) {
-		t.Fatalf("explain project output must not render unmeasured size as \"Size: 0 B\":\n%s", out)
+	// issue #38: project size is now measured (see
+	// internal/app/analysis_orchestrator.go), so the line must show a real
+	// humanized value instead of the old "—" placeholder.
+	if bytes.Contains(out.Bytes(), []byte("Size: —")) {
+		t.Fatalf("explain project output must not render the unmeasured-size placeholder:\n%s", out)
 	}
 }
 

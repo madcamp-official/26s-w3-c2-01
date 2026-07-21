@@ -54,16 +54,11 @@ func TestProjectsCommandListsAndFiltersScannedProjects(t *testing.T) {
 		t.Fatalf("projects --type Node = %s, want sample-app (case-insensitive match)", caseInsensitive)
 	}
 
-	// issue #38: no project detector ever measures BuildProject.LogicalSize,
-	// so it is always 0 -- rendering that as "0 B" reads as "measured empty"
-	// rather than "not measured", which is what it actually means. The SIZE
-	// column must show the "not measured" placeholder instead, for every
-	// project, with a footnote explaining why.
-	if bytes.Contains(all.Bytes(), []byte("0 B")) {
-		t.Fatalf("projects output must not render unmeasured project size as \"0 B\":\n%s", all)
-	}
-	if !bytes.Contains(all.Bytes(), []byte("not measured")) {
-		t.Fatalf("projects output missing a footnote explaining unmeasured SIZE:\n%s", all)
+	// issue #38: AnalysisOrchestrator now measures BuildProject.LogicalSize
+	// (see internal/app/analysis_orchestrator.go), so the SIZE column must
+	// show a real humanized value instead of the old "—" placeholder.
+	if bytes.Contains(all.Bytes(), []byte("—")) {
+		t.Fatalf("projects output must not render the unmeasured-size placeholder:\n%s", all)
 	}
 }
 

@@ -43,6 +43,20 @@ type PlanBlockedLine struct {
 	UsedBy      []string            `json:"used_by,omitempty"`
 }
 
+// Envelope maps PlanView onto the shared JSON envelope (issue #59):
+// INSUFFICIENT_CANDIDATES means plan couldn't reach --target, which is
+// exactly the "completed but fell short" case Outcome exists to flag.
+// Issues aren't wired here (out of #59's approved scope for this round --
+// SAFE/REVIEW/BLOCKED already carry per-candidate RiskReasons of their
+// own, and folding those into envelope-level Issues too is a separate,
+// not-yet-decided design question), only Outcome.
+func (v PlanView) Envelope() EnvelopeOptions {
+	if v.Status == domain.CleanupPlanInsufficientCandidates {
+		return EnvelopeOptions{Outcome: OutcomePartial}
+	}
+	return EnvelopeOptions{Outcome: OutcomeSuccess}
+}
+
 // RenderText implements Renderable. The numbered list continues across
 // SAFE and REVIEW (matching the §3.8 example: SAFE ends at [4], REVIEW
 // starts at [5]) since both are candidates the user might act on manually;

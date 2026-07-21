@@ -47,7 +47,7 @@ var purgeCmd = &cobra.Command{
 			return fmt.Errorf("purge transaction: %w", err)
 		}
 		view := output.PurgeView{TransactionID: result.Transaction.ID, DryRun: result.DryRun, Status: result.Transaction.Status, Candidates: result.Candidates}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "purge").PrintEnvelope(view, view.Envelope())
 	},
 }
 

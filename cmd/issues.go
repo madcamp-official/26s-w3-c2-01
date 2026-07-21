@@ -48,7 +48,7 @@ By default it reads the latest scan; use --scan to inspect an earlier scan.`,
 				Operation: issue.Operation, Severity: issue.Severity, Message: issue.Message,
 			})
 		}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "issues").PrintEnvelope(view, view.Envelope())
 	},
 }
 

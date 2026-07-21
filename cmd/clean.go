@@ -74,7 +74,8 @@ Without --yes, execution asks for interactive confirmation.`,
 			if err != nil {
 				return fmt.Errorf("execute cleanup: %w", err)
 			}
-			return output.New(cmd.OutOrStdout(), jsonOutput).Print(output.CleanupTransactionViewFromDomain(transaction))
+			transactionView := output.CleanupTransactionViewFromDomain(transaction)
+			return output.New(cmd.OutOrStdout(), jsonOutput, "clean").PrintEnvelope(transactionView, transactionView.Envelope())
 		}
 		view := output.CleanView{PlanID: plan.ID, DryRun: true}
 		for _, item := range plan.Items {
@@ -85,7 +86,7 @@ Without --yes, execution asks for interactive confirmation.`,
 			view.Items = append(view.Items, line)
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "clean").PrintEnvelope(view, view.Envelope())
 	},
 }
 

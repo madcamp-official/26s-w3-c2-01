@@ -683,11 +683,15 @@ restore 규칙:
 `--json` 모두 `scan_id`와 issue의 code/phase/adapter/path/operation/severity/message를 제공한다
 (`IMPLEMENTED`, issue #47). `scan --strict`는 이 계약에 포함하지 않는다.
 
-현재 `--json`은 각 command view를 JSON으로 직렬화한다. 아래 공통 envelope는 합의됐지만 기존 명령 전체 migration이 끝나지 않아 `CONFIRMED`다.
+모든 명령의 `--json`이 아래 공통 envelope로 나간다 (`IMPLEMENTED`, issue #42/#59). `output.New(w, jsonOutput, command)`이 command 이름을 받고, `Printer.Print`/`PrintEnvelope`가 감싼다.
 
 ```json
-{"command":"clean","status":"PARTIAL","data":{},"issues":[],"unverified":[]}
+{"command":"clean","schema_version":1,"outcome":"PARTIAL","data":{},"issues":[],"unverified":[]}
 ```
+
+- **`status` → `outcome`으로 개명**: 최초 초안은 `status`였는데, `PlanView.Status`(READY/INSUFFICIENT_CANDIDATES) 등 `data` 하위 필드도 이미 `status`라는 이름을 쓰고 있어 JSON depth만 다르고 이름이 같은 두 개념이 헷갈릴 수 있었다(`jq .status`가 어느 쪽을 가리키는지 불명확). envelope 레벨은 `outcome`(`SUCCESS`/`PARTIAL`/`FAILED`)으로 분리했다.
+- **`issues`/`unverified` 실제 배선**: `scan`/`issues`/`clean`(dry-run 포함)/`purge`/`restore` 5개 명령만 채운다 — 이 명령들만 "이번 실행 자체가 부분적으로만 성공했다"는 개념이 구조적으로 존재한다(예: scan이 일부 경로에서 권한 오류를 만났거나, clean이 일부 item만 이동함). 나머지(`projects`/`resources`/`summary`/`explain`/`impact`/`transactions`/`plan`)는 DB를 읽기만 하거나(전자) 매 요청이 전부 성공하거나 에러로 죽는 이분법이라, `issues: []`가 스텁이 아니라 정확한 값이다. `plan`만 예외로 `outcome`은 `INSUFFICIENT_CANDIDATES`일 때 `PARTIAL`로 매핑하되(목표 미달도 "완료했지만 부족" 케이스라서), `issues` 배선은 이번 스코프에 넣지 않았다(SAFE/REVIEW/BLOCKED가 이미 후보별 `risk_reasons`를 따로 들고 있어, envelope 레벨 issues와 어떻게 합칠지는 별도 결정 필요).
+- `Unverified`(app.UnverifiedScope)는 scan 실행 중에만 존재하고 DB에 영속화되지 않아, scan 이외 명령은 구조적으로 접근 불가 — scan만 채운다.
 
 Exit code 목표:
 
@@ -729,11 +733,12 @@ cleanup fixture는 임시 디렉터리만 사용하고 다음을 검증한다.
 
 | 우선순위 | 항목 |
 |---:|---|
-| 1 | typed CLI error와 exit code 2/3/4/5/130 연결 |
-| 2 | 모든 명령 공통 JSON envelope migration |
+| 1 | typed CLI error와 exit code 2/3/4/5/130 연결 (issue #62) |
+| 2 | ~~모든 명령 공통 JSON envelope migration~~ — `IMPLEMENTED` (issue #42/#59) |
 | 3 | Windows 실제 volume에서 junction, ACL, hidden attribute 통합 테스트 |
 | 5 | incremental scan snapshot과 STALE 전환 |
-| 6 | daemon OS-native watcher/lock과 공통 JSON envelope migration |
+| 6 | daemon OS-native watcher/lock 완성 |
+| 7 | `daemon status --json`을 공통 envelope로 편입 -- 현재 `output.New`/`Printer`를 거치지 않고 `json.NewEncoder(...).Encode(map[string]any{...})`로 직접 인코딩해, 이 §13 계약 밖에 있음(issue #42/#59 작업 중 발견, 이번 스코프에는 포함하지 않음) |
 
 ## 16. 변경 관리
 

@@ -126,7 +126,7 @@ needs review, or is blocked from cleanup.`,
 				Bytes: line.Bytes,
 			})
 		}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "summary").Print(view)
 	},
 }
 

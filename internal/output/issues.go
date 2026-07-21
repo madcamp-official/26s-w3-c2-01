@@ -23,6 +23,22 @@ type IssueLine struct {
 	Message   string            `json:"message"`
 }
 
+// Envelope maps IssuesView onto the shared JSON envelope (issue #59).
+// Outcome is always SUCCESS: `issues` is a pure listing of a past scan's
+// already-recorded problems, so having issues to show doesn't mean this
+// command's own listing operation was itself degraded (contrast ScanView's
+// Envelope, where the warnings reflect the current run's own operation).
+func (v IssuesView) Envelope() EnvelopeOptions {
+	opts := EnvelopeOptions{Outcome: OutcomeSuccess}
+	for _, issue := range v.Issues {
+		opts.Issues = append(opts.Issues, EnvelopeIssue{
+			Code: string(issue.Code), Severity: string(issue.Severity), Phase: string(issue.Phase),
+			Adapter: issue.Adapter, Path: issue.Path, Operation: issue.Operation, Message: issue.Message,
+		})
+	}
+	return opts
+}
+
 func (v IssuesView) RenderText(w io.Writer) error {
 	if len(v.Issues) == 0 {
 		fmt.Fprintf(w, "No issues found for scan %s.\n", v.ScanID)

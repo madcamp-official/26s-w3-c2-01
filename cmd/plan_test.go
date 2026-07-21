@@ -3,13 +3,13 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -61,8 +61,8 @@ func TestPlanCommandSelectsSeededSafeResourceUntilTarget(t *testing.T) {
 			Path      string `json:"path"`
 		} `json:"safe"`
 	}
-	if err := json.Unmarshal([]byte(got), &view); err != nil {
-		t.Fatalf("unmarshal plan output: %v\n%s", err, got)
+	if _, err := output.DecodeEnvelope([]byte(got), &view); err != nil {
+		t.Fatalf("decode plan output: %v\n%s", err, got)
 	}
 	if view.Status != "READY" {
 		t.Fatalf("status = %q, want READY", view.Status)
@@ -175,8 +175,8 @@ func TestPlanCommandReviewAndBlockedShowRealSizeNotZero(t *testing.T) {
 			Path      string `json:"path"`
 		} `json:"review"`
 	}
-	if err := json.Unmarshal([]byte(got), &view); err != nil {
-		t.Fatalf("unmarshal plan output: %v\n%s", err, got)
+	if _, err := output.DecodeEnvelope([]byte(got), &view); err != nil {
+		t.Fatalf("decode plan output: %v\n%s", err, got)
 	}
 	if len(view.Review) == 0 {
 		t.Fatalf("plan output has no REVIEW candidates to check:\n%s", got)

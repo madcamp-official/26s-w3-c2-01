@@ -2,7 +2,6 @@ package output
 
 import (
 	"bytes"
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -38,13 +37,13 @@ func TestPrinterJSON(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := New(&buf, true).Print(view); err != nil {
+	if err := New(&buf, true, "summary").Print(view); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
 	var decoded SummaryView
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatalf("Unmarshal: %v\noutput: %s", err, buf.String())
+	if _, err := DecodeEnvelope(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("DecodeEnvelope: %v\noutput: %s", err, buf.String())
 	}
 	if decoded.SafeReclaimable != view.SafeReclaimable {
 		t.Errorf("SafeReclaimable = %d, want %d", decoded.SafeReclaimable, view.SafeReclaimable)
@@ -58,7 +57,7 @@ func TestPrinterText(t *testing.T) {
 	view := SummaryView{ResourcesByType: []SummaryLine{{Label: "X", Bytes: 1}}}
 
 	var buf bytes.Buffer
-	if err := New(&buf, false).Print(view); err != nil {
+	if err := New(&buf, false, "summary").Print(view); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 	if strings.HasPrefix(strings.TrimSpace(buf.String()), "{") {

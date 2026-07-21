@@ -2,7 +2,6 @@ package output
 
 import (
 	"bytes"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,13 +35,13 @@ func TestProjectsViewJSON_StillCarriesLogicalSize(t *testing.T) {
 	view := ProjectsView{Projects: []ProjectLine{{Name: "frontend", LogicalSize: 0}}}
 
 	var buf bytes.Buffer
-	if err := New(&buf, true).Print(view); err != nil {
+	if err := New(&buf, true, "projects").Print(view); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
 	var decoded ProjectsView
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatalf("Unmarshal: %v\noutput: %s", err, buf.String())
+	if _, err := DecodeEnvelope(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("DecodeEnvelope: %v\noutput: %s", err, buf.String())
 	}
 	if len(decoded.Projects) != 1 || decoded.Projects[0].LogicalSize != 0 {
 		t.Errorf("decoded = %+v, want one project with logical_size_bytes = 0 (JSON contract unchanged)", decoded.Projects)
@@ -80,7 +79,7 @@ func TestProjectsViewJSON_CarriesSizeKnown(t *testing.T) {
 	view := ProjectsView{Projects: []ProjectLine{{Name: "frontend", LogicalSize: 0, SizeKnown: false}}}
 
 	var buf bytes.Buffer
-	if err := New(&buf, true).Print(view); err != nil {
+	if err := New(&buf, true, "projects").Print(view); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
@@ -89,8 +88,8 @@ func TestProjectsViewJSON_CarriesSizeKnown(t *testing.T) {
 	}
 
 	var decoded ProjectsView
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatalf("Unmarshal: %v\noutput: %s", err, buf.String())
+	if _, err := DecodeEnvelope(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("DecodeEnvelope: %v\noutput: %s", err, buf.String())
 	}
 	if len(decoded.Projects) != 1 || decoded.Projects[0].SizeKnown != false {
 		t.Errorf("decoded = %+v, want one project with size_known = false", decoded.Projects)
@@ -194,13 +193,13 @@ func TestProjectsViewRenderText_TreeGroupingLeavesJSONFlatAndUnordered(t *testin
 	}}
 
 	var buf bytes.Buffer
-	if err := New(&buf, true).Print(view); err != nil {
+	if err := New(&buf, true, "projects").Print(view); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
 	var decoded ProjectsView
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatalf("Unmarshal: %v\noutput: %s", err, buf.String())
+	if _, err := DecodeEnvelope(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("DecodeEnvelope: %v\noutput: %s", err, buf.String())
 	}
 	if len(decoded.Projects) != 2 || decoded.Projects[0].Name != "frontend" || decoded.Projects[1].Name != "week1" {
 		t.Errorf("decoded = %+v, want the original flat [frontend, week1] order preserved", decoded.Projects)

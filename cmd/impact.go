@@ -105,7 +105,7 @@ dependency, and any CI configuration that references it.`,
 			view.Projects = append(view.Projects, projectView)
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "impact").Print(view)
 	},
 }
 

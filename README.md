@@ -297,6 +297,7 @@ REVIEW
 * .NET MSBuild: `.csproj`
 * Node.js: `package.json`
 * Git 저장소: `.git`
+* Python: `pyproject.toml`, `Pipfile`, `setup.py`, `requirements.txt`
 
 ### 지원 리소스
 
@@ -308,6 +309,8 @@ REVIEW
 * 프로젝트별 `bin`, `obj`, `build`, `dist`, `.next`, `out`
 * 프로젝트 경로와 드라이브
 * 프로젝트별 manifest·lockfile
+* 프로젝트별 Python 가상환경(`.venv`/`venv`/`env`)과 `__pycache__` 등 캐시
+* conda 환경 (전역 named 환경은 정보 제공용, 자동 정리 대상 아님 — §19.5)
 
 ### 지원 질문
 
@@ -2035,7 +2038,7 @@ libra summary
 * ETW 기반 개발 프로세스 관찰
 * 프로젝트별 저장공간 증가 타임라인
 * Android SDK·Gradle Adapter
-* Cargo·Python Adapter
+* Cargo Adapter (Python/conda는 구현 완료 — `docs/libra_integration_contracts.md` §19.4/§19.5)
 * 로컬 웹 대시보드
 * GitHub Issue 또는 리포트 내보내기
 

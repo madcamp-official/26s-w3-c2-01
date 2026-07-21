@@ -36,6 +36,15 @@ func (f fakeToolLocator) Locate(context.Context) ([]domain.Resource, error) {
 	return f.resources, f.err
 }
 
+type fakeCondaEnvLister struct {
+	resources []domain.Resource
+	err       error
+}
+
+func (f fakeCondaEnvLister) ListEnvs(context.Context) ([]domain.Resource, error) {
+	return f.resources, f.err
+}
+
 func TestResourceDetectorAdaptersPassThroughResources(t *testing.T) {
 	resources := []domain.Resource{{Type: domain.ResourceTypeWindowsSDK, Version: "10.0.22621.0"}}
 
@@ -52,6 +61,12 @@ func TestResourceDetectorAdaptersPassThroughResources(t *testing.T) {
 	got = VisualStudioResourceDetector{Locator: fakeToolLocator{resources: resources}}.Detect(context.Background(), Environment{})
 	if len(got.Items) != 1 || len(got.Issues) != 0 {
 		t.Fatalf("VisualStudioResourceDetector.Detect() = %#v", got)
+	}
+
+	condaResources := []domain.Resource{{Type: domain.ResourceTypeCondaEnv, Name: "base"}}
+	got = CondaResourceDetector{Lister: fakeCondaEnvLister{resources: condaResources}}.Detect(context.Background(), Environment{})
+	if len(got.Items) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("CondaResourceDetector.Detect() = %#v", got)
 	}
 }
 

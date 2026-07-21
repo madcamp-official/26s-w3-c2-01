@@ -58,3 +58,92 @@ func TestMSBuildDependencyAnalyzerReportsUnverifiedConditionalProperty(t *testin
 func TestMSBuildDependencyAnalyzerSatisfiesDependencyAnalyzer(t *testing.T) {
 	var _ DependencyAnalyzer = MSBuildDependencyAnalyzer{}
 }
+
+func TestCondaDependencyAnalyzerMatchesDeclaredEnvironment(t *testing.T) {
+	env := domain.Resource{ID: "resource-conda-env", Type: domain.ResourceTypeCondaEnv, Name: "myproject"}
+	index := newMemoryResourceIndex([]domain.Resource{env})
+	collectedAt := time.Date(2026, 7, 21, 9, 0, 0, 0, time.UTC)
+
+	input := ProjectAnalysisInput{
+		Project: domain.BuildProject{ID: "project-1", ManifestPath: `/repo/pyproject.toml`},
+		Properties: []ProjectProperty{
+			{OwnerManifestPath: `/repo/pyproject.toml`, SourcePath: `/repo/environment.yml`,
+				Name: condaEnvPropertyName, Value: "myproject"},
+		},
+	}
+
+	analyzer := CondaDependencyAnalyzer{Now: func() time.Time { return collectedAt }}
+	got := analyzer.Analyze(context.Background(), input, index)
+
+	if len(got.Items) != 1 {
+		t.Fatalf("Analyze() items = %#v, want one resolved dependency", got.Items)
+	}
+	bundle := got.Items[0]
+	if bundle.Dependency.SourceID != "project-1" || bundle.Dependency.TargetID != "resource-conda-env" {
+		t.Errorf("dependency = %#v, want project-1 -> resource-conda-env", bundle.Dependency)
+	}
+	if bundle.Dependency.Relation != domain.RelationRequires {
+		t.Errorf("Relation = %q, want REQUIRES (결정 4)", bundle.Dependency.Relation)
+	}
+	if bundle.Dependency.Confidence != domain.DefaultConfidence[domain.EvidenceDeclared] {
+		t.Errorf("Confidence = %d, want DECLARED-strength for a specific project name", bundle.Dependency.Confidence)
+	}
+	if len(got.Unverified) != 0 {
+		t.Errorf("Unverified = %#v, want none for a specific, matched name", got.Unverified)
+	}
+}
+
+func TestCondaDependencyAnalyzerDegradesGenericEnvName(t *testing.T) {
+	env := domain.Resource{ID: "resource-conda-env", Type: domain.ResourceTypeCondaEnv, Name: "base"}
+	index := newMemoryResourceIndex([]domain.Resource{env})
+
+	input := ProjectAnalysisInput{
+		Project: domain.BuildProject{ID: "project-1"},
+		Properties: []ProjectProperty{
+			{Name: condaEnvPropertyName, Value: "base"},
+		},
+	}
+
+	got := (CondaDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+
+	if len(got.Items) != 1 {
+		t.Fatalf("Analyze() items = %#v, want one dependency even for a generic name (결정 5)", got.Items)
+	}
+	if got.Items[0].Dependency.Confidence != domain.DefaultConfidence[domain.EvidenceInferred] {
+		t.Errorf("Confidence = %d, want INFERRED-strength for a generic env name", got.Items[0].Dependency.Confidence)
+	}
+	if len(got.Unverified) != 1 {
+		t.Errorf("Unverified = %#v, want one scope explaining the generic-name downgrade", got.Unverified)
+	}
+}
+
+func TestCondaDependencyAnalyzerNoMatchReportsUnverified(t *testing.T) {
+	index := newMemoryResourceIndex(nil)
+	input := ProjectAnalysisInput{
+		Project: domain.BuildProject{ID: "project-1"},
+		Properties: []ProjectProperty{
+			{SourcePath: `/repo/environment.yml`, Name: condaEnvPropertyName, Value: "myproject"},
+		},
+	}
+
+	got := (CondaDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+
+	if len(got.Items) != 0 || len(got.Unverified) != 1 {
+		t.Fatalf("Analyze() = %#v, want zero items and one unverified scope", got)
+	}
+}
+
+func TestCondaDependencyAnalyzerNoDeclaration(t *testing.T) {
+	index := newMemoryResourceIndex(nil)
+	input := ProjectAnalysisInput{Project: domain.BuildProject{ID: "project-1"}}
+
+	got := (CondaDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+
+	if len(got.Items) != 0 || len(got.Unverified) != 0 {
+		t.Fatalf("Analyze() = %#v, want an empty result when no conda-env property is declared", got)
+	}
+}
+
+func TestCondaDependencyAnalyzerSatisfiesDependencyAnalyzer(t *testing.T) {
+	var _ DependencyAnalyzer = CondaDependencyAnalyzer{}
+}

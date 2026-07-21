@@ -6,10 +6,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/dotnet"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
@@ -38,6 +40,7 @@ func defaultResourceDetectors() []app.ResourceDetector {
 		app.WindowsSDKResourceDetector{Detector: windowsdk.FilesystemDetector{}},
 		app.DotNetSDKResourceDetector{Lister: dotnet.CLISDKLister{}},
 		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
+		app.CondaResourceDetector{Lister: conda.CLIEnvLister{}},
 	}
 }
 
@@ -86,8 +89,10 @@ not exist yet, so --full has no effect (see --help).`,
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
+			app.PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}},
 		}, resourceDetectors(), []app.DependencyAnalyzer{
 			app.MSBuildDependencyAnalyzer{},
+			app.CondaDependencyAnalyzer{},
 		})
 
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{

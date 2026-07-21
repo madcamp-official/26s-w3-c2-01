@@ -67,8 +67,8 @@ func TestPlanCommandSelectsSeededSafeResourceUntilTarget(t *testing.T) {
 	if view.Status != "READY" {
 		t.Fatalf("status = %q, want READY", view.Status)
 	}
-	if len(view.Safe) != 1 || view.Safe[0].Path != seeded.NormalizedPath {
-		t.Fatalf("safe = %#v, want exactly [%s]", view.Safe, seeded.NormalizedPath)
+	if len(view.Safe) != 1 || view.Safe[0].Path != seeded.DisplayPath {
+		t.Fatalf("safe = %#v, want exactly [%s]", view.Safe, seeded.DisplayPath)
 	}
 	if view.Selected != seeded.ReclaimableSize {
 		t.Fatalf("selected = %d, want %d", view.Selected, seeded.ReclaimableSize)

@@ -45,6 +45,7 @@ func TestPlanCommandSelectsSeededSafeResourceUntilTarget(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	// A real scan of this fixture never produces a SAFE resource today
 	// (see seedSafeResource's doc comment), so seed one directly to
@@ -107,6 +108,7 @@ func TestPlanCommandDefaultsToUnlimitedTargetAndAllRiskTiers(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	got := run("plan").String()
 	if !strings.Contains(got, "Target: unlimited") {
@@ -167,6 +169,7 @@ func TestPlanCommandReviewAndBlockedShowRealSizeNotZero(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	got := run("plan", "--json").String()
 	var view struct {

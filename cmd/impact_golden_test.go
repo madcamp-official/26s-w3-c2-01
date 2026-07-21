@@ -41,6 +41,7 @@ func TestImpactGoldenGameClientWindowsSDK(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	_, project := seedWindowsSDKDependency(t, "GameClient")
 

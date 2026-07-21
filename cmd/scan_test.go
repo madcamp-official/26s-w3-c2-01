@@ -28,6 +28,12 @@ func TestScanCommandDetectsAndPersistsNodeProjects(t *testing.T) {
 	out := &bytes.Buffer{}
 	rootCmd.SetOut(out)
 	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v; output=%s", err, out)
+	}
+
+	out.Reset()
 	rootCmd.SetArgs([]string{"scan", "--root", fixture})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v; output=%s", err, out)
@@ -64,6 +70,12 @@ func TestScanCommandFullFlagIsDeprecatedButHarmless(t *testing.T) {
 	out := &bytes.Buffer{}
 	rootCmd.SetOut(out)
 	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v; output=%s", err, out)
+	}
+
+	out.Reset()
 	rootCmd.SetArgs([]string{"scan", "--root", fixture, "--full"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v; output=%s", err, out)
@@ -120,6 +132,12 @@ func TestScanCommandSupportsJSON(t *testing.T) {
 	out := &bytes.Buffer{}
 	rootCmd.SetOut(out)
 	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v; output=%s", err, out)
+	}
+
+	out.Reset()
 	rootCmd.SetArgs([]string{"scan", "--root", fixture, "--json"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v; output=%s", err, out)
@@ -202,6 +220,7 @@ func TestScanCommandSummarizesIssuesByDefaultAndShowsAllWithVerbose(t *testing.T
 		return out
 	}
 
+	run("init")
 	summary := run("scan", "--root", root)
 	if !bytes.Contains(summary.Bytes(), []byte("Warnings:        4")) {
 		t.Fatalf("scan output missing warning count:\n%s", summary)
@@ -243,6 +262,12 @@ func TestScanCommandPrintsNextActionHint(t *testing.T) {
 	out := &bytes.Buffer{}
 	rootCmd.SetOut(out)
 	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v; output=%s", err, out)
+	}
+
+	out.Reset()
 	rootCmd.SetArgs([]string{"scan", "--root", fixture})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v; output=%s", err, out)

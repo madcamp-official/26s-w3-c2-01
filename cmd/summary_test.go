@@ -36,6 +36,7 @@ func TestSummaryCommandReflectsScannedProjects(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	out := run("summary")
 	// Match tolerant of tabwriter column width, which shifts as resource
@@ -73,6 +74,7 @@ func TestSummaryCommandShowsLastScanFreshness(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	out := run("summary")
 	for _, want := range []string{"Last scan", "Coverage", "Files inspected"} {
@@ -191,6 +193,7 @@ func TestSummaryCommandTypeFilterIsCaseInsensitive(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	lowerCase := run("summary", "--type", "node-modules")
 	summaryType = ""

@@ -68,6 +68,7 @@ func TestScanWiresRealDependencyEdgeForExplainAndImpact(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 
 	// Check the persisted graph directly first: this is the actual claim

@@ -35,6 +35,7 @@ func TestProjectsCommandListsAndFiltersScannedProjects(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 
 	all := run("projects")
@@ -127,6 +128,7 @@ func TestProjectsCommandDefaultLimitAndAllFlag(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 
 	// Count NAME-column occurrences only (line starts with "project-"):
@@ -197,6 +199,7 @@ func TestProjectsCommandNameUnderAndSortFilters(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 
 	named := run("projects", "--name", "app-a")
@@ -259,6 +262,7 @@ func TestProjectsCommandSortModifiedOrdersNewestFirst(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	out := run("projects", "--sort", "modified").String()
 
@@ -319,6 +323,7 @@ func TestProjectsCommandSortSizeOrdersLargestFirst(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", root)
 	out := run("projects", "--sort", "size").String()
 

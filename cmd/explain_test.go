@@ -28,6 +28,7 @@ func TestExplainCommandDescribesResourceWithEvidence(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	seedWindowsSDKDependency(t, "GameClient")
 
@@ -70,6 +71,7 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	_, project := seedWindowsSDKDependency(t, "GameClient")
 

@@ -18,6 +18,15 @@ func TestEventsCommandFiltersAndLimitsNewestEvents(t *testing.T) {
 	eventsSince = ""
 	eventsLimit = 50
 	t.Cleanup(func() { cfgPath = ""; jsonOutput = false; eventsKind = ""; eventsSince = ""; eventsLimit = 50 })
+
+	initOut := &bytes.Buffer{}
+	rootCmd.SetOut(initOut)
+	rootCmd.SetErr(initOut)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v; output=%s", err, initOut)
+	}
+
 	now := time.Now().UTC()
 	for _, event := range []eventlog.Event{{At: now.Add(-2 * time.Hour), Kind: "DAEMON_STARTED"}, {At: now.Add(-time.Hour), Kind: "RESOURCE_DIRTY"}, {At: now, Kind: "RESOURCE_DIRTY", Error: "scan failed"}} {
 		if err := eventlog.Append(daemonEventPath(), event); err != nil {

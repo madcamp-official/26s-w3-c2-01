@@ -43,6 +43,7 @@ func TestCleanCommandDryRunPreviewsSeededSafeResource(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	seeded := seedSafeResource(t, "big-node-modules", 100)
 
@@ -112,6 +113,7 @@ func TestCleanCommandFlagsDriftSincePlanning(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	seeded := seedSafeResource(t, "big-node-modules", 100)
 

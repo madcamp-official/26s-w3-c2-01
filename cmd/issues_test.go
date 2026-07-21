@@ -16,6 +16,7 @@ func TestIssuesCommandUsesLatestScanAndFilters(t *testing.T) {
 	t.Cleanup(resetIssueFlags)
 	dir := t.TempDir()
 	t.Chdir(dir)
+	runIssuesCommand(t, "init")
 	db, err := openDatabase()
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +69,7 @@ func TestScanPersistsIssuesForLaterCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
+	runIssuesCommand(t, "init")
 	runIssuesCommand(t, "scan", "--root", fixture)
 	out := runIssuesCommand(t, "issues", "--code", "MALFORMED_MANIFEST")
 	if !bytes.Contains(out.Bytes(), []byte("MALFORMED_MANIFEST")) || !bytes.Contains(out.Bytes(), []byte("package.json")) {

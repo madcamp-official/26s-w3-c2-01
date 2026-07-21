@@ -55,6 +55,7 @@ func TestPlanGoldenNodeFixtureHasNoSafeCandidatesYet(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	got := normalizePlanGolden(run("plan").String(), fixture)
 

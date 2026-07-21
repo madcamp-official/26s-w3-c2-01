@@ -41,6 +41,7 @@ func TestResourcesCommandListsAndFiltersScannedResources(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 
 	all := run("resources")

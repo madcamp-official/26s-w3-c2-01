@@ -28,6 +28,7 @@ func TestImpactCommandReportsAffectedProject(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	_, project := seedWindowsSDKDependency(t, "GameClient")
 
@@ -74,6 +75,7 @@ func TestImpactCommandNoDependentsIsZero(t *testing.T) {
 		return out
 	}
 
+	run("init")
 	run("scan", "--root", fixture)
 	out := run("impact", filepath.Join(fixture, "basic", "node_modules"))
 	if !bytes.Contains(out.Bytes(), []byte("Affected projects: 0")) {
@@ -93,6 +95,11 @@ func TestImpactCommandRejectsProjectTarget(t *testing.T) {
 
 	rootCmd.SetOut(&bytes.Buffer{})
 	rootCmd.SetErr(&bytes.Buffer{})
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v", err)
+	}
+
 	rootCmd.SetArgs([]string{"scan", "--root", fixture})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute(scan) error = %v", err)

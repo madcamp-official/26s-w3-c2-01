@@ -330,7 +330,7 @@ REVIEW
 * MSBuild `-preprocess` 실행
 * MSBuild binary log 분석
 * npm·pnpm 전역 저장소 탐지
-* Docker 디스크 사용량 탐지
+* Docker 디스크 사용량 탐지 (`docker system df`, read-only 구현됨)
 * HTML 또는 Markdown 리포트
 * 삭제 전 프로젝트 빌드 검증 명령 생성
 
@@ -1315,6 +1315,12 @@ SQLite 갱신
 * 알 수 없는 대용량 폴더
 
 Docker는 공식적으로 사용하지 않는 이미지·컨테이너·네트워크·빌드 캐시를 정리하는 명령을 제공하지만, Volume은 기본 정리에 포함되지 않고 별도 옵션이 필요하다. 이처럼 각 생태계의 공식 정리 명령을 우선 활용하는 방향으로 확장한다.
+
+현재 Libra는 `docker system df --format '{{json .}}'`를 읽어 Images, Containers,
+Build Cache와 Local Volumes의 aggregate 용량을 `resources`/`summary`에 포함한다.
+이미지·컨테이너·빌드 캐시는 `REVIEW`, Volume은 사용자 데이터 가능성 때문에
+`BLOCKED`다. Libra는 `docker system prune`, `docker volume prune` 또는 remove 명령을
+자동 실행하지 않는다.
 
 ---
 

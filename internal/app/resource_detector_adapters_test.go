@@ -41,6 +41,15 @@ type fakeCondaEnvLister struct {
 	err       error
 }
 
+type fakeDockerUsageLister struct {
+	resources []domain.Resource
+	err       error
+}
+
+func (f fakeDockerUsageLister) ListUsage(context.Context) ([]domain.Resource, error) {
+	return f.resources, f.err
+}
+
 func (f fakeCondaEnvLister) ListEnvs(context.Context) ([]domain.Resource, error) {
 	return f.resources, f.err
 }
@@ -68,6 +77,12 @@ func TestResourceDetectorAdaptersPassThroughResources(t *testing.T) {
 	if len(got.Items) != 1 || len(got.Issues) != 0 {
 		t.Fatalf("CondaResourceDetector.Detect() = %#v", got)
 	}
+
+	dockerResources := []domain.Resource{{Type: domain.ResourceTypeDockerCache, Name: "Docker Images"}}
+	got = DockerResourceDetector{Lister: fakeDockerUsageLister{resources: dockerResources}}.Detect(context.Background(), Environment{})
+	if len(got.Items) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("DockerResourceDetector.Detect() = %#v", got)
+	}
 }
 
 func TestResourceDetectorAdaptersReportUnsupportedPlatformAsRecoverableIssue(t *testing.T) {
@@ -86,5 +101,12 @@ func TestResourceDetectorAdaptersReportOtherFailuresAsAdapterFailed(t *testing.T
 	got := DotNetSDKResourceDetector{Lister: fakeDotNetSDKLister{err: errors.New("boom")}}.Detect(context.Background(), Environment{})
 	if len(got.Items) != 0 || len(got.Issues) != 1 || got.Issues[0].Code != IssueAdapterFailed {
 		t.Fatalf("Detect() = %#v, want a single ADAPTER_FAILED issue", got)
+	}
+}
+
+func TestDockerResourceDetectorReportsDaemonFailureAsRecoverableIssue(t *testing.T) {
+	got := DockerResourceDetector{Lister: fakeDockerUsageLister{err: errors.New("daemon unavailable")}}.Detect(context.Background(), Environment{})
+	if len(got.Items) != 0 || len(got.Issues) != 1 || got.Issues[0].Adapter != "docker" {
+		t.Fatalf("Detect() = %#v, want Docker ADAPTER_FAILED issue", got)
 	}
 }

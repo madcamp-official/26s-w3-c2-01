@@ -33,6 +33,7 @@ var resourceTypeLabels = map[domain.ResourceType]string{
 	domain.ResourceTypeBuildOutput:  "Build outputs",
 	domain.ResourceTypeGlobalCache:  "Global package caches",
 	domain.ResourceTypeDockerCache:  "Docker cache",
+	domain.ResourceTypeDockerVolume: "Docker volumes",
 }
 
 func resourceTypeLabel(t domain.ResourceType) string {

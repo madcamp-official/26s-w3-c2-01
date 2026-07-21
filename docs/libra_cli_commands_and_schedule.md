@@ -309,7 +309,7 @@ libra resources --risk review
 | 프로젝트 `node_modules` | P0 |
 | 프로젝트 `bin`, `obj`, `build`, `dist` | P0 |
 | npm·pnpm 전역 캐시 | P1 |
-| Docker 이미지·빌드 캐시 | P2 |
+| Docker 이미지·컨테이너·빌드 캐시·Volume 용량 | IMPLEMENTED (read-only) |
 
 ### 출력 정보
 
@@ -941,7 +941,7 @@ libra restore --transaction <transaction-id>
 2. Markdown report
 3. `Directory.Build.props` 조건 개선
 4. pnpm 전역 store 분석
-5. Docker `system df` Adapter
+5. Docker `system df` Adapter — 완료 (read-only, cleanup 제외)
 
 ---
 
@@ -994,7 +994,7 @@ libra restore --transaction <transaction-id>
 
 - 백그라운드 데몬
 - NTFS USN Journal
-- Docker Adapter
+- Docker cleanup 안내/세부 image 분석 (aggregate `system df` 탐지는 완료)
 - ETW 기반 개발 프로세스 관찰
 - 인터랙티브 TUI
 - 로컬 웹 대시보드
@@ -1006,7 +1006,7 @@ libra restore --transaction <transaction-id>
 다음 순서로 제거한다.
 
 1. 백그라운드 데몬
-2. Docker Adapter
+2. Docker cleanup 실행 연동 (read-only 탐지는 유지)
 3. pnpm 전역 저장소
 4. Markdown report
 5. MSBuild binary log

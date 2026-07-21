@@ -20,9 +20,10 @@ const (
 	// ResourceTypeBuildOutput covers bin, obj, build, dist, .next, out,
 	// Debug, Release, and (docs/libra_integration_contracts.md §19.4)
 	// Python's __pycache__, .pytest_cache, .mypy_cache, *.egg-info.
-	ResourceTypeBuildOutput ResourceType = "build-output"
-	ResourceTypeGlobalCache ResourceType = "global-cache" // npm/pnpm global cache
-	ResourceTypeDockerCache ResourceType = "docker-cache"
+	ResourceTypeBuildOutput  ResourceType = "build-output"
+	ResourceTypeGlobalCache  ResourceType = "global-cache" // npm/pnpm global cache
+	ResourceTypeDockerCache  ResourceType = "docker-cache"
+	ResourceTypeDockerVolume ResourceType = "docker-volume"
 	// ResourceTypeVenv is a Python virtual environment (.venv/venv/env),
 	// confirmed only after pyvenv.cfg is found inside it (§19.4 결정 3).
 	ResourceTypeVenv ResourceType = "python-venv"

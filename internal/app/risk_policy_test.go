@@ -112,3 +112,14 @@ func TestDefaultRiskPolicyCriticalUnknownForcesReview(t *testing.T) {
 		t.Fatalf("Classify() = %#v, want REVIEW with structured unknown", assessment)
 	}
 }
+
+func TestDefaultRiskPolicyKeepsDockerCleanupInOfficialTools(t *testing.T) {
+	cache := (DefaultRiskPolicy{}).Classify(ResourceContext{Resource: domain.Resource{Type: domain.ResourceTypeDockerCache}})
+	if cache.Level != domain.RiskReview || cache.Warnings[0].Code != "DOCKER_OFFICIAL_CLEANUP_REQUIRED" {
+		t.Fatalf("Docker cache assessment = %#v", cache)
+	}
+	volume := (DefaultRiskPolicy{}).Classify(ResourceContext{Resource: domain.Resource{Type: domain.ResourceTypeDockerVolume}})
+	if volume.Level != domain.RiskBlocked || volume.Blockers[0].Code != "DOCKER_VOLUME_USER_DATA" {
+		t.Fatalf("Docker volume assessment = %#v", volume)
+	}
+}

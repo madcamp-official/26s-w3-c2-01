@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
@@ -147,6 +148,13 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 			workspaceCandidates = append(workspaceCandidates, workspaceCandidate{workspace: workspace, projectPaths: candidate.WorkspaceProjectPaths})
 		}
 	}
+	workspaceCandidates = topLevelWorkspaceCandidates(workspaceCandidates)
+	result.Workspaces = workspacesFromCandidates(workspaceCandidates)
+	result.Projects = dedupeProjects(result.Projects)
+	result.Projects = filterNodeProjectsByWorkspace(result.Projects, workspaceCandidates)
+	projectResourceCandidates = filterProjectResourcesByOwner(projectResourceCandidates, result.Projects)
+	projectResourceCandidates = dedupeProjectResources(projectResourceCandidates)
+	propertiesByManifest = filterProjectPropertiesByOwner(propertiesByManifest, result.Projects)
 
 	o.phase(&result, PhaseDiscoverSystemResources)
 	for _, detector := range o.resourceDetectors {
@@ -334,6 +342,136 @@ func structuredCandidateIssue(path, operation string, err error) Issue {
 type workspaceCandidate struct {
 	workspace    domain.Workspace
 	projectPaths []string
+}
+
+// topLevelWorkspaceCandidates preserves every non-Node workspace and only
+// the outermost Node workspace. Nested workspace expansion is intentionally
+// outside the MVP contract (§19.2), even when a member also declares its own
+// workspaces field.
+func topLevelWorkspaceCandidates(candidates []workspaceCandidate) []workspaceCandidate {
+	filtered := make([]workspaceCandidate, 0, len(candidates))
+	for i, candidate := range candidates {
+		if candidate.workspace.Type != domain.WorkspaceTypeNode {
+			filtered = append(filtered, candidate)
+			continue
+		}
+		root := filepath.Dir(candidate.workspace.ManifestPath)
+		nested := false
+		for j, other := range candidates {
+			if i == j || other.workspace.Type != domain.WorkspaceTypeNode {
+				continue
+			}
+			otherRoot := filepath.Dir(other.workspace.ManifestPath)
+			inside, err := pathutil.IsSameOrChild(root, otherRoot)
+			if err == nil && inside {
+				same, _ := pathutil.Equal(root, otherRoot)
+				if !same {
+					nested = true
+					break
+				}
+			}
+		}
+		if !nested {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func workspacesFromCandidates(candidates []workspaceCandidate) []domain.Workspace {
+	workspaces := make([]domain.Workspace, 0, len(candidates))
+	for _, candidate := range candidates {
+		workspaces = append(workspaces, candidate.workspace)
+	}
+	return workspaces
+}
+
+func filterNodeProjectsByWorkspace(projects []domain.BuildProject, workspaces []workspaceCandidate) []domain.BuildProject {
+	filtered := make([]domain.BuildProject, 0, len(projects))
+	for _, project := range projects {
+		if project.Type != domain.ProjectTypeNode || nodeProjectAllowedByWorkspaces(project, workspaces) {
+			filtered = append(filtered, project)
+		}
+	}
+	return filtered
+}
+
+func dedupeProjects(projects []domain.BuildProject) []domain.BuildProject {
+	seen := make(map[string]struct{}, len(projects))
+	unique := make([]domain.BuildProject, 0, len(projects))
+	for _, project := range projects {
+		if _, exists := seen[project.ID]; exists {
+			continue
+		}
+		seen[project.ID] = struct{}{}
+		unique = append(unique, project)
+	}
+	return unique
+}
+
+func nodeProjectAllowedByWorkspaces(project domain.BuildProject, workspaces []workspaceCandidate) bool {
+	for _, candidate := range workspaces {
+		if candidate.workspace.Type != domain.WorkspaceTypeNode {
+			continue
+		}
+		root := filepath.Dir(candidate.workspace.ManifestPath)
+		inside, err := pathutil.IsSameOrChild(project.RootPath, root)
+		if err != nil || !inside {
+			continue
+		}
+		sameRoot, err := pathutil.Equal(project.RootPath, root)
+		if err == nil && sameRoot {
+			return true
+		}
+		for _, memberManifest := range candidate.projectPaths {
+			sameManifest, err := pathutil.Equal(project.ManifestPath, memberManifest)
+			if err == nil && sameManifest {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func filterProjectResourcesByOwner(candidates []ProjectResourceCandidate, projects []domain.BuildProject) []ProjectResourceCandidate {
+	filtered := make([]ProjectResourceCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if _, found := projectByManifest(projects, candidate.OwnerManifestPath); found {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func dedupeProjectResources(candidates []ProjectResourceCandidate) []ProjectResourceCandidate {
+	seen := make(map[string]struct{}, len(candidates))
+	unique := make([]ProjectResourceCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		owner, ownerErr := pathutil.Normalize(candidate.OwnerManifestPath)
+		resource, resourceErr := pathutil.Normalize(candidate.Resource.DisplayPath)
+		if ownerErr != nil || resourceErr != nil {
+			unique = append(unique, candidate)
+			continue
+		}
+		key := owner + "\x00" + resource
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, candidate)
+	}
+	return unique
+}
+
+func filterProjectPropertiesByOwner(properties map[string][]ProjectProperty, projects []domain.BuildProject) map[string][]ProjectProperty {
+	filtered := make(map[string][]ProjectProperty, len(properties))
+	for _, project := range projects {
+		if owned := properties[project.NormalizedManifestPath]; len(owned) > 0 {
+			filtered[project.NormalizedManifestPath] = owned
+		}
+	}
+	return filtered
 }
 
 func projectByManifest(projects []domain.BuildProject, manifestPath string) (domain.BuildProject, bool) {

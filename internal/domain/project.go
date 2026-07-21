@@ -21,10 +21,11 @@ type WorkspaceType string
 
 const (
 	WorkspaceTypeVSSolution WorkspaceType = "vs-solution" // .sln
+	WorkspaceTypeNode       WorkspaceType = "node"        // package.json or pnpm-workspace.yaml
 )
 
 // Workspace is a grouping file that references one or more BuildProjects
-// (currently only a Visual Studio .sln). It has no build-tool dependencies
+// (currently a Visual Studio .sln or Node workspace declaration). It has no build-tool dependencies
 // of its own -- those live on the BuildProjects it references, via
 // WorkspaceProject.
 type Workspace struct {

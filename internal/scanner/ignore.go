@@ -13,9 +13,10 @@ import (
 // vs. relative exclude patterns, normalization) is a distinct concern from
 // the walk/visitor logic in scanner.go itself.
 type excludeMatcher struct {
-	roots    []string
-	absolute []string
-	relative []string
+	roots              []string
+	absolute           []string
+	relative           []string
+	relativeAnySegment []string
 }
 
 func newExcludeMatcher(roots, excludes []string) (excludeMatcher, error) {
@@ -40,7 +41,12 @@ func newExcludeMatcher(roots, excludes []string) (excludeMatcher, error) {
 			matcher.absolute = append(matcher.absolute, normalized)
 			continue
 		}
-		matcher.relative = append(matcher.relative, canonical(filepath.Clean(exclude)))
+		cleaned := canonical(filepath.Clean(exclude))
+		if !strings.ContainsRune(cleaned, filepath.Separator) {
+			matcher.relativeAnySegment = append(matcher.relativeAnySegment, cleaned)
+			continue
+		}
+		matcher.relative = append(matcher.relative, cleaned)
 	}
 
 	return matcher, nil
@@ -62,6 +68,13 @@ func (m excludeMatcher) Matches(path string) bool {
 			continue
 		}
 		relative = canonical(relative)
+		for _, segment := range strings.Split(relative, string(filepath.Separator)) {
+			for _, excluded := range m.relativeAnySegment {
+				if segment == excluded {
+					return true
+				}
+			}
+		}
 		for _, excluded := range m.relative {
 			if sameOrChild(relative, excluded) {
 				return true

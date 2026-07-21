@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
@@ -135,6 +136,60 @@ func TestAnalysisOrchestratorObservesProjectOwnedResources(t *testing.T) {
 	}
 	if result.Resources[0].Type != domain.ResourceTypeNodeModules {
 		t.Fatalf("observed resource type = %q, want node-modules", result.Resources[0].Type)
+	}
+}
+
+func TestAnalysisOrchestratorKeepsOnlyDeclaredProjectsInsideNodeWorkspace(t *testing.T) {
+	scanRoot := t.TempDir()
+	workspaceRoot := filepath.Join(scanRoot, "frontend")
+	memberRoot := filepath.Join(workspaceRoot, "packages", "app")
+	excludedMemberRoot := filepath.Join(workspaceRoot, "build")
+	undeclaredRoot := filepath.Join(workspaceRoot, "examples", "demo")
+	standaloneRoot := filepath.Join(scanRoot, "standalone")
+	for _, dir := range []string{memberRoot, excludedMemberRoot, undeclaredRoot, standaloneRoot} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifests := map[string]string{
+		filepath.Join(workspaceRoot, "package.json"):      `{"name":"frontend","workspaces":["packages/*","build"]}`,
+		filepath.Join(memberRoot, "package.json"):         `{"name":"app"}`,
+		filepath.Join(excludedMemberRoot, "package.json"): `{"name":"build-tool"}`,
+		filepath.Join(undeclaredRoot, "package.json"):     `{"name":"demo"}`,
+		filepath.Join(standaloneRoot, "package.json"):     `{"name":"standalone"}`,
+	}
+	for path, body := range manifests {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	projects := &projectRepositoryCapture{}
+	workspaces := &workspaceRepositoryCapture{}
+	orchestrator := NewAnalysisOrchestrator(scanner.New(2), &scanRepositoryCapture{}, projects,
+		workspaces, resourceObserverFake{observedAt: time.Now()}, &dependencyRepositoryCapture{}).
+		WithDetectors([]ProjectDetector{NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}}}, nil, nil)
+	result, err := orchestrator.Run(context.Background(), AnalysisOptions{
+		ScanID: "scan-node-workspace", Scan: scanner.Options{Roots: []string{scanRoot}, MaxDepth: 6, Exclude: []string{"build"}},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantNames := map[string]bool{"frontend": true, "app": true, "build-tool": true, "standalone": true}
+	if len(result.Projects) != len(wantNames) {
+		t.Fatalf("Projects = %#v, want workspace root, declared member, and standalone project", result.Projects)
+	}
+	for _, project := range result.Projects {
+		if !wantNames[project.Name] {
+			t.Fatalf("unexpected project %q from %s", project.Name, project.ManifestPath)
+		}
+	}
+	if len(result.Workspaces) != 1 || result.Workspaces[0].Type != domain.WorkspaceTypeNode {
+		t.Fatalf("Workspaces = %#v, want one Node workspace", result.Workspaces)
+	}
+	if len(workspaces.members) != 2 {
+		t.Fatalf("workspace members = %v, want both declared members", workspaces.members)
 	}
 }
 
@@ -294,12 +349,17 @@ func (*projectRepositoryCapture) List(context.Context) ([]domain.BuildProject, e
 	return nil, errors.New("not implemented")
 }
 
-type workspaceRepositoryCapture struct{}
+type workspaceRepositoryCapture struct {
+	saved   []domain.Workspace
+	members []string
+}
 
-func (*workspaceRepositoryCapture) Upsert(context.Context, string, domain.Workspace) error {
+func (r *workspaceRepositoryCapture) Upsert(_ context.Context, _ string, workspace domain.Workspace) error {
+	r.saved = append(r.saved, workspace)
 	return nil
 }
-func (*workspaceRepositoryCapture) ReplaceMembers(context.Context, string, []string) error {
+func (r *workspaceRepositoryCapture) ReplaceMembers(_ context.Context, _ string, members []string) error {
+	r.members = append(r.members, members...)
 	return nil
 }
 

@@ -186,14 +186,39 @@ type Requirement struct {
 
 Configuration·Platform을 분석하지 않았으면 반드시 `UnverifiedScope`를 남긴다. `Latest`, `10.0`, 미설치 SDK, Debug/Release 차이 및 조건별 dependency 표현은 B가 구현 전에 확정한다.
 
-### 19.2 Node workspace (`CONFIRMED`, MVP 범위 — 2026-07-18 재결정)
+### 19.2 Node workspace (`CONFIRMED`, Option C — 2026-07-21)
 
 ```text
-각 package.json  → BuildProject 후보
-workspace root   → Workspace
+workspace 경계 밖 package.json → 독립 BuildProject 후보
+workspace root              → Workspace + BuildProject
+명시적으로 선언된 member     → BuildProject + WorkspaceProject
+workspace 내부 미선언 package → 프로젝트 후보에서 제외
 root node_modules → workspace 소유 Resource
 하위 node_modules → 해당 package 소유 Resource
 ```
+
+Option C의 프로젝트 선택 규칙은 다음으로 고정한다.
+
+1. Node workspace 경계 밖에서 발견된 `package.json`은 독립 프로젝트로 유지한다. 넓은 상위 디렉터리를 scan root로 사용하는 기존 동작을 깨지 않기 위해 scan root의 직계 경로만으로 제한하지 않는다.
+2. `package.json#workspaces` 또는 `pnpm-workspace.yaml`을 선언한 디렉터리는 workspace root이자 직접 빌드 가능한 Node `BuildProject`다.
+3. workspace root 아래에서는 `ResolveMembers`가 해당 workspace 선언으로 실제 해석한 member만 `BuildProject`로 인정한다. 단순히 중첩된 `package.json`이 있다는 이유만으로 프로젝트가 되지 않는다.
+4. 미선언 하위 프로젝트의 project property, 소유 Resource, OWNS edge도 함께 제외한다. 필터링은 DB 영속화와 resource 측정 전에 수행한다.
+5. workspace는 `WorkspaceTypeNode`로 저장하고, npm/Yarn은 root `package.json`, pnpm은 `pnpm-workspace.yaml`을 안정 ID의 manifest로 사용한다. member 관계는 기존 `WorkspaceProject` 다대다 저장소를 재사용한다.
+6. 중첩 workspace는 기존 MVP 범위대로 재귀 확장하지 않는다. 바깥 workspace가 member로 명시한 root까지만 인정하며, 중첩 workspace 재귀 지원은 추후 별도 합의한다.
+
+이 규칙은 Option D의 `Origin` 필드를 도입하지 않는다. 화면 표시용 origin은 별도 기능이며, 프로젝트/DB/그래프 오염을 막는 Option C의 정확성 계약과 분리한다.
+
+> 갱신(2026-07-21, issue #36): `node_modules` 하위(또는 내부)의 `package.json`은
+> 설치된 third-party 의존성이지 개발자 프로젝트가 아니므로 BuildProject으로
+> 탐지하지 않는다. Node adapter의 `CanDetect`가 경로에 `node_modules` 세그먼트가
+> 있으면 프로젝트 후보에서 제외한다(`isVendoredPath`). 위 매핑의 "각 package.json
+> → BuildProject 후보"는 vendored 경로를 제외한 뒤에 적용된다. 소유 프로젝트의
+> `node_modules`는 여전히 `DetectArtifacts`로 Resource로 잡히고
+> `scanner.MeasureResource`로 크기를 재는데, 둘 다 스캔 walk가 node_modules 안으로
+> 내려가는 것에 의존하지 않는다. issue #36의 Windows A 범위도 구현해 기본
+> exclude가 `node_modules`, `.next`, `dist`, `build`, `bin`, `obj`, `.git`,
+> `.libra-quarantine`을 어느 깊이에서든 path segment 단위로 가지치기한다.
+> 사용자가 config에 `exclude`를 명시하면 해당 목록으로 기본값을 대체한다.
 
 Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapter/node`
 (Mac C 소유 영역)에서 MVP 범위로 확정하고 구현했다. 처음에는 workspace
@@ -205,17 +230,17 @@ Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapt
 | npm/pnpm/Yarn workspace 지원 범위 | **지원(재결정).** `package.json`의 `workspaces` 필드(npm/Yarn, 배열 또는 `{packages:[...]}` 객체 형태 모두 인정)와 `pnpm-workspace.yaml`(pnpm)을 읽어 workspace root를 탐지한다(`DetectWorkspace`). member는 `filepath.Glob` 기반 단일 세그먼트 glob만 지원한다 — `packages/*`는 되지만 재귀 `**`는 세그먼트 하나로만 매칭되고, `!` 부정 패턴은 적용되지 않고 그냥 건너뛴다(제외 안 됨, 안전한 쪽으로 미지원). 중첩 workspace(member가 또 다른 workspace root인 경우)는 한 단계만 풀고 재귀하지 않는다. |
 | 여러 lockfile의 우선순위 | 불필요. `package-lock.json`/`npm-shrinkwrap.json`/`pnpm-lock.yaml`/`yarn.lock` 중 하나라도 있으면 재생성 근거로 충분하다고 본다(존재 여부만 확인, 어떤 패키지 매니저인지는 판단하지 않음). workspace member는 자기 디렉터리뿐 아니라 workspace root의 lockfile도 근거로 인정한다(`DetectMemberArtifacts`) — 실제로 npm/Yarn/pnpm workspace는 보통 lockfile을 root에 하나만 둔다. |
 | lockfile 없는 node_modules의 재생성 가능성 | `Regenerable=false`. `Confidence`도 낮춰서(§20.2 확정 전 임시값) INFERRED 수준으로 취급한다. |
-| malformed package.json 저장 방식 | `Detector.Detect`가 error를 반환한다. 다른 후보나 전체 scan을 막지 않는 recoverable 실패로 간주하되(§5), orchestration이 아직 없어 실제 issue 수집·저장은 후속 작업이다. |
-| nested node_modules 탐색 | **부분 지원(재결정).** project root 바로 아래는 그대로 보고, workspace member는 `ResolveMembers`로 찾은 각 member 디렉터리 바로 아래만 추가로 본다 — member 안에 또 nested node_modules(예: 3단계 이상 깊이)가 있으면 여전히 안 본다. root의 `node_modules`는 한 번만 Resource로 만들고, 자기 것이 없는 member는 root 것을 공유(`SharesRootNodeModules=true`)한다고만 표시한다 — 같은 디렉터리를 member 수만큼 중복 Resource로 만들지 않는다(§3.1 "디렉터리 논리 크기는 한 번만 계산"). |
+| malformed package.json 저장 방식 | `Detector.Detect`가 error를 반환한다. `NodeProjectDetector`가 `IssueMalformedManifest`와 `UnverifiedScope`로 수집하며, 다른 후보나 전체 scan을 막지 않는 recoverable 실패로 처리한다(§5). workspace 선언 또는 member 해석 실패도 같은 방식으로 해당 경계를 미검증 상태로 남긴다. |
+| nested node_modules 탐색 | **부분 지원.** Option B의 discovery walk는 어느 깊이에서든 `node_modules`를 가지치기한다. 각 retained project의 바로 아래 산출물은 별도 `DetectArtifacts` 호출로 발견하고 `MeasureResource`가 독립적으로 전체 크기를 재므로 root `node_modules`의 내부 크기는 누락되지 않는다. workspace member에 별도 `node_modules`가 있으면 그 member 소유 Resource가 되며, root 공유 관계는 아직 graph에 연결하지 않는다. |
 | `.pnpm` store 크기 소유권 | 범위 밖. 전역 pnpm store 분석은 원래 일정에서도 P1(`pnpm 전역 저장소`)이라 이번 결정에 포함하지 않는다. |
 
-**중요한 제약**: member가 workspace root의 공유 자원을 쓴다는 관계
-(`MemberArtifacts.SharesRootNodeModules`)는 `domain.Dependency`
-그래프(§18.5, 이제 `CONFIRMED`)에 아직 저장하지 않는다. `PROJECT ->
-RESOURCE REQUIRES` edge를 만들려면 안정적인 `BuildProject` ID가 필요한데
-그건 여전히 `DECISION_REQUIRED`다(§7.2, §15.2, Windows A 담당). 그래서 이
-관계는 지금 `internal/adapter/node` 안에서만 값으로 존재하고, Project ID가
-정해지면 바로 Dependency edge로 옮겨 담을 수 있게 모양만 맞춰뒀다.
+**남은 구현 사항**: member가 workspace root의 공유 `node_modules`를 쓴다는
+`MemberArtifacts.SharesRootNodeModules` 정보는 아직 `PROJECT -> RESOURCE
+REQUIRES` graph로 저장하지 않는다. 안정적인 Project/Resource ID와 dependency
+저장 계약은 이미 확정·구현됐으므로, 후속 Node dependency analyzer가 이 값을
+`RelationRequires` edge와 Evidence로 변환하면 된다. 이 후속 작업은 Option C의
+프로젝트 선택 정확성과 분리하며, 구현 전 공유 자원의 재생성 명령·Evidence kind를
+합의한다.
 
 ### 19.3 산출물 판정 (`DECISION_REQUIRED`)
 

@@ -18,6 +18,7 @@ import (
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/npm"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/pnpm"
+	projectmarkeradapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/projectmarker"
 	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
@@ -68,8 +69,8 @@ resources and build artifacts, computes their logical size, runs dependency
 analysis, and stores the results in the local SQLite database.
 
 Permission errors on individual paths are recorded but do not abort the
-scan. Every scan is currently a full scan -- incremental scanning does
-not exist yet, so --full has no effect (see --help).`,
+scan. The daemon can invoke a root-scoped incremental scan; --full forces
+the normal configured-root scan when used manually.`,
 	Example: `  libra scan
   libra scan --root D:\Projects`,
 	Args: cobra.NoArgs,
@@ -105,6 +106,7 @@ not exist yet, so --full has no effect (see --help).`,
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},
 			app.PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}},
+			app.EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}},
 		}, resourceDetectors(), []app.DependencyAnalyzer{
 			app.MSBuildDependencyAnalyzer{},
 			app.CondaDependencyAnalyzer{},
@@ -118,7 +120,7 @@ not exist yet, so --full has no effect (see --help).`,
 		}
 
 		result, err := orchestrator.Run(cmd.Context(), app.AnalysisOptions{
-			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405")),
+			ScanID: fmt.Sprintf("scan-%s", time.Now().UTC().Format("20060102-150405.000000000")),
 			Scan:   scanOpts,
 		})
 		if progressDisplay != nil {
@@ -208,8 +210,7 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 
 	scanCmd.Flags().StringVar(&scanRoot, "root", "", "scan only this project root instead of all configured roots")
-	scanCmd.Flags().BoolVar(&scanFull, "full", false, "no-op: every scan is currently a full scan")
-	_ = scanCmd.Flags().MarkDeprecated("full", "every scan is currently a full scan; incremental scanning does not exist yet")
+	scanCmd.Flags().BoolVar(&scanFull, "full", false, "scan all configured roots (overrides --root)")
 }
 
 // resolveScanOptions builds scanner options from the config file (if one
@@ -225,7 +226,7 @@ func resolveScanOptions() (scanner.Options, error) {
 	}
 
 	roots := cfg.ProjectRoots
-	if scanRoot != "" {
+	if scanRoot != "" && !scanFull {
 		roots = []string{scanRoot}
 	}
 	if len(roots) == 0 {

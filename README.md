@@ -47,7 +47,7 @@
 | MSBuild C++ (`.vcxproj`) / .NET (`.csproj`) — XML에서 `WindowsTargetPlatformVersion` 등 속성 파싱 | ✅ |
 | Python (`pyproject.toml`/`Pipfile`/`setup.py`/`requirements.txt`) | ✅ |
 | Visual Studio Solution (`.sln`) | ⚠️ Workspace로만 취급되어 소속 프로젝트를 묶어줄 뿐, 그 자체가 독립된 분석 대상(BuildProject)은 아님 |
-| Java/Go/Rust 등 다른 언어의 "프로젝트" 단위 탐지 | ❌ 미지원 (해당 생태계는 아래 전역 캐시/SDK만 리소스로 탐지) |
+| Java/Android (`pom.xml`, `build.gradle[.kts]`), Go (`go.mod`), Rust (`Cargo.toml`) | ✅ 매니페스트 기반 프로젝트 단위 탐지 (Android Gradle 플러그인 표식 구분) |
 
 ### 리소스 탐지 (scan에 실제로 연결되어 있음)
 
@@ -97,12 +97,12 @@
 
 ### 백그라운드 데몬 (`daemon` / `events`)
 
-- **지원:** `daemon start/status/stop`이 설정된 project root들을 2초 간격으로 폴링해 파일 수·총 바이트·최신 수정시각 스냅샷을 비교하고, 변화가 감지되면 백그라운드에서 `libra scan`을 다시 실행한다. 감지 시각과 결과는 `.libra-events.jsonl`에 `DAEMON_STARTED`/`RESOURCE_DIRTY`로 기록되고 `libra events`로 조회할 수 있다.
-- **미지원:** 변경된 디렉터리만 골라 재계산하는 진짜 증분 스캔(현재는 변화가 감지되면 항상 전체 재스캔), 파일 단위 `CREATE`/`DELETE`/`RENAME`/`SIZE_CHANGE` 이벤트 세분화(현재는 `RESOURCE_DIRTY` 단일 신호), ETW 기반 파일 접근 추적, 데몬에 의한 자동 정리(관찰과 재스캔만 수행).
+- **지원:** `daemon start/status/stop`이 설정된 project root들을 2초 간격으로 폴링해 파일 인벤토리를 비교한다. 변경된 root만 `scan --root`로 증분 갱신하며 `.libra-events.jsonl`에 `CREATE`/`DELETE`/`RENAME`/`SIZE_CHANGE`/`MODIFY`와 `INCREMENTAL_SCAN`을 경로·크기와 함께 기록한다.
+- **미지원:** 변경 디렉터리 내부만 재계산하는 하위 디렉터리 단위 병합, ETW 기반 파일 접근 추적, 데몬에 의한 자동 정리(관찰과 재스캔만 수행).
 
 ### 출력 계약
 
-전역 `--json` 플래그는 `init`/`scan`/`summary`/`projects`/`resources`/`issues`/`explain`/`impact`/`plan`/`clean`/`restore`/`transactions`/`export`/`purge`/`daemon start·status·stop`/`events`를 포함한 모든 결과 명령에 다음과 같은 공통 envelope를 적용한다(schema version 1).
+전역 `--json` 플래그는 `init`/`config show·validate·set`/`scan`/`summary`/`projects`/`resources`/`issues`/`explain`/`impact`/`plan`/`clean`/`restore`/`transactions`/`export`/`purge`/`daemon start·status·stop`/`events`를 포함한 모든 결과 명령에 다음과 같은 공통 envelope를 적용한다(schema version 1).
 
 ```json
 {
@@ -180,14 +180,20 @@ libra init --config .libra.yaml
 ```
 결과물: `.libra.yaml`, `.libra.db`. `init` 실행 후에는 `.libra.yaml`의 `project_roots`가 비어 있으므로 직접 스캔할 경로를 채워 넣어야 한다(또는 매번 `scan --root`로 지정).
 
-**2. (수동) `.libra.yaml` 편집** — `project_roots`에 스캔할 프로젝트 루트 경로를 추가한다. `exclude`/`scan.max_depth`/`cleanup.quarantine_days` 등도 필요에 따라 조정한다.
+**2. `libra config show|validate|set`** — 유효 설정을 확인·검증하거나 안전하게 수정한다. `set`은 `project_roots`/`exclude`(쉼표 구분), `scan.max_depth`/`scan.stale_days`/`scan.follow_reparse_points`, `cleanup.quarantine_days`를 지원하고 저장 전에 전체 설정을 검증한다.
+```bash
+libra config show
+libra config validate
+libra config set project_roots D:\Projects,D:\Work
+libra config set scan.max_depth 30
+```
 
-**3. `libra scan [--root <path>]`** — 실제 파일시스템 스캔과 분석을 실행하는 유일한 명령(DB에 쓰는 것도 이 명령뿐). 동작 순서: 설정된 루트(또는 `--root`)를 병렬 워커 4개로 순회 → Git/Node/MSBuild/Python 프로젝트 탐지 → Windows SDK/.NET SDK/Visual Studio/Docker/생태계 어댑터로 리소스 탐지 → 논리 크기 계산 → MSBuild/Conda 의존성 분석기 실행 → scan/project/resource/dependency/evidence/issue를 SQLite에 저장. 경로 접근 오류가 나도 전체 스캔은 중단되지 않고 issue로 기록된다.
+**3. `libra scan [--root <path>] [--full]`** — 실제 파일시스템 스캔과 분석을 실행하는 유일한 명령(DB에 쓰는 것도 이 명령뿐). 동작 순서: 설정된 루트(또는 `--root`)를 병렬 워커 4개로 순회 → Git/Node/MSBuild/Python/Gradle/Maven/Cargo/Go 프로젝트 탐지 → Windows SDK/.NET SDK/Visual Studio/Docker/생태계 어댑터로 리소스 탐지 → 논리 크기 계산 → MSBuild/Conda 의존성 분석기 실행 → 결과를 SQLite에 저장한다. `--full`은 `--root`보다 우선해 모든 설정 root를 스캔한다.
 ```bash
 libra scan
 libra scan --root D:\Projects
 ```
-결과물: `Roots scanned / Projects found / Resources found / Files inspected` 요약과 발견된 warning 일부(`--verbose`로 전체), 마지막 줄에 다음 단계 안내(`Next: libra summary`). 언제 쓰나: 최초 분석 시, 또는 프로젝트·SDK 구성이 바뀐 뒤 최신 상태를 반영하고 싶을 때. 매 실행이 항상 전체 재스캔이다(증분 스캔 없음).
+결과물: `Roots scanned / Projects found / Resources found / Files inspected` 요약과 발견된 warning 일부(`--verbose`로 전체), 마지막 줄에 다음 단계 안내(`Next: libra summary`). 데몬은 변경된 root에 `--root`를 적용해 증분 갱신한다.
 
 **4. 저장된 스캔 결과 조회** — 아래 5개는 모두 read-only이며 직전 `scan`이 채운 SQLite만 읽는다.
 
@@ -277,7 +283,7 @@ libra export --format markdown --output report.md
 ```
 언제: 발표 자료, 버그 리포트, 팀원 간 환경 공유, 후속 분석 입력이 필요할 때. (`--format markdown`은 `--json`과 함께 쓸 수 없다.)
 
-**11. `libra daemon start` / `libra daemon status` / `libra daemon stop`** — 설정된 `project_roots`를 2초 간격으로 폴링해 파일 수·총 바이트·최신 수정 시각 스냅샷이 바뀌면 백그라운드에서 자동으로 `libra scan`을 재실행한다. `status`는 실행 중/멈춤/heartbeat가 오래돼 stale인지와 마지막 스캔·오류를 보여주고, `stop`은 데몬 프로세스를 종료한다. 자동 정리는 절대 하지 않는다(관찰과 재스캔만).
+**11. `libra daemon start` / `libra daemon status` / `libra daemon stop`** — 설정된 `project_roots`의 파일 인벤토리를 2초 간격으로 비교해 변경 root만 증분 스캔한다. `status`는 실행 상태와 마지막 스캔·오류를 보여준다. 자동 정리는 하지 않는다.
 ```bash
 libra daemon start
 libra daemon status
@@ -285,11 +291,11 @@ libra daemon stop
 ```
 언제: 코딩하는 동안 저장공간 현황이 거의 실시간으로 갱신되길 원할 때.
 
-**12. `libra events [--kind RESOURCE_DIRTY] [--since 24h] [--limit 50]`** — 데몬이 기록한 이벤트 이력(`DAEMON_STARTED`, `RESOURCE_DIRTY`)을 조회한다. `--since`는 RFC3339 시각 또는 `24h` 같은 기간을 받는다.
+**12. `libra events [--kind CREATE] [--since 24h] [--limit 50]`** — 데몬이 기록한 파일 이벤트와 증분 스캔 이력을 조회한다. `--since`는 RFC3339 시각 또는 `24h` 같은 기간을 받는다.
 ```bash
 libra events
 libra events --since 24h
-libra events --kind RESOURCE_DIRTY --limit 10
+libra events --kind SIZE_CHANGE --limit 10
 ```
 언제: 데몬이 실제로 언제 무엇을 감지해서 재스캔했는지 확인할 때.
 

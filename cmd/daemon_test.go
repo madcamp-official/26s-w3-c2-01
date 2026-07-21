@@ -35,7 +35,7 @@ func TestSnapshotRootsDetectsChangesAndHonorsExclude(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before == after || after.Files != before.Files+1 {
+	if len(after.Files) != len(before.Files)+1 {
 		t.Fatalf("before/after = %#v/%#v", before, after)
 	}
 }
@@ -68,5 +68,20 @@ func TestDaemonStateFresh(t *testing.T) {
 	}
 	if daemonStateFresh(daemonState{PID: 1, Heartbeat: now.Add(-daemonStaleAfter - time.Second)}, now) {
 		t.Fatal("old heartbeat should be stale")
+	}
+}
+
+func TestDiffDaemonSnapshotsClassifiesFileEvents(t *testing.T) {
+	before := daemonSnapshot{Files: map[string]daemonFileState{"old": {Size: 1, Modified: 1, Root: "root"}, "sized": {Size: 1, Modified: 1, Root: "root"}}}
+	after := daemonSnapshot{Files: map[string]daemonFileState{"new": {Size: 1, Modified: 1, Root: "root"}, "sized": {Size: 2, Modified: 2, Root: "root"}, "created": {Size: 3, Modified: 3, Root: "root"}}}
+	changes := diffDaemonSnapshots(before, after)
+	kinds := map[string]bool{}
+	for _, change := range changes {
+		kinds[change.Event.Kind] = true
+	}
+	for _, kind := range []string{"RENAME", "SIZE_CHANGE", "CREATE"} {
+		if !kinds[kind] {
+			t.Fatalf("missing %s in %#v", kind, changes)
+		}
 	}
 }

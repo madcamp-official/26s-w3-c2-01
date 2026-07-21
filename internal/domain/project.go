@@ -48,7 +48,12 @@ const (
 	// ProjectTypePython covers pyproject.toml/Pipfile/setup.py/requirements.txt
 	// roots -- see docs/libra_integration_contracts.md §19.4 for the marker
 	// priority (internal/adapter/python.FilesystemDetector).
-	ProjectTypePython ProjectType = "python"
+	ProjectTypePython  ProjectType = "python"
+	ProjectTypeGradle  ProjectType = "gradle"
+	ProjectTypeMaven   ProjectType = "maven"
+	ProjectTypeCargo   ProjectType = "cargo"
+	ProjectTypeGo      ProjectType = "go"
+	ProjectTypeAndroid ProjectType = "android"
 )
 
 // ProjectStatus describes the activity state of a project.

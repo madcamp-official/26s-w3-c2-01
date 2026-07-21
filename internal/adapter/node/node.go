@@ -37,6 +37,14 @@ import (
 // manifestFile is the marker that identifies a Node BuildProject root.
 const manifestFile = "package.json"
 
+// vendoredDir is the directory installed dependencies live under. A
+// package.json at or beneath a node_modules directory belongs to a
+// third-party package, not an authored project, so CanDetect refuses it
+// (issue #36). The owning project's node_modules is still reported as a
+// Resource via DetectArtifacts and sized via scanner.MeasureResource, neither
+// of which needs the discovery walk to descend into node_modules.
+const vendoredDir = "node_modules"
+
 // lockfiles are recognized as regenerability evidence for node_modules, and
 // (via packageManagerOf) identify which package manager owns the project.
 // Order is the priority checked in if more than one is somehow present.
@@ -76,7 +84,12 @@ var (
 // normalized identity and persists it through ProjectRepository. Artifacts
 // follow the separate ResourceService pipeline.
 type Detector interface {
-	// CanDetect reports whether entry's directory contains package.json.
+	// CanDetect reports whether entry's directory is the root of a Node
+	// project: it contains package.json and is not itself vendored (a
+	// node_modules directory or anything beneath one). A package.json under
+	// node_modules belongs to an installed dependency, not the developer, so
+	// it is not a project (issue #36); node_modules is still detected and
+	// sized as the owning project's resource, independently of the walk.
 	CanDetect(entry scanner.Entry) bool
 	// Detect builds the domain.BuildProject for the Node project rooted at
 	// entry. Callers should only call this after CanDetect reports true. A
@@ -91,8 +104,24 @@ type Detector interface {
 type FilesystemDetector struct{}
 
 func (FilesystemDetector) CanDetect(entry scanner.Entry) bool {
+	if isVendoredPath(entry.Path) {
+		return false
+	}
 	_, err := os.Stat(filepath.Join(entry.Path, manifestFile))
 	return err == nil
+}
+
+// isVendoredPath reports whether path is, or lives beneath, a node_modules
+// directory. Matching is segment-wise so a sibling like "node_modules-cache"
+// is not treated as vendored. Paths are normalized to forward slashes first so
+// the same check holds for Windows "\\"-separated paths the scanner produces.
+func isVendoredPath(path string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(path), "/") {
+		if segment == vendoredDir {
+			return true
+		}
+	}
+	return false
 }
 
 func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (domain.BuildProject, error) {

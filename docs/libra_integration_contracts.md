@@ -195,6 +195,16 @@ root node_modules → workspace 소유 Resource
 하위 node_modules → 해당 package 소유 Resource
 ```
 
+> 갱신(2026-07-21, issue #36): `node_modules` 하위(또는 내부)의 `package.json`은
+> 설치된 third-party 의존성이지 개발자 프로젝트가 아니므로 BuildProject으로
+> 탐지하지 않는다. Node adapter의 `CanDetect`가 경로에 `node_modules` 세그먼트가
+> 있으면 프로젝트 후보에서 제외한다(`isVendoredPath`). 위 매핑의 "각 package.json
+> → BuildProject 후보"는 vendored 경로를 제외한 뒤에 적용된다. 소유 프로젝트의
+> `node_modules`는 여전히 `DetectArtifacts`로 Resource로 잡히고
+> `scanner.MeasureResource`로 크기를 재는데, 둘 다 스캔 walk가 node_modules 안으로
+> 내려가는 것에 의존하지 않는다. 스캔 walk 자체의 가지치기와 기본 exclude(성능·
+> 시스템 일반화)는 Option B(별도 이슈, scanner/config = Windows A)로 남긴다.
+
 Node adapter 구현 전에 결정하기로 했던 6개 항목을 `internal/adapter/node`
 (Mac C 소유 영역)에서 MVP 범위로 확정하고 구현했다. 처음에는 workspace
 지원 자체를 범위 밖으로 미뤘었는데("관계/공용 자원 연결을 지원해야 하지

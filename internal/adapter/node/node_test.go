@@ -33,6 +33,67 @@ func TestFilesystemDetector_CanDetect(t *testing.T) {
 	}
 }
 
+// TestFilesystemDetector_CanDetect_SkipsVendoredPackages reproduces issue #36:
+// package.json files under node_modules are installed dependencies, not
+// projects, and must not be detected as project roots -- while the real
+// project roots around them still are.
+func TestFilesystemDetector_CanDetect_SkipsVendoredPackages(t *testing.T) {
+	root := t.TempDir()
+	writeManifest := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, manifestFile), []byte(`{"name":"x"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	frontend := filepath.Join(root, "frontend")
+	member := filepath.Join(frontend, "packages", "app")
+	vendored := filepath.Join(frontend, "node_modules", "react")
+	vendoredNested := filepath.Join(frontend, "node_modules", "resolve", "test", "fixture")
+	for _, dir := range []string{frontend, member, vendored, vendoredNested} {
+		writeManifest(dir)
+	}
+
+	var detector Detector = FilesystemDetector{}
+	cases := []struct {
+		dir  string
+		want bool
+	}{
+		{frontend, true},
+		{member, true},
+		{filepath.Join(frontend, "node_modules"), false},
+		{vendored, false},
+		{vendoredNested, false},
+	}
+	for _, tc := range cases {
+		if got := detector.CanDetect(scanner.Entry{Path: tc.dir}); got != tc.want {
+			t.Errorf("CanDetect(%q) = %v, want %v", tc.dir, got, tc.want)
+		}
+	}
+}
+
+func TestIsVendoredPath(t *testing.T) {
+	j := filepath.Join
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{j("a", "b", "frontend"), false},
+		{j("a", "node_modules"), true},
+		{j("a", "node_modules", "react"), true},
+		{j("a", "node_modules", "x", "node_modules", "y"), true},
+		{j("a", "node_modules-cache", "pkg"), false},
+	}
+	for _, tc := range cases {
+		if got := isVendoredPath(tc.path); got != tc.want {
+			t.Errorf("isVendoredPath(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestFilesystemDetector_Detect(t *testing.T) {
 	var detector Detector = FilesystemDetector{}
 	modifiedAt := time.Date(2026, 7, 18, 3, 4, 5, 0, time.UTC)

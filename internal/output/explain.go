@@ -49,10 +49,12 @@ type ExplainView struct {
 }
 
 // ExplainUsage is one dependency edge's evidence, rendered under "Used by"
-// (resource target) or "Requires" (project target).
+// (resource target) or "Uses" (project target), grouped into "Owns"/
+// "Requires" relation subsections by renderUsageGroup.
 type ExplainUsage struct {
 	Name     string                `json:"name"`
 	Path     string                `json:"path,omitempty"`
+	Relation domain.RelationType   `json:"relation"`
 	Evidence []ExplainEvidenceLine `json:"evidence,omitempty"`
 }
 
@@ -94,10 +96,8 @@ func (v ExplainView) renderResource(w io.Writer) error {
 	if len(v.UsedBy) == 0 {
 		fmt.Fprintln(w, "- none found in the last scan")
 	}
-	for _, usage := range v.UsedBy {
-		fmt.Fprintf(w, "- %s\n", usage.Path)
-		renderEvidence(w, usage.Evidence)
-	}
+	renderUsageGroup(w, "  Owns:", v.UsedBy, domain.RelationOwns)
+	renderUsageGroup(w, "  Requires:", v.UsedBy, domain.RelationRequires)
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Expected impact:")
@@ -131,29 +131,60 @@ func (v ExplainView) renderProject(w io.Writer) error {
 	fmt.Fprintf(w, "Last observed: %s\n", formatTime(v.LastObservedAt))
 	fmt.Fprintln(w)
 
-	fmt.Fprintln(w, "Requires:")
+	fmt.Fprintln(w, "Uses:")
 	if len(v.Requires) == 0 {
 		fmt.Fprintln(w, "- none found in the last scan")
 	}
-	for _, usage := range v.Requires {
-		fmt.Fprintf(w, "- %s\n", usage.Name)
-		renderEvidence(w, usage.Evidence)
-	}
+	renderUsageGroup(w, "  Owns:", v.Requires, domain.RelationOwns)
+	renderUsageGroup(w, "  Requires:", v.Requires, domain.RelationRequires)
 
 	return v.renderUnverified(w)
 }
 
+// renderUsageGroup prints one relation's subsection of "Used by" (e.g.
+// "  Owns:") followed by its usages, or nothing at all if none of usages
+// match relation -- a resource only ever shows the relation groups that
+// actually apply to it.
+func renderUsageGroup(w io.Writer, header string, usages []ExplainUsage, relation domain.RelationType) {
+	var matched []ExplainUsage
+	for _, usage := range usages {
+		if usage.Relation == relation {
+			matched = append(matched, usage)
+		}
+	}
+	if len(matched) == 0 {
+		return
+	}
+	fmt.Fprintln(w, header)
+	for _, usage := range matched {
+		fmt.Fprintf(w, "  - %s\n", usageLabel(usage))
+		renderEvidence(w, usage.Evidence, "      ")
+	}
+}
+
+// usageLabel prefers a usage's Path -- set on "Used by" entries, one per
+// owning/requiring project -- and falls back to Name, set on "Uses" entries
+// (one per resource, which has no path of its own distinct from the
+// project's).
+func usageLabel(usage ExplainUsage) string {
+	if usage.Path != "" {
+		return usage.Path
+	}
+	return usage.Name
+}
+
 // renderEvidence is shared by renderResource ("Used by") and renderProject
-// ("Requires"): both sections list dependency edges with the same
-// Evidence/Source/Property sub-lines, just under a different heading.
-func renderEvidence(w io.Writer, evidence []ExplainEvidenceLine) {
+// ("Uses"): both sections list dependency edges with the same
+// Evidence/Source/Property sub-lines, just under a different heading, at a
+// caller-supplied indent.
+func renderEvidence(w io.Writer, evidence []ExplainEvidenceLine, indent string) {
 	for _, e := range evidence {
-		fmt.Fprintf(w, "  Evidence: %s\n", e.Kind)
+		fmt.Fprintf(w, "%sEvidence: %s\n", indent, e.Kind)
 		if e.Source != "" {
-			fmt.Fprintf(w, "  Source: %s\n", e.Source)
+			fmt.Fprintf(w, "%sSource: %s\n", indent, e.Source)
 		}
 		if e.Property != "" {
-			fmt.Fprintf(w, "  Property: %s\n", e.Property)
+			fmt.Fprintf(w, "%sProperty: %s\n", indent, e.Property)
 		}
 	}
 }

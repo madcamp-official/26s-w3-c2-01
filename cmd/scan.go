@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -103,8 +104,54 @@ not exist yet, so --full has no effect (see --help).`,
 		fmt.Fprintf(cmd.OutOrStdout(), "Resources found: %d\n", len(result.Resources))
 		fmt.Fprintf(cmd.OutOrStdout(), "Files inspected: %d\n", result.Filesystem.FilesInspected)
 		fmt.Fprintf(cmd.OutOrStdout(), "Warnings:        %d\n", len(result.Issues))
+		printScanIssues(cmd.OutOrStdout(), result.Issues, verbose)
 		return nil
 	},
+}
+
+// scanIssueSummaryLimit is how many of result.Issues print by default
+// (issue #37): the prior behavior showed only the count ("Warnings: N"),
+// leaving the user unable to tell whether "Safely reclaimable" reflects a
+// complete scan or one that silently skipped unreadable paths. This is
+// display-only -- result.Issues (path/operation/message) is already fully
+// populated in memory by the orchestrator this same run, nothing new is
+// computed or persisted. A separate `libra issues` command that re-lists a
+// *past* scan's warnings would need Issue detail to survive to a later
+// process, which ScanRecord does not currently persist (only ErrorCount, an
+// int) -- that's a DB schema change in Windows A's area (internal/store)
+// requiring team agreement (docs/libra_collaboration_rules.md §9), so it is
+// out of scope here and left to a follow-up.
+const scanIssueSummaryLimit = 3
+
+// printScanIssues prints up to scanIssueSummaryLimit issues, or every issue
+// when full is true (the --verbose flag). Prints nothing when there are no
+// issues, matching Warnings: 0 above.
+func printScanIssues(w io.Writer, issues []app.Issue, full bool) {
+	if len(issues) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+
+	shown := issues
+	if !full && len(issues) > scanIssueSummaryLimit {
+		shown = issues[:scanIssueSummaryLimit]
+	}
+	for _, issue := range shown {
+		fmt.Fprintf(w, "[%s] %s\n", issue.Code, formatIssueDetail(issue))
+	}
+	if hidden := len(issues) - len(shown); hidden > 0 {
+		fmt.Fprintf(w, "...and %d more (use --verbose to see all)\n", hidden)
+	}
+}
+
+// formatIssueDetail renders one app.Issue as "operation path: message", or
+// "operation: message" when Issue has no Path (some issue codes, like
+// IssueCancelled, are not tied to a single filesystem path).
+func formatIssueDetail(issue app.Issue) string {
+	if issue.Path == "" {
+		return fmt.Sprintf("%s: %s", issue.Operation, issue.Message)
+	}
+	return fmt.Sprintf("%s %s: %s", issue.Operation, issue.Path, issue.Message)
 }
 
 func init() {

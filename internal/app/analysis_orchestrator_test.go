@@ -37,7 +37,11 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 		WithDetectors([]ProjectDetector{projectDetector}, []ResourceDetector{resourceDetector}, []DependencyAnalyzer{analyzer})
 	orchestrator.now = func() time.Time { return time.Date(2026, 7, 18, 11, 0, 0, 0, time.UTC) }
 	var phases []AnalysisPhase
-	orchestrator.onPhase = func(phase AnalysisPhase) { phases = append(phases, phase) }
+	var progressAtPhase []ScanProgress
+	orchestrator.onPhase = func(phase AnalysisPhase, progress ScanProgress) {
+		phases = append(phases, phase)
+		progressAtPhase = append(progressAtPhase, progress)
+	}
 
 	result, err := orchestrator.Run(context.Background(), AnalysisOptions{
 		ScanID: "scan-orchestrated", Scan: scanner.Options{Roots: []string{root}, MaxDepth: 4},
@@ -78,8 +82,104 @@ func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 			t.Fatalf("phases = %v, want %v", phases, wantPhases)
 		}
 	}
+	// The one detected project/resource must show up in the phase hook's
+	// ScanProgress starting exactly at the phase each becomes final -- not
+	// before (still zero) and not only at the very end.
+	for i, phase := range phases {
+		wantProjects, wantResources := int64(0), int64(0)
+		if phase == PhaseDiscoverSystemResources || phase == PhaseAnalyzeProjectSettings ||
+			phase == PhaseResolveDependencies || phase == PhaseClassifyArtifacts ||
+			phase == PhaseCalculateRisk || phase == PhasePersistResults || phase == PhaseCompleted {
+			wantProjects = 1
+		}
+		if phase == PhaseAnalyzeProjectSettings || phase == PhaseResolveDependencies ||
+			phase == PhaseClassifyArtifacts || phase == PhaseCalculateRisk ||
+			phase == PhasePersistResults || phase == PhaseCompleted {
+			wantResources = 1
+		}
+		if progressAtPhase[i].Projects != wantProjects || progressAtPhase[i].Resources != wantResources {
+			t.Fatalf("progress at phase %q = %#v, want Projects=%d Resources=%d",
+				phase, progressAtPhase[i], wantProjects, wantResources)
+		}
+	}
 	if scans.records[len(scans.records)-1].Status != ScanStatusCompleted {
 		t.Fatalf("final scan = %#v", scans.records[len(scans.records)-1])
+	}
+}
+
+// TestAnalysisOrchestratorReportsProgress covers WithProgress: the callback
+// must fire at least once per discovered entry, with FilesInspected/
+// Directories that only ever grow and that end up matching the authoritative
+// counts scanner.Result reports for the same run.
+func TestAnalysisOrchestratorReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var updates []ScanProgress
+	orchestrator := NewAnalysisOrchestrator(scanner.New(2), &scanRepositoryCapture{}, &projectRepositoryCapture{},
+		&workspaceRepositoryCapture{}, resourceObserverFake{observedAt: time.Now()}, &dependencyRepositoryCapture{}).
+		WithDetectors([]ProjectDetector{projectDetectorFake{root: root}}, nil, nil).
+		WithProgress(func(p ScanProgress) { updates = append(updates, p) })
+
+	result, err := orchestrator.Run(context.Background(), AnalysisOptions{
+		ScanID: "scan-progress", Scan: scanner.Options{Roots: []string{root}, MaxDepth: 4},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(updates) == 0 {
+		t.Fatal("WithProgress callback never fired")
+	}
+	for i := 1; i < len(updates); i++ {
+		if updates[i].FilesInspected < updates[i-1].FilesInspected || updates[i].Directories < updates[i-1].Directories {
+			t.Fatalf("progress went backwards: %#v -> %#v", updates[i-1], updates[i])
+		}
+	}
+	last := updates[len(updates)-1]
+	if last.FilesInspected != result.Filesystem.FilesInspected {
+		t.Fatalf("final FilesInspected = %d, want %d (scanner.Result)", last.FilesInspected, result.Filesystem.FilesInspected)
+	}
+}
+
+// TestAnalysisOrchestratorWithPhaseHookFiresInOrder is the public-API
+// counterpart of TestAnalysisOrchestratorRunsPipelineInContractOrder (which
+// sets the unexported onPhase field directly, since it lives in this same
+// package): callers outside internal/app -- cmd/scan.go -- can only reach
+// onPhase through WithPhaseHook, so this exercises that setter directly.
+func TestAnalysisOrchestratorWithPhaseHookFiresInOrder(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var phases []AnalysisPhase
+	orchestrator := NewAnalysisOrchestrator(scanner.New(1), &scanRepositoryCapture{}, &projectRepositoryCapture{},
+		&workspaceRepositoryCapture{}, resourceObserverFake{observedAt: time.Now()}, &dependencyRepositoryCapture{}).
+		WithDetectors([]ProjectDetector{projectDetectorFake{root: root}}, nil, nil).
+		WithPhaseHook(func(phase AnalysisPhase, _ ScanProgress) { phases = append(phases, phase) })
+
+	if _, err := orchestrator.Run(context.Background(), AnalysisOptions{
+		ScanID: "scan-phase-hook", Scan: scanner.Options{Roots: []string{root}, MaxDepth: 4},
+	}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	wantPhases := []AnalysisPhase{
+		PhaseDiscoverFiles, PhaseDiscoverProjects, PhaseDiscoverSystemResources,
+		PhaseAnalyzeProjectSettings, PhaseResolveDependencies, PhaseClassifyArtifacts,
+		PhaseCalculateRisk, PhasePersistResults, PhaseCompleted,
+	}
+	if len(phases) != len(wantPhases) {
+		t.Fatalf("phases = %v, want %v", phases, wantPhases)
+	}
+	for i := range wantPhases {
+		if phases[i] != wantPhases[i] {
+			t.Fatalf("phases = %v, want %v", phases, wantPhases)
+		}
 	}
 }
 

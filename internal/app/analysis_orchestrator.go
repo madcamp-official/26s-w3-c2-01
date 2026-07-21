@@ -35,6 +35,19 @@ type AnalysisOptions struct {
 	Environment Environment
 }
 
+// ScanProgress reports how much of the scan has been done so far. It is
+// cumulative for the running scan, not a delta. FilesInspected/Directories
+// are live during PhaseDiscoverFiles; Projects/Resources are zero until
+// PhaseDiscoverProjects/PhaseDiscoverSystemResources finish counting them
+// (see the WithPhaseHook callback, which reports them as soon as each is
+// known rather than waiting for the whole scan to finish).
+type ScanProgress struct {
+	FilesInspected int64
+	Directories    int64
+	Projects       int64
+	Resources      int64
+}
+
 type ScanResult struct {
 	ScanID       string
 	Filesystem   scanner.Result
@@ -61,11 +74,35 @@ type AnalysisOrchestrator struct {
 	resourceDetectors   []ResourceDetector
 	dependencyAnalyzers []DependencyAnalyzer
 	now                 func() time.Time
-	onPhase             func(AnalysisPhase)
+	onPhase             func(AnalysisPhase, ScanProgress)
+	onProgress          func(ScanProgress)
 }
 
 func (o *AnalysisOrchestrator) WithIssueRepository(issues ScanIssueRepository) *AnalysisOrchestrator {
 	o.issues = issues
+	return o
+}
+
+// WithProgress registers a callback invoked after every filesystem entry
+// PhaseDiscoverFiles visits, so a caller (e.g. a terminal progress bar) can
+// show live progress without waiting for Run to return. The callback runs
+// synchronously on the scanning goroutine, so it must be cheap and must not
+// call back into the orchestrator.
+func (o *AnalysisOrchestrator) WithProgress(fn func(ScanProgress)) *AnalysisOrchestrator {
+	o.onProgress = fn
+	return o
+}
+
+// WithPhaseHook registers a callback invoked at the start of every pipeline
+// phase (see AnalysisPhase and §18.3 of docs/libra_integration_contracts.md),
+// so a caller can show which phase a running scan is currently in. Unlike
+// WithProgress this fires only once per phase -- a handful of times per
+// scan -- so the callback does not need to throttle itself. The ScanProgress
+// passed alongside is a snapshot as of that phase starting: Projects is
+// final starting with PhaseDiscoverSystemResources, Resources starting with
+// PhaseAnalyzeProjectSettings; both are zero before that.
+func (o *AnalysisOrchestrator) WithPhaseHook(fn func(AnalysisPhase, ScanProgress)) *AnalysisOrchestrator {
+	o.onPhase = fn
 	return o
 }
 
@@ -99,8 +136,18 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	}
 
 	var candidates []ProjectCandidate
-	o.phase(&result, PhaseDiscoverFiles)
+	var progress ScanProgress
+	o.phase(&result, PhaseDiscoverFiles, progress)
 	filesystemResult, err := o.filesystem.Scan(ctx, options.Scan, func(ctx context.Context, entry scanner.Entry) error {
+		switch entry.Kind {
+		case scanner.EntryFile, scanner.EntryOther:
+			progress.FilesInspected++
+		case scanner.EntryDirectory:
+			progress.Directories++
+		}
+		if o.onProgress != nil {
+			o.onProgress(progress)
+		}
 		for _, detector := range o.projectDetectors {
 			detected := detector.Observe(ctx, entry)
 			candidates = append(candidates, detected.Items...)
@@ -120,7 +167,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		return o.fail(ctx, result, record, err)
 	}
 
-	o.phase(&result, PhaseDiscoverProjects)
+	o.phase(&result, PhaseDiscoverProjects, progress)
 	observedAt := o.now()
 	workspaceCandidates := make([]workspaceCandidate, 0)
 	var projectResourceCandidates []ProjectResourceCandidate
@@ -169,7 +216,10 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	projectResourceCandidates = dedupeProjectResources(projectResourceCandidates)
 	propertiesByManifest = filterProjectPropertiesByOwner(propertiesByManifest, result.Projects)
 
-	o.phase(&result, PhaseDiscoverSystemResources)
+	// result.Projects is final now, so the projects count a phase hook
+	// observer sees from here on is the real one, not a work-in-progress tally.
+	progress.Projects = int64(len(result.Projects))
+	o.phase(&result, PhaseDiscoverSystemResources, progress)
 	for _, detector := range o.resourceDetectors {
 		detected := detector.Detect(ctx, options.Environment)
 		result.Issues = append(result.Issues, detected.Issues...)
@@ -220,8 +270,11 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		result.Evidence = append(result.Evidence, evidence)
 	}
 
-	o.phase(&result, PhaseAnalyzeProjectSettings)
-	o.phase(&result, PhaseResolveDependencies)
+	// result.Resources is final now (system resources plus project-owned
+	// ones observed above), so this is the real resources count.
+	progress.Resources = int64(len(result.Resources))
+	o.phase(&result, PhaseAnalyzeProjectSettings, progress)
+	o.phase(&result, PhaseResolveDependencies, progress)
 	index := newMemoryResourceIndex(result.Resources)
 	for _, project := range result.Projects {
 		input := ProjectAnalysisInput{
@@ -240,8 +293,8 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		}
 	}
 
-	o.phase(&result, PhaseClassifyArtifacts)
-	o.phase(&result, PhaseCalculateRisk)
+	o.phase(&result, PhaseClassifyArtifacts, progress)
+	o.phase(&result, PhaseCalculateRisk, progress)
 	// A resource's first Classify pass (inside Observe, back during
 	// PhaseDiscoverSystemResources) can't know yet whether any project
 	// requires it -- that's only known now that PhaseResolveDependencies has
@@ -264,7 +317,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		result.Resources[i].Risk = reclassified.Resource.Risk
 		result.Resources[i].ReclaimableSize = reclassified.Resource.ReclaimableSize
 	}
-	o.phase(&result, PhasePersistResults)
+	o.phase(&result, PhasePersistResults, progress)
 	if err := o.projects.UpsertObserved(ctx, options.ScanID, result.Projects); err != nil {
 		return o.fail(ctx, result, record, fmt.Errorf("persist projects: %w", err))
 	}
@@ -290,7 +343,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		}
 	}
 
-	o.phase(&result, PhaseCompleted)
+	o.phase(&result, PhaseCompleted, progress)
 	result.Status = ScanStatusCompleted
 	if len(result.Issues) > 0 {
 		result.Status = ScanStatusCompletedWithErrors
@@ -331,10 +384,10 @@ func (o *AnalysisOrchestrator) observeResourceFacts(ctx context.Context, result 
 	return nil
 }
 
-func (o *AnalysisOrchestrator) phase(result *ScanResult, phase AnalysisPhase) {
+func (o *AnalysisOrchestrator) phase(result *ScanResult, phase AnalysisPhase, progress ScanProgress) {
 	result.Phase = phase
 	if o.onPhase != nil {
-		o.onPhase(phase)
+		o.onPhase(phase, progress)
 	}
 }
 

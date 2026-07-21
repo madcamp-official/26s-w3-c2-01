@@ -329,8 +329,8 @@ REVIEW
 * `Directory.Build.props` 상위 경로 분석
 * MSBuild `-preprocess` 실행
 * MSBuild binary log 분석
-* npm·pnpm 전역 저장소 탐지 (read-only 구현됨)
-* Android SDK·Gradle, Cargo, Maven 전역 저장소 탐지 (read-only 구현됨)
+* npm·pnpm 전역 저장소 탐지 (analysis-only 구현됨, 공식 cleanup 명령 안내)
+* Android SDK·Gradle, Cargo, Maven 전역 저장소 탐지 (analysis-only 구현됨, 공식 cleanup 절차 안내)
 * Docker 디스크 사용량 탐지 (`docker system df`, read-only 구현됨)
 * HTML 또는 Markdown 리포트
 * 삭제 전 프로젝트 빌드 검증 명령 생성

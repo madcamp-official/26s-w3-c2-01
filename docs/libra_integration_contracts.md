@@ -403,7 +403,7 @@ reclaimable 크기를 읽는다. Docker CLI가 없으면 빈 결과이며 daemon
 - `clean`, `purge`, daemon은 Docker prune/remove 명령을 실행하지 않는다.
 - 정리는 Docker 공식 명령을 사용자가 별도로 검토·실행해야 한다.
 
-### 19.7 Ecosystem SDK/cache adapters (`IMPLEMENTED`, read-only)
+### 19.7 Ecosystem SDK/cache adapters (`IMPLEMENTED`, analysis-only)
 
 - Android SDK: `ANDROID_HOME`, deprecated fallback `ANDROID_SDK_ROOT`, 플랫폼 기본 경로 순으로 탐지하고 `android-sdk`/`BLOCKED`로 저장한다. SDK 변경은 Android Studio 또는 `sdkmanager`에 맡긴다.
 - Gradle: `GRADLE_USER_HOME` 또는 `~/.gradle` 아래 `caches`만 `global-cache`로 탐지한다. `gradle.properties`, `init.d`, toolchain JDK는 포함하지 않는다.
@@ -413,6 +413,14 @@ reclaimable 크기를 읽는다. Docker CLI가 없으면 빈 결과이며 daemon
 - pnpm: 설치된 CLI의 `pnpm store path` 결과를 사용한다.
 
 전역 cache는 모두 `REVIEW`이며 자동 plan/clean 대상이 아니다. CLI 부재는 해당 항목의 빈 결과이고, 실행·설정 파싱 실패는 recoverable scan issue다.
+
+구현은 의미 경계를 유지하도록 `internal/adapter/android`, `gradle`, `cargo`, `maven`,
+`npm`, `pnpm` package로 분리한다. 공통 filesystem helper만 `cachepath`에 둔다.
+Libra는 cleanup 명령을 실행하지 않고 구조화된 `OFFICIAL_CLEANUP_GUIDANCE` reason으로
+다음 안내만 제공한다: Android `sdkmanager --uninstall`, npm `npm cache clean --force`,
+pnpm `pnpm store prune`, Maven `mvn dependency:purge-local-repository`. Gradle은 자체 자동
+cleanup/retention 설정을 안내하고, Cargo는 전역 cache purge 명령이 없으므로 프로젝트
+산출물에 한해 `cargo clean`을 안내한다.
 
 ## 20. Evidence, Confidence, Risk 및 Impact
 

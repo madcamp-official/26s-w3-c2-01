@@ -63,7 +63,12 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 	if context.Resource.Type == domain.ResourceTypeAndroidSDK {
 		return RiskAssessment{
 			Level: domain.RiskBlocked, Confidence: context.Confidence,
-			Blockers: []domain.RiskReason{{Code: "ANDROID_SDK_MANAGED", Severity: domain.RiskReasonBlocker, Message: "Android SDK packages must be managed with sdkmanager or Android Studio"}},
+			Blockers: []domain.RiskReason{{Code: "ANDROID_SDK_MANAGED", Severity: domain.RiskReasonBlocker, Message: "use `sdkmanager --list` and `sdkmanager --uninstall <package>` or Android Studio SDK Manager"}},
+		}
+	}
+	if context.Resource.Type == domain.ResourceTypeGlobalCache {
+		return RiskAssessment{Level: domain.RiskReview, Confidence: context.Confidence,
+			Warnings: []domain.RiskReason{{Code: "OFFICIAL_CLEANUP_GUIDANCE", Severity: domain.RiskReasonWarning, Message: officialCacheCleanupGuidance(context.Resource.Version)}},
 		}
 	}
 	if context.Resource.Type == domain.ResourceTypeDockerVolume {
@@ -102,5 +107,22 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 	return RiskAssessment{
 		Level: domain.RiskReview, Confidence: context.Confidence,
 		Warnings: []domain.RiskReason{{Code: "SAFE_CONDITIONS_NOT_PROVEN", Severity: domain.RiskReasonWarning, Message: "cleanup safety has not been fully verified"}},
+	}
+}
+
+func officialCacheCleanupGuidance(version string) string {
+	switch version {
+	case "npm":
+		return "inspect with `npm cache verify`; reclaim only when necessary with `npm cache clean --force`"
+	case "pnpm":
+		return "remove unreferenced packages with `pnpm store prune`"
+	case "maven":
+		return "use `mvn dependency:purge-local-repository` for project dependency cleanup"
+	case "cargo-registry", "cargo-git":
+		return "Cargo has no built-in global cache purge; use `cargo clean` only for project target artifacts"
+	case "gradle":
+		return "Gradle manages cache cleanup automatically; configure retention in Gradle User Home init scripts"
+	default:
+		return "use the owning package manager's official cleanup workflow"
 	}
 }

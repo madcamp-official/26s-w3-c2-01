@@ -13,6 +13,7 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/windowsdk"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/safety"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
@@ -97,14 +98,24 @@ not exist yet, so --full has no effect (see --help).`,
 			return fmt.Errorf("run scan: %w", err)
 		}
 
-		fmt.Fprintln(cmd.OutOrStdout(), "Scan completed")
-		fmt.Fprintln(cmd.OutOrStdout())
-		fmt.Fprintf(cmd.OutOrStdout(), "Roots scanned:   %d\n", result.Filesystem.RootsScanned)
-		fmt.Fprintf(cmd.OutOrStdout(), "Projects found:  %d\n", len(result.Projects))
-		fmt.Fprintf(cmd.OutOrStdout(), "Resources found: %d\n", len(result.Resources))
-		fmt.Fprintf(cmd.OutOrStdout(), "Files inspected: %d\n", result.Filesystem.FilesInspected)
-		fmt.Fprintf(cmd.OutOrStdout(), "Warnings:        %d\n", len(result.Issues))
-		printScanIssues(cmd.OutOrStdout(), result.Issues, verbose)
+		view := output.ScanView{
+			RootsScanned:   result.Filesystem.RootsScanned,
+			ProjectsFound:  len(result.Projects),
+			ResourcesFound: len(result.Resources),
+			FilesInspected: result.Filesystem.FilesInspected,
+		}
+		for _, issue := range result.Issues {
+			view.Warnings = append(view.Warnings, output.ScanIssue{
+				Code: string(issue.Code), Phase: string(issue.Phase), Severity: string(issue.Severity),
+				Path: issue.Path, Operation: issue.Operation, Message: issue.Message,
+			})
+		}
+		if err := output.New(cmd.OutOrStdout(), jsonOutput).Print(view); err != nil {
+			return err
+		}
+		if !jsonOutput {
+			printScanIssues(cmd.OutOrStdout(), result.Issues, verbose)
+		}
 		return nil
 	},
 }
@@ -113,14 +124,9 @@ not exist yet, so --full has no effect (see --help).`,
 // (issue #37): the prior behavior showed only the count ("Warnings: N"),
 // leaving the user unable to tell whether "Safely reclaimable" reflects a
 // complete scan or one that silently skipped unreadable paths. This is
-// display-only -- result.Issues (path/operation/message) is already fully
-// populated in memory by the orchestrator this same run, nothing new is
-// computed or persisted. A separate `libra issues` command that re-lists a
-// *past* scan's warnings would need Issue detail to survive to a later
-// process, which ScanRecord does not currently persist (only ErrorCount, an
-// int) -- that's a DB schema change in Windows A's area (internal/store)
-// requiring team agreement (docs/libra_collaboration_rules.md §9), so it is
-// out of scope here and left to a follow-up.
+// display-only -- result.Issues is also persisted by the orchestrator for
+// the separate `libra issues` command, while this helper controls only how
+// much detail the immediate text response shows.
 const scanIssueSummaryLimit = 3
 
 // printScanIssues prints up to scanIssueSummaryLimit issues, or every issue

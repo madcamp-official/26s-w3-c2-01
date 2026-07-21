@@ -676,7 +676,7 @@ restore 규칙:
 | plan | IMPLEMENTED |
 | clean dry-run/execute | IMPLEMENTED |
 | transactions, restore | IMPLEMENTED |
-| purge, export, daemon | IMPLEMENTED |
+| purge, export, daemon, events | IMPLEMENTED |
 
 `libra issues`는 기본적으로 가장 최근에 시작한 scan의 경고·오류를 조회한다. `--scan <id>`로
 과거 scan을 지정하고 `--code`와 `--severity`를 함께 또는 각각 적용할 수 있다. 텍스트와

@@ -1230,6 +1230,10 @@ libra daemon stop
 libra events
 ```
 
+`libra events`는 daemon이 기록한 최근 이벤트 50건을 보여준다. `--kind`,
+`--since <RFC3339|duration>`, `--limit`과 전역 `--json`을 지원한다. daemon 시작은
+`DAEMON_STARTED`, 변경 감지 후 scan은 `RESOURCE_DIRTY`로 기록된다.
+
 ### 처리 대상
 
 * 설정된 프로젝트 루트

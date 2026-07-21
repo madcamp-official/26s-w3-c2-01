@@ -34,7 +34,7 @@ var purgeCmd = &cobra.Command{
 			fmt.Fprint(cmd.ErrOrStderr(), "Permanently delete quarantined items? This cannot be restored. [y/N] ")
 			answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-				return errors.New("purge cancelled")
+				return fmt.Errorf("purge cancelled: %w", ErrUserCancelled)
 			}
 		}
 		db, err := openDatabase()
@@ -47,6 +47,7 @@ var purgeCmd = &cobra.Command{
 			return fmt.Errorf("purge transaction: %w", err)
 		}
 		view := output.PurgeView{TransactionID: result.Transaction.ID, DryRun: result.DryRun, Status: result.Transaction.Status, Candidates: result.Candidates}
+		recordTransactionExit(result.Transaction.Status)
 		return output.New(cmd.OutOrStdout(), jsonOutput, "purge").PrintEnvelope(view, view.Envelope())
 	},
 }

@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
+
 	"github.com/madcamp-official/26s-w3-c2-01/internal/eventlog"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"path/filepath"
 	"testing"
 	"time"
@@ -30,11 +31,13 @@ func TestEventsCommandFiltersAndLimitsNewestEvents(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var view struct {
-		Events []eventlog.Event `json:"events"`
-	}
-	if err := json.Unmarshal(out.Bytes(), &view); err != nil {
+	var view output.EventsView
+	envelope, err := output.DecodeEnvelope(out.Bytes(), &view)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if envelope.Command != "events" || envelope.Outcome != output.OutcomeSuccess {
+		t.Fatalf("envelope = %#v", envelope)
 	}
 	if len(view.Events) != 1 || view.Events[0].Error != "scan failed" {
 		t.Fatalf("events = %#v", view.Events)

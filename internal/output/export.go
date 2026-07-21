@@ -8,6 +8,15 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 )
 
+// ExportView adapts the portable export report to the interactive CLI
+// renderer. `export --format json` remains the raw, portable report format;
+// the global `--json` flag wraps this same data in the shared CLI envelope.
+type ExportView app.ExportReport
+
+func (v ExportView) RenderText(w io.Writer) error {
+	return WriteExportMarkdown(w, app.ExportReport(v))
+}
+
 func WriteExportJSON(w io.Writer, report app.ExportReport) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")

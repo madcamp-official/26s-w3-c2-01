@@ -92,11 +92,16 @@ func TestPurgeViewEnvelopeReusesTransactionOutcome(t *testing.T) {
 // for issue #59: a plan that couldn't reach --target completed, but fell
 // short of what was asked -- exactly the case Outcome exists to flag.
 func TestPlanViewEnvelopeReflectsInsufficientCandidates(t *testing.T) {
-	if got := (PlanView{Status: domain.CleanupPlanReady}).Envelope().Outcome; got != OutcomeSuccess {
+	ready := (PlanView{Status: domain.CleanupPlanReady}).Envelope()
+	if got := ready.Outcome; got != OutcomeSuccess {
 		t.Errorf("Outcome for READY = %q, want %q", got, OutcomeSuccess)
 	}
-	if got := (PlanView{Status: domain.CleanupPlanInsufficientCandidates}).Envelope().Outcome; got != OutcomePartial {
+	partial := (PlanView{Status: domain.CleanupPlanInsufficientCandidates}).Envelope()
+	if got := partial.Outcome; got != OutcomePartial {
 		t.Errorf("Outcome for INSUFFICIENT_CANDIDATES = %q, want %q", got, OutcomePartial)
+	}
+	if len(ready.Issues) != 0 || len(partial.Issues) != 0 {
+		t.Fatal("plan risk reasons are decision evidence in data, not execution issues")
 	}
 }
 

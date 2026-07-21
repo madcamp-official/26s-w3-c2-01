@@ -8,8 +8,11 @@ import (
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
+	err := cmd.Execute()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	}
+	if code := cmd.ExitCode(err); code != cmd.ExitSuccess {
+		os.Exit(code)
 	}
 }

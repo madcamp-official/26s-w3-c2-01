@@ -13,6 +13,7 @@ import (
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/eventlog"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -90,15 +91,13 @@ func startDaemon(cmd *cobra.Command, _ []string) error {
 	}); err != nil {
 		return fmt.Errorf("record daemon state: %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Daemon starting (PID %d).\n", pid)
-	return nil
+	return output.New(cmd.OutOrStdout(), jsonOutput, "daemon start").Print(output.DaemonActionView{Status: "starting", PID: pid})
 }
 
 func showDaemonStatus(cmd *cobra.Command, _ []string) error {
 	state, err := readDaemonState()
 	if os.IsNotExist(err) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Daemon is stopped.")
-		return nil
+		return output.New(cmd.OutOrStdout(), jsonOutput, "daemon status").Print(output.DaemonStatusView{Status: "stopped"})
 	}
 	if err != nil {
 		return err
@@ -107,24 +106,14 @@ func showDaemonStatus(cmd *cobra.Command, _ []string) error {
 	if daemonStateFresh(state, time.Now()) {
 		status = "running"
 	}
-	if jsonOutput {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"status": status, "state": state})
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Daemon is %s (PID %d).\nLast heartbeat: %s\n", status, state.PID, state.Heartbeat.Format(time.RFC3339))
-	if !state.LastScanAt.IsZero() {
-		fmt.Fprintf(cmd.OutOrStdout(), "Last scan: %s\n", state.LastScanAt.Format(time.RFC3339))
-	}
-	if state.LastError != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\n", state.LastError)
-	}
-	return nil
+	view := output.DaemonStatusView{Status: status, PID: state.PID, StartedAt: state.StartedAt, Heartbeat: state.Heartbeat, Roots: state.Roots, LastScanAt: state.LastScanAt, LastError: state.LastError}
+	return output.New(cmd.OutOrStdout(), jsonOutput, "daemon status").Print(view)
 }
 
 func stopDaemon(cmd *cobra.Command, _ []string) error {
 	state, err := readDaemonState()
 	if os.IsNotExist(err) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Daemon is already stopped.")
-		return nil
+		return output.New(cmd.OutOrStdout(), jsonOutput, "daemon stop").Print(output.DaemonActionView{Status: "already_stopped"})
 	}
 	if err != nil {
 		return err
@@ -141,8 +130,7 @@ func stopDaemon(cmd *cobra.Command, _ []string) error {
 	if err := os.Remove(daemonStatePath()); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "Daemon stopped.")
-	return nil
+	return output.New(cmd.OutOrStdout(), jsonOutput, "daemon stop").Print(output.DaemonActionView{Status: "stopped"})
 }
 
 func runDaemon(_ *cobra.Command, _ []string) error {

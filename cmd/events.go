@@ -44,7 +44,7 @@ func runEvents(cmd *cobra.Command, _ []string) error {
 	if eventsLimit > 0 && len(filtered) > eventsLimit {
 		filtered = filtered[len(filtered)-eventsLimit:]
 	}
-	return output.New(cmd.OutOrStdout(), jsonOutput).Print(output.EventsView{Events: filtered})
+	return output.New(cmd.OutOrStdout(), jsonOutput, "events").Print(output.EventsView{Events: filtered})
 }
 func parseEventsSince(value string, now time.Time) (time.Time, error) {
 	if value == "" {

@@ -46,10 +46,9 @@ type PlanBlockedLine struct {
 // Envelope maps PlanView onto the shared JSON envelope (issue #59):
 // INSUFFICIENT_CANDIDATES means plan couldn't reach --target, which is
 // exactly the "completed but fell short" case Outcome exists to flag.
-// Issues aren't wired here (out of #59's approved scope for this round --
-// SAFE/REVIEW/BLOCKED already carry per-candidate RiskReasons of their
-// own, and folding those into envelope-level Issues too is a separate,
-// not-yet-decided design question), only Outcome.
+// Issues deliberately aren't wired here: SAFE/REVIEW/BLOCKED risk reasons
+// are decision evidence about candidates, not failures in the plan command's
+// execution. Duplicating them as envelope issues would blur that distinction.
 func (v PlanView) Envelope() EnvelopeOptions {
 	if v.Status == domain.CleanupPlanInsufficientCandidates {
 		return EnvelopeOptions{Outcome: OutcomePartial}

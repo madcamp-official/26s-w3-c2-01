@@ -42,7 +42,12 @@ var exportCmd = &cobra.Command{
 			defer file.Close()
 			writer = file
 		}
-		if format == "json" {
+		if jsonOutput {
+			if format != "json" {
+				return errors.New("--json cannot be combined with --format markdown")
+			}
+			err = output.New(writer, true, "export").Print(output.ExportView(report))
+		} else if format == "json" {
 			err = output.WriteExportJSON(writer, report)
 		} else {
 			err = output.WriteExportMarkdown(writer, report)

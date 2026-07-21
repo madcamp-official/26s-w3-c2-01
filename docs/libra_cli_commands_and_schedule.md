@@ -77,6 +77,8 @@ libra
 | `--project <path>` | 특정 프로젝트만 분석 |
 | `--drive <drive>` | 특정 드라이브만 조회 |
 
+`--json` 결과는 모든 명령에서 `command`, `schema_version`, `outcome`, `data`, `issues`, `unverified` 공통 envelope를 사용한다. `daemon` 하위 명령은 `command`에 `daemon status`처럼 전체 경로를 기록한다. `export --format json`은 portable report 원본이며, 전역 `--json`을 사용한 `libra --json export`만 CLI envelope 형식이다.
+
 ---
 
 ## 3. 명령어별 기능 명세

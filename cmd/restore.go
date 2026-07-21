@@ -34,6 +34,7 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("restore transaction: %w", err)
 		}
 		view := output.CleanupTransactionViewFromDomain(transaction)
+		recordTransactionExit(transaction.Status)
 		return output.New(cmd.OutOrStdout(), jsonOutput, "restore").PrintEnvelope(view, view.Envelope())
 	},
 }

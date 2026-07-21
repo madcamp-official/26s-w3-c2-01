@@ -6,18 +6,33 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 var ErrEmptyPath = errors.New("path must not be empty")
 
 // Normalize returns an absolute, cleaned path suitable for comparison and DB
 // identity. It does not resolve symlinks or junctions.
+//
+// The result is also Unicode-normalized to NFC (issue #49): a path
+// containing a decomposable character (Hangul syllables, Latin letters with
+// combining diacritics like é/ü) can reach this function as either NFC
+// (composed) or NFD (decomposed) byte sequences depending on how it
+// entered -- a CLI argument or config file tends to stay NFC, while
+// walking a real directory on macOS's APFS tends to yield NFD -- even
+// though both render identically and refer to the same file. Every stable
+// ID (§3 of docs/libra_integration_contracts.md) is computed from this
+// value, so leaving the two byte forms distinct would let the same
+// path/project/resource collide under two different identities depending
+// on which entry path produced it. Absolute/DisplayPath deliberately keep
+// the original bytes -- only the comparison/identity value normalizes.
 func Normalize(path string) (string, error) {
 	absolute, err := Absolute(path)
 	if err != nil {
 		return "", err
 	}
-	return normalizePlatform(absolute), nil
+	return normalizePlatform(norm.NFC.String(absolute)), nil
 }
 
 // Absolute returns a cleaned absolute path while preserving its display case.

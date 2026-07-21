@@ -23,6 +23,7 @@
 | Windows A | Windows | 플랫폼·스캔·DB·안전 처리 | `internal/scanner`, `internal/store`, `internal/config`, `internal/safety` |
 | Windows B | Windows | Windows SDK·MSBuild·.NET 의존성 | `internal/adapter/windowsdk`, `msbuild`, `visualstudio`, `dotnet` |
 | Mac C | macOS | CLI·출력·Node 분석·QA·문서 | `cmd`, `internal/output`, `internal/adapter/node`, `testdata`, `docs` |
+| (Python/Conda 담당, `feature/python_scope`) | - | Python·conda 분석 | `internal/adapter/python`, `internal/adapter/conda` (2026-07-21 신설, `docs/libra_python_conda_scope_decisions.md` 결정 8) |
 
 ### 코드 소유권 원칙
 
@@ -470,6 +471,8 @@ build
 dist
 .next
 out
+.venv, venv, env (재생성 evidence가 PINNED 이상일 때만 — §19.4)
+__pycache__, .pytest_cache, .mypy_cache, *.egg-info
 ```
 
 ### 자동 처리 금지 대상
@@ -489,6 +492,7 @@ Git objects
 비밀키
 사용자 문서
 알 수 없는 대용량 폴더
+conda 환경 (전역 named 환경, 프로젝트 소유 로컬 prefix 환경 모두 — §19.5)
 ```
 
 ### cleanup PR 추가 체크리스트

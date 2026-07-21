@@ -21,6 +21,13 @@ var defaultExcludes = []string{
 	"obj",
 	".git",
 	".libra-quarantine",
+	// Python (docs/libra_integration_contracts.md §19.4): dist/build are
+	// already covered above and shared with Node's mapping.
+	".venv",
+	"venv",
+	"__pycache__",
+	".pytest_cache",
+	".mypy_cache",
 }
 
 type Config struct {

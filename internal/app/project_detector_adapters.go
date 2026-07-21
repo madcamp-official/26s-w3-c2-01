@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	condaadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
@@ -145,6 +147,75 @@ func detectNodeWorkspace(root string, project domain.BuildProject) (*nodeWorkspa
 		memberManifestPaths: memberManifests,
 		memberRoots:         members,
 	}, nil, nil
+}
+
+// PythonProjectDetector wraps internal/adapter/python (project markers,
+// venv, cache) and internal/adapter/conda (local prefix environments,
+// declared environment.yml name) the same way NodeProjectDetector wraps
+// node.go and workspace.go -- see docs/libra_integration_contracts.md §19.4
+// and docs/libra_python_conda_scope_decisions.md.
+type PythonProjectDetector struct{ Detector pythonadapter.Detector }
+
+func (d PythonProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	if d.Detector == nil || !d.Detector.CanDetect(entry) {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	project, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("python", entry.Path, "detect Python project", err)
+	}
+
+	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	var issues []Issue
+
+	artifacts, err := pythonadapter.DetectArtifacts(entry.Path)
+	if err != nil {
+		issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "python",
+			Path: entry.Path, Operation: "detect python artifacts", Severity: IssueWarning, Message: err.Error(), Cause: err})
+		return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+	}
+	for _, resource := range artifacts {
+		cleanup, evidenceIssues := projectArtifactCleanupEvidence(ctx, entry.Path, resource)
+		issues = append(issues, evidenceIssues...)
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath,
+			Resource:          resource,
+			Cleanup:           cleanup,
+		})
+	}
+
+	declaredEnvName, declaredEnvSource, hasEnvDecl, envErr := condaadapter.DeclaredEnvironmentName(entry.Path)
+	if envErr != nil {
+		issues = append(issues, Issue{Code: IssueMalformedManifest, Phase: PhaseDiscoverProjects, Adapter: "conda",
+			Path: entry.Path, Operation: "parse environment.yml", Severity: IssueWarning, Message: envErr.Error(), Cause: envErr})
+	} else if hasEnvDecl {
+		candidate.ProjectProperties = append(candidate.ProjectProperties, ProjectProperty{
+			OwnerManifestPath: project.ManifestPath,
+			SourcePath:        declaredEnvSource,
+			Name:              condaEnvPropertyName,
+			Value:             declaredEnvName,
+		})
+	}
+
+	// Local conda prefix environments (결정 5 예외): OWNS, but -- unlike the
+	// venv/cache artifacts above -- deliberately left with zero-value
+	// CleanupEvidence. A conda environment is never a cleanup candidate even
+	// when project-owned (결정 4), so projectArtifactCleanupEvidence is never
+	// called for it; CleanupEvidence.complete() stays false and RiskPolicy
+	// can never classify it SAFE.
+	localEnvs, err := condaadapter.DetectLocalPrefixEnvs(entry.Path, hasEnvDecl)
+	if err != nil {
+		issues = append(issues, Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "conda",
+			Path: entry.Path, Operation: "detect local conda prefix environments", Severity: IssueWarning, Message: err.Error(), Cause: err})
+	}
+	for _, resource := range localEnvs {
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath,
+			Resource:          resource,
+		})
+	}
+
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
 }
 
 type MSBuildProjectDetector struct{ Parser msbuild.BuildProjectParser }

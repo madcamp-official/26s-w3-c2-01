@@ -12,6 +12,7 @@ import (
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
@@ -115,6 +116,118 @@ func TestNodeProjectDetectorReturnsStructuredParseIssue(t *testing.T) {
 func TestGitAndMSBuildAdaptersSatisfyProjectDetector(t *testing.T) {
 	var _ ProjectDetector = GitProjectDetector{Detector: gitadapter.FilesystemDetector{}}
 	var _ ProjectDetector = MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}}
+	var _ ProjectDetector = PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}
+}
+
+func TestPythonProjectDetectorAdaptsProjectFact(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname=\"svc\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	modifiedAt := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	got := (PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root, ModifiedAt: modifiedAt})
+	if len(got.Items) != 1 || len(got.Items[0].Projects) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	project := got.Items[0].Projects[0]
+	if project.Type != domain.ProjectTypePython || !project.LastModifiedAt.Equal(modifiedAt) {
+		t.Fatalf("project = %#v", project)
+	}
+}
+
+func TestPythonProjectDetectorReportsVenvAndCacheAsProjectResources(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "poetry.lock"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname=\"svc\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	venv := filepath.Join(root, ".venv")
+	if err := os.MkdirAll(venv, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(venv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "__pycache__"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root})
+	if len(got.Items) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	resources := got.Items[0].ProjectResources
+	if len(resources) != 2 {
+		t.Fatalf("ProjectResources = %#v, want venv + cache candidates", resources)
+	}
+	manifest := filepath.Join(root, "pyproject.toml")
+	for _, r := range resources {
+		if r.OwnerManifestPath != manifest {
+			t.Errorf("OwnerManifestPath = %q, want %q", r.OwnerManifestPath, manifest)
+		}
+		if r.Resource.Type == domain.ResourceTypeVenv && !r.Resource.Regenerable {
+			t.Errorf("venv resource = %#v, want Regenerable=true (poetry.lock is DECLARED-strength)", r.Resource)
+		}
+	}
+}
+
+func TestPythonProjectDetectorLinksDeclaredCondaEnvironment(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname=\"svc\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "environment.yml"), []byte("name: svc-env\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root})
+	if len(got.Items) != 1 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	properties := got.Items[0].ProjectProperties
+	if len(properties) != 1 || properties[0].Name != condaEnvPropertyName || properties[0].Value != "svc-env" {
+		t.Fatalf("ProjectProperties = %#v, want one conda-env=svc-env property", properties)
+	}
+}
+
+func TestPythonProjectDetectorReportsLocalCondaPrefixEnvAsOwnedWithoutCleanupEvidence(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname=\"svc\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	envDir := filepath.Join(root, "envs", "conda-meta")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envDir, "history"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root})
+	if len(got.Items) != 1 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	var condaResource *ProjectResourceCandidate
+	for i := range got.Items[0].ProjectResources {
+		if got.Items[0].ProjectResources[i].Resource.Type == domain.ResourceTypeCondaEnv {
+			condaResource = &got.Items[0].ProjectResources[i]
+		}
+	}
+	if condaResource == nil {
+		t.Fatalf("ProjectResources = %#v, want a local conda prefix env (OWNS)", got.Items[0].ProjectResources)
+	}
+	// 결정 4: a conda environment is never a cleanup candidate even when
+	// project-owned, so its CleanupEvidence is deliberately left zero-value
+	// -- projectArtifactCleanupEvidence is never called for it.
+	if condaResource.Cleanup != (CleanupEvidence{}) {
+		t.Errorf("Cleanup = %#v, want zero-value (결정 4: conda envs never enter the SAFE path)", condaResource.Cleanup)
+	}
 }
 
 func TestMSBuildProjectDetectorReportsOwnedArtifactsAsProjectResources(t *testing.T) {

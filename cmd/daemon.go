@@ -32,9 +32,12 @@ type daemonState struct {
 }
 
 type daemonSnapshot struct {
-	Files  int64
-	Bytes  int64
-	Latest int64
+	Files map[string]daemonFileState
+}
+type daemonFileState struct {
+	Size     int64
+	Modified int64
+	Root     string
 }
 
 var daemonCmd = &cobra.Command{Use: "daemon", Short: "Monitor configured roots and refresh the scan index"}
@@ -160,11 +163,22 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 		state.Heartbeat = time.Now().UTC()
 		if snapshotErr != nil {
 			state.LastError = snapshotErr.Error()
-		} else if current != previous {
-			state.LastError = runDaemonScan()
+		} else if changes := diffDaemonSnapshots(previous, current); len(changes) > 0 {
+			changedRoots := map[string]bool{}
+			for _, change := range changes {
+				changedRoots[change.Root] = true
+				_ = eventlog.Append(daemonEventPath(), change.Event)
+			}
+			var scanErrors []string
+			for root := range changedRoots {
+				if scanErr := runDaemonScan(root); scanErr != "" {
+					scanErrors = append(scanErrors, scanErr)
+				}
+			}
+			state.LastError = strings.Join(scanErrors, "; ")
 			state.LastScanAt = time.Now().UTC()
 			previous = current
-			appendDaemonEvent(state.LastScanAt, "RESOURCE_DIRTY", state.LastError)
+			appendDaemonEvent(state.LastScanAt, "INCREMENTAL_SCAN", state.LastError)
 		}
 		if err := writeDaemonState(state); err != nil {
 			return err
@@ -173,7 +187,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runDaemonScan() string {
+func runDaemonScan(root string) string {
 	executable, err := os.Executable()
 	if err != nil {
 		return err.Error()
@@ -182,7 +196,7 @@ func runDaemonScan() string {
 	if cfgPath != "" {
 		args = append(args, "--config", cfgPath)
 	}
-	args = append(args, "scan")
+	args = append(args, "scan", "--root", root)
 	command := exec.Command(executable, args...)
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
@@ -202,7 +216,7 @@ func snapshotRoots(cfg config.Config) (daemonSnapshot, error) {
 	for _, name := range cfg.Exclude {
 		excluded[strings.ToLower(name)] = true
 	}
-	var snapshot daemonSnapshot
+	snapshot := daemonSnapshot{Files: map[string]daemonFileState{}}
 	for _, root := range cfg.ProjectRoots {
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -211,17 +225,14 @@ func snapshotRoots(cfg config.Config) (daemonSnapshot, error) {
 			if entry.IsDir() && path != root && excluded[strings.ToLower(entry.Name())] {
 				return filepath.SkipDir
 			}
+			if entry.IsDir() {
+				return nil
+			}
 			info, err := entry.Info()
 			if err != nil {
 				return err
 			}
-			snapshot.Files++
-			if !entry.IsDir() {
-				snapshot.Bytes += info.Size()
-			}
-			if modified := info.ModTime().UnixNano(); modified > snapshot.Latest {
-				snapshot.Latest = modified
-			}
+			snapshot.Files[path] = daemonFileState{Size: info.Size(), Modified: info.ModTime().UnixNano(), Root: root}
 			return nil
 		})
 		if err != nil {
@@ -229,6 +240,59 @@ func snapshotRoots(cfg config.Config) (daemonSnapshot, error) {
 		}
 	}
 	return snapshot, nil
+}
+
+type daemonChange struct {
+	Root  string
+	Event eventlog.Event
+}
+
+func diffDaemonSnapshots(before, after daemonSnapshot) []daemonChange {
+	now := time.Now().UTC()
+	created := map[string]daemonFileState{}
+	deleted := map[string]daemonFileState{}
+	var changes []daemonChange
+	for path, old := range before.Files {
+		current, ok := after.Files[path]
+		if !ok {
+			deleted[path] = old
+			continue
+		}
+		kind := ""
+		if current.Size != old.Size {
+			kind = "SIZE_CHANGE"
+		} else if current.Modified != old.Modified {
+			kind = "MODIFY"
+		}
+		if kind != "" {
+			changes = append(changes, daemonChange{current.Root, eventlog.Event{At: now, Kind: kind, Path: path, Size: current.Size}})
+		}
+	}
+	for path, current := range after.Files {
+		if _, ok := before.Files[path]; !ok {
+			created[path] = current
+		}
+	}
+	for oldPath, old := range deleted {
+		renamed := ""
+		for newPath, current := range created {
+			if old.Size == current.Size && old.Modified == current.Modified && old.Root == current.Root {
+				renamed = newPath
+				break
+			}
+		}
+		if renamed != "" {
+			current := created[renamed]
+			delete(created, renamed)
+			changes = append(changes, daemonChange{old.Root, eventlog.Event{At: now, Kind: "RENAME", Path: renamed, OldPath: oldPath, Size: current.Size}})
+		} else {
+			changes = append(changes, daemonChange{old.Root, eventlog.Event{At: now, Kind: "DELETE", Path: oldPath, Size: old.Size}})
+		}
+	}
+	for path, current := range created {
+		changes = append(changes, daemonChange{current.Root, eventlog.Event{At: now, Kind: "CREATE", Path: path, Size: current.Size}})
+	}
+	return changes
 }
 
 func daemonStateFresh(state daemonState, now time.Time) bool {

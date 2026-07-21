@@ -31,22 +31,22 @@ var defaultExcludes = []string{
 }
 
 type Config struct {
-	Version      int           `yaml:"version"`
-	ProjectRoots []string      `yaml:"project_roots"`
-	Exclude      []string      `yaml:"exclude"`
-	Scan         ScanConfig    `yaml:"scan"`
-	Cleanup      CleanupConfig `yaml:"cleanup"`
+	Version      int           `yaml:"version" json:"version"`
+	ProjectRoots []string      `yaml:"project_roots" json:"project_roots"`
+	Exclude      []string      `yaml:"exclude" json:"exclude"`
+	Scan         ScanConfig    `yaml:"scan" json:"scan"`
+	Cleanup      CleanupConfig `yaml:"cleanup" json:"cleanup"`
 }
 
 type ScanConfig struct {
-	MaxDepth            int  `yaml:"max_depth"`
-	FollowReparsePoints bool `yaml:"follow_reparse_points"`
-	StaleDays           int  `yaml:"stale_days"`
+	MaxDepth            int  `yaml:"max_depth" json:"max_depth"`
+	FollowReparsePoints bool `yaml:"follow_reparse_points" json:"follow_reparse_points"`
+	StaleDays           int  `yaml:"stale_days" json:"stale_days"`
 }
 
 type CleanupConfig struct {
-	DefaultMode    string `yaml:"default_mode"`
-	QuarantineDays int    `yaml:"quarantine_days"`
+	DefaultMode    string `yaml:"default_mode" json:"default_mode"`
+	QuarantineDays int    `yaml:"quarantine_days" json:"quarantine_days"`
 }
 
 // Default returns the safe baseline configuration used for omitted fields.

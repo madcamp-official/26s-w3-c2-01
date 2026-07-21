@@ -17,9 +17,9 @@ func (v EventsView) RenderText(w io.Writer) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "TIME\tKIND\tERROR")
+	fmt.Fprintln(tw, "TIME\tKIND\tPATH\tOLD PATH\tSIZE\tERROR")
 	for _, event := range v.Events {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", event.At.Format("2006-01-02T15:04:05Z07:00"), event.Kind, emptyDash(event.Error))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\n", event.At.Format("2006-01-02T15:04:05Z07:00"), event.Kind, emptyDash(event.Path), emptyDash(event.OldPath), event.Size, emptyDash(event.Error))
 	}
 	return tw.Flush()
 }

@@ -76,6 +76,22 @@ func TestScanCommandFullFlagIsDeprecatedButHarmless(t *testing.T) {
 	}
 }
 
+func TestResolveScanOptionsRootOverrideIgnoresStaleFullFlag(t *testing.T) {
+	root := t.TempDir()
+	scanRoot = root
+	scanFull = true
+	cfgPath = filepath.Join(t.TempDir(), "missing.yaml")
+	t.Cleanup(func() { scanRoot = ""; scanFull = false; cfgPath = "" })
+
+	options, err := resolveScanOptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.Roots) != 1 || options.Roots[0] != root {
+		t.Fatalf("Roots = %#v, want root override %q", options.Roots, root)
+	}
+}
+
 // TestScanCommandSupportsJSON covers issue #42: scan was the only command
 // left ignoring the shared --json flag entirely (it always printed plain
 // text, regardless of jsonOutput), unlike every other command's

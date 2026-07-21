@@ -9,9 +9,12 @@ import (
 )
 
 type Event struct {
-	At    time.Time `json:"at"`
-	Kind  string    `json:"kind"`
-	Error string    `json:"error,omitempty"`
+	At      time.Time `json:"at"`
+	Kind    string    `json:"kind"`
+	Path    string    `json:"path,omitempty"`
+	OldPath string    `json:"old_path,omitempty"`
+	Size    int64     `json:"size,omitempty"`
+	Error   string    `json:"error,omitempty"`
 }
 
 func Append(path string, event Event) error {

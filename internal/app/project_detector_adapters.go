@@ -11,10 +11,24 @@ import (
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	projectmarkeradapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/projectmarker"
 	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
+
+type EcosystemProjectDetector struct{ Detector projectmarkeradapter.Detector }
+
+func (d EcosystemProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {
+	project, matched, err := d.Detector.Detect(ctx, entry)
+	if err != nil {
+		return projectDetectionFailure("ecosystem", entry.Path, "parse ecosystem project", err)
+	}
+	if !matched {
+		return DetectionResult[ProjectCandidate]{}
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{project}}}}
+}
 
 // project_detector_adapters.go wraps each internal/adapter/* package's own
 // Detector/Parser type in the ProjectDetector interface

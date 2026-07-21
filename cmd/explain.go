@@ -137,6 +137,7 @@ func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, p
 		ProjectType:    project.Type,
 		Status:         project.Status,
 		LogicalSize:    project.LogicalSize,
+		SizeKnown:      &project.SizeKnown,
 		LastModifiedAt: project.LastModifiedAt,
 		LastObservedAt: project.LastObservedAt,
 	}

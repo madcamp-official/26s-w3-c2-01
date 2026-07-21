@@ -46,9 +46,9 @@ func (r *ProjectRepository) UpsertObserved(ctx context.Context, scanID string, p
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO projects (
 				id, name, project_type, root_path, normalized_root_path,
-				manifest_path, normalized_manifest_path, drive, logical_size,
+				manifest_path, normalized_manifest_path, drive, logical_size, size_known,
 				last_modified_at, last_observed_at, status, last_observed_scan_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				name = excluded.name,
 				project_type = excluded.project_type,
@@ -58,12 +58,13 @@ func (r *ProjectRepository) UpsertObserved(ctx context.Context, scanID string, p
 				normalized_manifest_path = excluded.normalized_manifest_path,
 				drive = excluded.drive,
 				logical_size = excluded.logical_size,
+				size_known = excluded.size_known,
 				last_modified_at = excluded.last_modified_at,
 				last_observed_at = excluded.last_observed_at,
 				status = excluded.status,
 				last_observed_scan_id = excluded.last_observed_scan_id
 		`, project.ID, project.Name, project.Type, project.RootPath, project.NormalizedRootPath,
-			project.ManifestPath, project.NormalizedManifestPath, project.Drive, project.LogicalSize,
+			project.ManifestPath, project.NormalizedManifestPath, project.Drive, project.LogicalSize, boolInt(project.SizeKnown),
 			lastModified, project.LastObservedAt.UTC().Format(time.RFC3339Nano), project.Status, scanID)
 		if err != nil {
 			return fmt.Errorf("upsert project %q: %w", project.ID, err)
@@ -111,7 +112,7 @@ func (r *ProjectRepository) List(ctx context.Context) ([]domain.BuildProject, er
 
 const projectSelect = `
 	SELECT id, name, project_type, root_path, normalized_root_path,
-		manifest_path, normalized_manifest_path, drive, logical_size,
+		manifest_path, normalized_manifest_path, drive, logical_size, size_known,
 		last_modified_at, last_observed_at, status
 	FROM projects`
 
@@ -124,12 +125,14 @@ func scanProject(row projectRow) (domain.BuildProject, error) {
 	var project domain.BuildProject
 	var lastModified sql.NullString
 	var lastObserved string
+	var sizeKnown int
 	err := row.Scan(&project.ID, &project.Name, &project.Type, &project.RootPath,
 		&project.NormalizedRootPath, &project.ManifestPath, &project.NormalizedManifestPath,
-		&project.Drive, &project.LogicalSize, &lastModified, &lastObserved, &project.Status)
+		&project.Drive, &project.LogicalSize, &sizeKnown, &lastModified, &lastObserved, &project.Status)
 	if err != nil {
 		return domain.BuildProject{}, err
 	}
+	project.SizeKnown = sizeKnown == 1
 	if lastModified.Valid {
 		project.LastModifiedAt, err = time.Parse(time.RFC3339Nano, lastModified.String)
 		if err != nil {

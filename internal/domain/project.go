@@ -75,6 +75,7 @@ type BuildProject struct {
 	NormalizedManifestPath string
 	Drive                  string
 	LogicalSize            int64
+	SizeKnown              bool
 	LastModifiedAt         time.Time
 	LastObservedAt         time.Time
 	Status                 ProjectStatus

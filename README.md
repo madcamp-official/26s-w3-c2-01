@@ -188,7 +188,7 @@ libra config set project_roots D:\Projects,D:\Work
 libra config set scan.max_depth 30
 ```
 
-**3. `libra scan [--root <path>]`** — 실제 파일시스템 스캔과 분석을 실행하는 유일한 명령(DB에 쓰는 것도 이 명령뿐). 동작 순서: 설정된 루트(또는 `--root`)를 병렬 워커 4개로 순회 → Git/Node/MSBuild/Python/Gradle/Maven/Cargo/Go 프로젝트 탐지 → Windows SDK/.NET SDK/Visual Studio/Docker/생태계 어댑터로 리소스 탐지 → 논리 크기 계산 → MSBuild/Conda 의존성 분석기 실행 → 결과를 SQLite에 저장한다. 기존 `--full`은 호환성을 위해 deprecated no-op으로만 남아 있다.
+**3. `libra scan [--root <path>]`** — 실제 파일시스템 스캔과 분석을 실행하는 유일한 명령(DB에 쓰는 것도 이 명령뿐). 동작 순서: 설정된 루트(또는 `--root`)를 병렬 워커 4개로 순회 → Git/Node/MSBuild/Python/Gradle/Maven/Cargo/Go 프로젝트 탐지 → Windows SDK/.NET SDK/Visual Studio/Docker/생태계 어댑터로 리소스 탐지 → 논리 크기 계산 → MSBuild/Conda 의존성 분석기 실행 → 결과를 SQLite에 저장한다. scan/project/resource/dependency/evidence/issue를 SQLite에 저장. 경로 접근 오류가 나도 전체 스캔은 중단되지 않고 issue로 기록된다.
 ```bash
 libra scan
 libra scan --root D:\Projects

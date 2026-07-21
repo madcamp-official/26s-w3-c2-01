@@ -48,14 +48,14 @@ const (
 )
 
 type Issue struct {
-	Code      IssueCode
-	Phase     AnalysisPhase
-	Adapter   string
-	Path      string
-	Operation string
-	Severity  IssueSeverity
-	Message   string
-	Cause     error
+	Code      IssueCode     `json:"code"`
+	Phase     AnalysisPhase `json:"phase"`
+	Adapter   string        `json:"adapter,omitempty"`
+	Path      string        `json:"path,omitempty"`
+	Operation string        `json:"operation,omitempty"`
+	Severity  IssueSeverity `json:"severity"`
+	Message   string        `json:"message"`
+	Cause     error         `json:"-"`
 }
 
 func (i Issue) Error() string {

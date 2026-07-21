@@ -16,13 +16,13 @@ const (
 )
 
 type ScanRecord struct {
-	ID         string
-	StartedAt  time.Time
-	FinishedAt *time.Time
-	Roots      []string
-	FileCount  int64
-	ErrorCount int64
-	Status     string
+	ID         string     `json:"id"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	Roots      []string   `json:"roots"`
+	FileCount  int64      `json:"file_count"`
+	ErrorCount int64      `json:"error_count"`
+	Status     string     `json:"status"`
 }
 
 func (s ScanRecord) Validate() error {

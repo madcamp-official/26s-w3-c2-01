@@ -606,13 +606,13 @@ Transaction status:
 
 ```text
 PLANNED, RUNNING, QUARANTINED, PARTIALLY_QUARANTINED,
-RESTORED, PARTIALLY_RESTORED, PURGED, FAILED
+RESTORED, PARTIALLY_RESTORED, PURGED, PARTIALLY_PURGED, FAILED
 ```
 
 Item status:
 
 ```text
-PENDING, MOVED, SKIPPED, FAILED, RESTORED
+PENDING, MOVED, SKIPPED, FAILED, RESTORED, PURGED
 ```
 
 ```text
@@ -627,7 +627,7 @@ restore 규칙:
 - quarantine item이 없거나 rename이 실패하면 FAILED
 - 매 item 후 manifest를 갱신하고 마지막에 DB 상태를 갱신
 
-`quarantine_days`는 purge 가능 표시 기준일 뿐 자동 삭제 시점이 아니다. 명시적 dry-run purge 명령과 `PURGED` 실행은 `PLANNED`다.
+`quarantine_days`는 purge 가능 표시 기준일 뿐 자동 삭제 시점이 아니다. `libra purge --transaction <id>`는 기본 dry-run이며 manifest identity, item 경로, link/reparse 여부를 다시 검증한다. `--execute`와 사용자 확인(또는 전역 `--yes`)이 함께 있을 때만 영구 삭제한다. 일부 item만 삭제되면 `PARTIALLY_PURGED`, 전부 삭제되면 `PURGED`다 (`IMPLEMENTED`).
 
 ## 13. CLI와 출력 현황
 
@@ -638,7 +638,7 @@ restore 규칙:
 | plan | IMPLEMENTED |
 | clean dry-run/execute | IMPLEMENTED |
 | transactions, restore | IMPLEMENTED |
-| purge, export, daemon | PLANNED |
+| purge, export, daemon | IMPLEMENTED |
 
 `libra issues`는 기본적으로 가장 최근에 시작한 scan의 경고·오류를 조회한다. `--scan <id>`로
 과거 scan을 지정하고 `--code`와 `--severity`를 함께 또는 각각 적용할 수 있다. 텍스트와
@@ -694,9 +694,8 @@ cleanup fixture는 임시 디렉터리만 사용하고 다음을 검증한다.
 | 1 | typed CLI error와 exit code 2/3/4/5/130 연결 |
 | 2 | 모든 명령 공통 JSON envelope migration |
 | 3 | Windows 실제 volume에서 junction, ACL, hidden attribute 통합 테스트 |
-| 4 | explicit `purge` dry-run/execute |
 | 5 | incremental scan snapshot과 STALE 전환 |
-| 6 | daemon lock/event 병합/export schema |
+| 6 | daemon OS-native watcher/lock과 공통 JSON envelope migration |
 
 ## 16. 변경 관리
 

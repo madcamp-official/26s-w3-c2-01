@@ -39,7 +39,9 @@ go build -o libra .
 | `libra clean --plan <id>` | 구현됨 — 기본 dry-run, `--execute`로 같은 volume quarantine에 격리합니다 |
 | `libra restore --transaction <id>` | 구현됨 — 원본 충돌 없이 격리 항목을 복구합니다 |
 | `libra transactions` | 구현됨 — 격리·복구 transaction과 item 상태를 보여줍니다 |
-| `libra export`, `daemon`, `purge` | 아직 구현되지 않음 (후속 작업) |
+| `libra export` | 구현됨 — 최신 scan의 project/resource/issue/transaction을 JSON 또는 Markdown으로 내보냅니다. |
+| `libra purge --transaction <id>` | 구현됨 — 보존기간을 지난 quarantine을 기본 dry-run으로 검증하고 `--execute`에서만 영구 삭제합니다. |
+| `libra daemon start/status/stop` | 구현됨 — 설정된 project root의 변경을 polling하고 기존 scan을 실행합니다. 자동 정리는 하지 않습니다. |
 
 ```bash
 go run . scan --root ./testdata

@@ -60,6 +60,9 @@ func TestScanPersistsIssuesForLaterCommand(t *testing.T) {
 	t.Cleanup(resetIssueFlags)
 	scanRoot = ""
 	cfgPath = ""
+	previousResourceDetectors := resourceDetectors
+	resourceDetectors = func() []app.ResourceDetector { return nil }
+	t.Cleanup(func() { resourceDetectors = previousResourceDetectors })
 	fixture, err := filepath.Abs("../testdata/node")
 	if err != nil {
 		t.Fatal(err)

@@ -80,7 +80,7 @@ not exist yet, so --full has no effect (see --help).`,
 			sqlite.NewWorkspaceRepository(db),
 			resources,
 			sqlite.NewDependencyRepository(db),
-		).WithDetectors([]app.ProjectDetector{
+		).WithIssueRepository(sqlite.NewScanIssueRepository(db)).WithDetectors([]app.ProjectDetector{
 			app.GitProjectDetector{Detector: gitadapter.FilesystemDetector{}},
 			app.NodeProjectDetector{Detector: nodeadapter.FilesystemDetector{}},
 			app.MSBuildProjectDetector{Parser: msbuild.XMLBuildProjectParser{}},

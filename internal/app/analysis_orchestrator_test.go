@@ -320,6 +320,15 @@ func (r *scanRepositoryCapture) Save(_ context.Context, record ScanRecord) error
 	return nil
 }
 
+func (r *scanRepositoryCapture) Find(_ context.Context, id string) (ScanRecord, error) {
+	for _, record := range r.records {
+		if record.ID == id {
+			return record, nil
+		}
+	}
+	return ScanRecord{}, ErrNoScans
+}
+
 func (r *scanRepositoryCapture) FindLatest(_ context.Context) (ScanRecord, error) {
 	if len(r.records) == 0 {
 		return ScanRecord{}, ErrNoScans

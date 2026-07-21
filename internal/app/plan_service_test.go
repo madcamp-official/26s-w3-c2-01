@@ -254,6 +254,13 @@ func (s *planScanRepositoryStub) Save(context.Context, ScanRecord) error {
 	return nil
 }
 
+func (s *planScanRepositoryStub) Find(context.Context, string) (ScanRecord, error) {
+	if s.err != nil {
+		return ScanRecord{}, s.err
+	}
+	return s.record, nil
+}
+
 func (s *planScanRepositoryStub) FindLatest(context.Context) (ScanRecord, error) {
 	if s.err != nil {
 		return ScanRecord{}, s.err

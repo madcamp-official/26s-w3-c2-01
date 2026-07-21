@@ -32,6 +32,7 @@ go build -o libra .
 | `libra summary` | 구현됨 — 실제 스캔 결과로 저장공간 현황을 요약합니다 (`--json` 지원) |
 | `libra projects` | 구현됨 — 발견된 프로젝트 목록과 활동 상태를 보여줍니다 |
 | `libra resources` | 구현됨 — 발견된 SDK·도구·빌드 산출물 목록을 보여줍니다 |
+| `libra issues` | 구현됨 — 최신 또는 지정한 스캔의 경고·오류를 조회합니다 (`--scan`, `--code`, `--severity`, `--json` 지원) |
 | `libra explain <target>` | 구현됨 — 프로젝트 또는 리소스 하나를 설명합니다 |
 | `libra impact <target>` | 구현됨 — 리소스를 제거했을 때 영향받는 프로젝트를 보여줍니다 |
 | `libra plan` | 구현됨 — SAFE 산출물을 결정적 순서로 선택하고 snapshot을 저장합니다 |

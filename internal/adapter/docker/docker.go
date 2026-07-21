@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -85,9 +86,14 @@ func parseSystemDF(output []byte, dockerPath string) ([]domain.Resource, error) 
 		if err != nil {
 			return nil, fmt.Errorf("decode Docker %s reclaimable size: %w", row.Type, err)
 		}
+		// Docker reports these as aggregate daemon-wide categories, not
+		// distinct filesystem paths -- but resources.normalized_path is
+		// UNIQUE per row, so each category needs its own synthetic path
+		// under the CLI binary's, or the second category to upsert
+		// collides with the first.
 		resources = append(resources, domain.Resource{
 			Name: "Docker " + row.Type, Type: resourceType, Version: slug,
-			DisplayPath: dockerPath, LogicalSize: size, SizeKnown: true,
+			DisplayPath: filepath.Join(dockerPath, slug), LogicalSize: size, SizeKnown: true,
 			ReclaimableSize: reclaimable,
 			Confidence:      domain.DefaultConfidence[domain.EvidenceResolved],
 		})

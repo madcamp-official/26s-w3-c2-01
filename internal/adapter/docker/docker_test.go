@@ -31,6 +31,9 @@ func TestCLIListerParsesDockerSystemDF(t *testing.T) {
 	if got[1].Type != domain.ResourceTypeDockerVolume || got[2].Version != "build-cache" {
 		t.Fatalf("resource classifications = %#v", got)
 	}
+	if got[0].DisplayPath == got[1].DisplayPath || got[1].DisplayPath == got[2].DisplayPath || got[0].DisplayPath == got[2].DisplayPath {
+		t.Fatalf("resources must have distinct DisplayPaths (resources.normalized_path is UNIQUE): %#v", got)
+	}
 }
 
 func TestCLIListerTreatsMissingDockerAsEmpty(t *testing.T) {

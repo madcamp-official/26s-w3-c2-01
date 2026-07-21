@@ -22,6 +22,9 @@ func (s scanRepositoryStub) Find(context.Context, string) (app.ScanRecord, error
 func (s scanRepositoryStub) FindLatest(context.Context) (app.ScanRecord, error) {
 	return s.record, s.err
 }
+func (s scanRepositoryStub) FindLatestByRoots(context.Context, []string) (app.ScanRecord, error) {
+	return s.record, s.err
+}
 
 func TestPreviousScanFileCount(t *testing.T) {
 	tests := []struct {
@@ -55,7 +58,7 @@ func TestPreviousScanFileCount(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			total, ok := previousScanFileCount(context.Background(), tt.repo)
+			total, ok := previousScanFileCount(context.Background(), tt.repo, []string{`D:\Projects`})
 			if total != tt.wantTotal || ok != tt.wantOK {
 				t.Fatalf("previousScanFileCount() = %d, %v; want %d, %v", total, ok, tt.wantTotal, tt.wantOK)
 			}

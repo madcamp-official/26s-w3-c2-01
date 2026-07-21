@@ -53,4 +53,9 @@ type ScanRepository interface {
 	Save(context.Context, ScanRecord) error
 	Find(context.Context, string) (ScanRecord, error)
 	FindLatest(context.Context) (ScanRecord, error)
+	// FindLatestByRoots returns the most recently started scan whose Roots
+	// match the given roots exactly (as a set, order-independent),
+	// regardless of status. Returns ErrNoScans if no scan recorded that
+	// same root set yet.
+	FindLatestByRoots(context.Context, []string) (ScanRecord, error)
 }

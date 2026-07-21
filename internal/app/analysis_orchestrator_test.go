@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -434,6 +435,15 @@ func (r *scanRepositoryCapture) FindLatest(_ context.Context) (ScanRecord, error
 		return ScanRecord{}, ErrNoScans
 	}
 	return r.records[len(r.records)-1], nil
+}
+
+func (r *scanRepositoryCapture) FindLatestByRoots(_ context.Context, roots []string) (ScanRecord, error) {
+	for i := len(r.records) - 1; i >= 0; i-- {
+		if reflect.DeepEqual(r.records[i].Roots, roots) {
+			return r.records[i], nil
+		}
+	}
+	return ScanRecord{}, ErrNoScans
 }
 
 type projectRepositoryCapture struct {

@@ -2,9 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 )
 
 func TestSummaryCommandReflectsScannedProjects(t *testing.T) {
@@ -104,6 +109,61 @@ func TestSummaryCommandOmitsFreshnessBeforeFirstScan(t *testing.T) {
 	}
 	if bytes.Contains(out.Bytes(), []byte("Last scan")) {
 		t.Fatalf("summary output should omit freshness section before any scan:\n%s", out)
+	}
+}
+
+// TestSummaryCommandShowsIncompleteForInterruptedScan is a regression test
+// for a bug caught in PR #50 review: Coverage was derived purely from
+// scan.ErrorCount, never scan.FinishedAt/Status. AnalysisOrchestrator.Run
+// saves a Status: RUNNING, FinishedAt: nil ScanRecord before doing any work
+// (internal/app/analysis_orchestrator.go); if the process running the scan
+// dies before Run's success/fail path updates that record, it's left behind
+// as the "latest scan" with ErrorCount still at its zero value. The old
+// logic read that as Coverage: "Complete" (ErrorCount == 0), even though
+// Files inspected stays near 0 -- a self-contradictory result that looked
+// identical to a real, fresh, empty scan.
+func TestSummaryCommandShowsIncompleteForInterruptedScan(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+	summaryType = ""
+	summaryDrive = ""
+	t.Chdir(t.TempDir())
+
+	out := &bytes.Buffer{}
+	rootCmd.SetOut(out)
+	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"init"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(init) error = %v", err)
+	}
+
+	db, err := openDatabase()
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	interrupted := app.ScanRecord{
+		ID: "scan-interrupted", StartedAt: time.Now().UTC(),
+		Roots: []string{"C:\\Projects"}, Status: app.ScanStatusRunning,
+	}
+	if err := sqlite.NewScanRepository(db).Save(ctx, interrupted); err != nil {
+		t.Fatalf("seed interrupted scan record: %v", err)
+	}
+
+	out.Reset()
+	rootCmd.SetArgs([]string{"summary"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute(summary) error = %v", err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("Incomplete")) {
+		t.Fatalf("summary output should report an incomplete scan as Incomplete, not Complete:\n%s", out)
+	}
+	// "Complete" (capital C) only ever appears as Coverage's exact value in
+	// this output, never as a substring of "Incomplete" (lowercase c) --
+	// safe to check without matching tabwriter's column padding.
+	if bytes.Contains(out.Bytes(), []byte("Complete\n")) {
+		t.Fatalf("summary output must not claim Complete for a scan that never finished:\n%s", out)
 	}
 }
 

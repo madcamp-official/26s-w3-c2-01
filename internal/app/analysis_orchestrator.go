@@ -56,11 +56,17 @@ type AnalysisOrchestrator struct {
 	workspaces          WorkspaceRepository
 	resources           ResourceObserver
 	dependencies        DependencyRepository
+	issues              ScanIssueRepository
 	projectDetectors    []ProjectDetector
 	resourceDetectors   []ResourceDetector
 	dependencyAnalyzers []DependencyAnalyzer
 	now                 func() time.Time
 	onPhase             func(AnalysisPhase)
+}
+
+func (o *AnalysisOrchestrator) WithIssueRepository(issues ScanIssueRepository) *AnalysisOrchestrator {
+	o.issues = issues
+	return o
 }
 
 func NewAnalysisOrchestrator(
@@ -293,6 +299,11 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	record.FileCount = filesystemResult.FilesInspected
 	record.ErrorCount = int64(len(result.Issues))
 	record.Status = result.Status
+	if o.issues != nil {
+		if err := o.issues.Replace(context.WithoutCancel(ctx), options.ScanID, result.Issues); err != nil {
+			return result, fmt.Errorf("persist scan issues: %w", err)
+		}
+	}
 	if err := o.scans.Save(context.WithoutCancel(ctx), record); err != nil {
 		return result, err
 	}
@@ -337,7 +348,12 @@ func (o *AnalysisOrchestrator) fail(ctx context.Context, result ScanResult, reco
 	record.FileCount = result.Filesystem.FilesInspected
 	record.ErrorCount = int64(len(result.Issues))
 	record.Status = ScanStatusFailed
-	return result, errors.Join(cause, o.scans.Save(context.WithoutCancel(ctx), record))
+	withoutCancel := context.WithoutCancel(ctx)
+	var issueErr error
+	if o.issues != nil {
+		issueErr = o.issues.Replace(withoutCancel, record.ID, result.Issues)
+	}
+	return result, errors.Join(cause, issueErr, o.scans.Save(withoutCancel, record))
 }
 
 func structuredCandidateIssue(path, operation string, err error) Issue {

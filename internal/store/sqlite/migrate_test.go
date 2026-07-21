@@ -18,7 +18,7 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 
 	wantTables := []string{
 		"cleanup_items", "cleanup_plans", "dependencies", "evidence",
-		"projects", "resources", "scans", "schema_migrations", "transactions", "transaction_items",
+		"projects", "resources", "scan_issues", "scans", "schema_migrations", "transactions", "transaction_items",
 		"workspaces", "workspace_projects",
 	}
 	for _, table := range wantTables {
@@ -35,8 +35,8 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 8 {
-		t.Fatalf("migration count = %d, want 8", migrationCount)
+	if migrationCount != 9 {
+		t.Fatalf("migration count = %d, want 9", migrationCount)
 	}
 
 	var sizeKnownColumn string

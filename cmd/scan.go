@@ -69,8 +69,8 @@ resources and build artifacts, computes their logical size, runs dependency
 analysis, and stores the results in the local SQLite database.
 
 Permission errors on individual paths are recorded but do not abort the
-scan. The daemon can invoke a root-scoped incremental scan; --full forces
-the normal configured-root scan when used manually.`,
+scan. The daemon can invoke a root-scoped incremental scan. The legacy
+--full flag is accepted as a deprecated no-op for compatibility.`,
 	Example: `  libra scan
   libra scan --root D:\Projects`,
 	Args: cobra.NoArgs,
@@ -210,7 +210,8 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 
 	scanCmd.Flags().StringVar(&scanRoot, "root", "", "scan only this project root instead of all configured roots")
-	scanCmd.Flags().BoolVar(&scanFull, "full", false, "scan all configured roots (overrides --root)")
+	scanCmd.Flags().BoolVar(&scanFull, "full", false, "deprecated no-op retained for compatibility")
+	_ = scanCmd.Flags().MarkDeprecated("full", "scans are full within each selected root; omit this flag")
 }
 
 // resolveScanOptions builds scanner options from the config file (if one
@@ -226,7 +227,7 @@ func resolveScanOptions() (scanner.Options, error) {
 	}
 
 	roots := cfg.ProjectRoots
-	if scanRoot != "" && !scanFull {
+	if scanRoot != "" {
 		roots = []string{scanRoot}
 	}
 	if len(roots) == 0 {

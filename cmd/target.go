@@ -20,6 +20,7 @@ var resourceTypePrefixes = map[string]domain.ResourceType{
 	string(domain.ResourceTypeVisualStudio): domain.ResourceTypeVisualStudio,
 	string(domain.ResourceTypeMSBuild):      domain.ResourceTypeMSBuild,
 	string(domain.ResourceTypeDotNetSDK):    domain.ResourceTypeDotNetSDK,
+	string(domain.ResourceTypeAndroidSDK):   domain.ResourceTypeAndroidSDK,
 	string(domain.ResourceTypeNodeModules):  domain.ResourceTypeNodeModules,
 	string(domain.ResourceTypeBuildOutput):  domain.ResourceTypeBuildOutput,
 	string(domain.ResourceTypeGlobalCache):  domain.ResourceTypeGlobalCache,

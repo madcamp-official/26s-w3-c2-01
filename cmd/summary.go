@@ -30,6 +30,7 @@ var resourceTypeLabels = map[domain.ResourceType]string{
 	domain.ResourceTypeVisualStudio: "Visual Studio tools",
 	domain.ResourceTypeMSBuild:      "MSBuild",
 	domain.ResourceTypeDotNetSDK:    ".NET SDKs",
+	domain.ResourceTypeAndroidSDK:   "Android SDK",
 	domain.ResourceTypeNodeModules:  "Node project artifacts",
 	domain.ResourceTypeBuildOutput:  "Build outputs",
 	domain.ResourceTypeGlobalCache:  "Global package caches",

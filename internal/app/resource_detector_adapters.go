@@ -45,6 +45,24 @@ func (d DotNetSDKResourceDetector) Detect(ctx context.Context, _ Environment) De
 	return DetectionResult[domain.Resource]{Items: resources}
 }
 
+type EcosystemResourceDetector struct {
+	Name   string
+	Lister interface {
+		ListResources(context.Context) ([]domain.Resource, error)
+	}
+}
+
+func (d EcosystemResourceDetector) Detect(ctx context.Context, _ Environment) DetectionResult[domain.Resource] {
+	if d.Lister == nil {
+		return DetectionResult[domain.Resource]{}
+	}
+	resources, err := d.Lister.ListResources(ctx)
+	if err != nil {
+		return resourceDetectionFailure(d.Name, err)
+	}
+	return DetectionResult[domain.Resource]{Items: resources}
+}
+
 // DockerResourceDetector reads aggregate daemon usage. The underlying adapter
 // is deliberately read-only and never invokes prune.
 type DockerResourceDetector struct{ Lister docker.UsageLister }

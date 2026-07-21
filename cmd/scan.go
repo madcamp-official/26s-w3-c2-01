@@ -120,6 +120,16 @@ not exist yet, so --full has no effect (see --help).`,
 		}
 		if !jsonOutput {
 			printScanIssues(cmd.OutOrStdout(), result.Issues, verbose)
+			// A one-line pointer to the natural next command (issue #41):
+			// scan only discovers and persists, it never says what to do
+			// with the result. `libra summary` is the one suggestion
+			// that's always valid regardless of what this scan found
+			// (unlike e.g. `libra plan`, which is only useful once there's
+			// something SAFE to reclaim). Text-mode only -- --json output
+			// must stay pure JSON, per the same contract output.ScanView
+			// itself already follows.
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Next: libra summary")
 		}
 		return nil
 	},

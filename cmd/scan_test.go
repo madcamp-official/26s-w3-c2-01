@@ -212,6 +212,30 @@ func TestScanCommandSummarizesIssuesByDefaultAndShowsAllWithVerbose(t *testing.T
 	}
 }
 
+// TestScanCommandPrintsNextActionHint covers issue #41: scan reported what
+// it found but never suggested what to do with the result.
+func TestScanCommandPrintsNextActionHint(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+
+	fixture, err := filepath.Abs("../testdata/node/basic")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	out := &bytes.Buffer{}
+	rootCmd.SetOut(out)
+	rootCmd.SetErr(out)
+	rootCmd.SetArgs([]string{"scan", "--root", fixture})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v; output=%s", err, out)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("Next: libra summary")) {
+		t.Fatalf("scan output missing next-action hint:\n%s", out)
+	}
+}
+
 func TestScanCommandRequiresRootsWithoutConfig(t *testing.T) {
 	scanRoot = ""
 	cfgPath = ""

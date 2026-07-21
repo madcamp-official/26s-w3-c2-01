@@ -16,6 +16,10 @@ import (
 // docs/libra_cli_commands_and_schedule.md.
 type ProjectsView struct {
 	Projects []ProjectLine `json:"projects"`
+	// TotalCount is how many projects matched the caller's filters before
+	// the default display limit (issue #41) truncated Projects. Equal to
+	// len(Projects) when --all was passed or nothing was truncated.
+	TotalCount int `json:"total_count"`
 }
 
 // ProjectLine is a single project row in a ProjectsView. SizeKnown
@@ -51,7 +55,17 @@ func (v ProjectsView) RenderText(w io.Writer) error {
 			p.Name, p.Type, p.Drive, formatProjectSize(p.LogicalSize, &p.SizeKnown),
 			p.Status, p.ResourceCount, formatTime(p.LastModifiedAt), p.Path)
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	// Only note the cap when it actually hid something (issue #41) -- e.g.
+	// "Showing 3 of 3 projects" on an unfiltered small scan would just be
+	// noise, not information.
+	if v.TotalCount > len(v.Projects) {
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Showing %d of %d projects. Use --all to see the rest.\n", len(v.Projects), v.TotalCount)
+	}
+	return nil
 }
 
 // formatProjectSize renders a project's LogicalSize as "—" when it is known

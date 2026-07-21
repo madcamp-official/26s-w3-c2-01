@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,28 @@ needs review, or is blocked from cleanup.`,
 			SafeReclaimable: summary.SafeReclaimable,
 			NeedsReview:     summary.NeedsReview,
 			Blocked:         summary.Blocked,
+		}
+
+		// Scan freshness (issue #41): omitted, not an error, when no scan has
+		// run yet -- ScanRepository.FindLatest's ErrNoScans is exactly the
+		// "ran `libra summary` before `libra scan`" case, which the rest of
+		// this command already tolerates (an empty Summary, all zeros).
+		scan, err := sqlite.NewScanRepository(db).FindLatest(cmd.Context())
+		switch {
+		case errors.Is(err, app.ErrNoScans):
+		case err != nil:
+			return fmt.Errorf("find latest scan: %w", err)
+		default:
+			view.LastScanAt = scan.StartedAt
+			view.LastScanRoots = scan.Roots
+			view.FilesInspected = scan.FileCount
+			if scan.FinishedAt != nil {
+				view.LastScanDurationMS = scan.FinishedAt.Sub(scan.StartedAt).Milliseconds()
+			}
+			view.Coverage = "Complete"
+			if scan.ErrorCount > 0 {
+				view.Coverage = fmt.Sprintf("Partial · %d warning(s)", scan.ErrorCount)
+			}
 		}
 		for _, line := range summary.ResourcesByType {
 			view.ResourcesByType = append(view.ResourcesByType, output.SummaryLine{

@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/spf13/cobra"
 )
 
 func TestPlanCommandSelectsSeededSafeResourceUntilTarget(t *testing.T) {
@@ -182,6 +185,63 @@ func TestPlanCommandReviewAndBlockedShowRealSizeNotZero(t *testing.T) {
 		if r.SizeBytes <= 0 {
 			t.Fatalf("REVIEW candidate %q has size_bytes = %d, want > 0 (real LogicalSize)", r.Path, r.SizeBytes)
 		}
+	}
+}
+
+// fakeDependencyRepository is a minimal app.DependencyRepository test
+// double for buildPlanView tests that don't exercise the BLOCKED "used by"
+// lookup. fakeResourceRepository/fakeProjectRepository (reused here) are
+// defined in target_test.go.
+type fakeDependencyRepository struct{}
+
+func (fakeDependencyRepository) UpsertGraph(context.Context, string, domain.Dependency, []domain.Evidence) error {
+	return nil
+}
+func (fakeDependencyRepository) FindResourcesByProject(context.Context, string) ([]domain.Dependency, error) {
+	return nil, nil
+}
+func (fakeDependencyRepository) FindProjectsByResource(context.Context, string) ([]domain.Dependency, error) {
+	return nil, nil
+}
+func (fakeDependencyRepository) FindEvidence(context.Context, string) ([]domain.Evidence, error) {
+	return nil, nil
+}
+
+// TestBuildPlanViewSafeUsesResourceDisplayPathNotSnapshotNormalizedPath is a
+// regression test for issue #41's path-casing bug: SAFE lines rendered
+// CleanupPlanItem.NormalizedPath (the plan snapshot's identity field, always
+// lowercase on Windows) instead of the resource's DisplayPath -- unlike
+// `projects`, which has always correctly used DisplayPath. It exercises
+// buildPlanView directly with a fake ResourceRepository rather than a real
+// scan/sqlite round trip: sqlite.ResourceRepository.Upsert legitimately
+// rejects a DisplayPath/NormalizedPath pair that don't match (it validates
+// NormalizedPath against pathutil.Normalize(DisplayPath)), and a real
+// Normalize() call can never produce the case difference this bug depends
+// on anyway, since internal/pathutil/normalize_other.go's non-Windows build
+// does not lowercase (only normalize_windows.go does).
+func TestBuildPlanViewSafeUsesResourceDisplayPathNotSnapshotNormalizedPath(t *testing.T) {
+	planRisk = ""
+	t.Cleanup(func() { planRisk = "" })
+
+	displayPath := "/Users/Someone/MixedCase/node_modules"
+	normalizedPath := "/users/someone/mixedcase/node_modules" // what Windows' pathutil would store
+	resources := &fakeResourceRepository{byID: []domain.Resource{
+		{ID: "resource-1", DisplayPath: displayPath, NormalizedPath: normalizedPath},
+	}}
+	result := app.PlanResult{Plan: domain.CleanupPlan{Items: []domain.CleanupPlanItem{
+		{ResourceID: "resource-1", NormalizedPath: normalizedPath, ExpectedSize: 1024, RiskAtPlanning: domain.RiskSafe},
+	}}}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	view, err := buildPlanView(cmd, result, resources, fakeDependencyRepository{}, &fakeProjectRepository{})
+	if err != nil {
+		t.Fatalf("buildPlanView() error = %v", err)
+	}
+	if len(view.Safe) != 1 || view.Safe[0].Path != displayPath {
+		t.Fatalf("Safe = %#v, want exactly one item with Path %q (DisplayPath, not lowercased NormalizedPath %q)",
+			view.Safe, displayPath, normalizedPath)
 	}
 }
 

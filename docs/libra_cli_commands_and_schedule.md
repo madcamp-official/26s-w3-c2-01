@@ -199,6 +199,8 @@ Potential cleanup:   18.2GB
 Warnings:            3
 ```
 
+> 구현됨(2026-07-21, issue #41): 완료 후 다음 명령 한 줄 안내(`Next: libra summary`)를 출력한다.
+
 ### 우선순위
 
 - **P0 필수**
@@ -242,6 +244,8 @@ Needs review             12.4GB
 Blocked                  58.8GB
 ```
 
+> 구현됨(2026-07-21, issue #41): 마지막 스캔 시각·대상 루트·소요 시간·분석 완전성(coverage)·검사 파일 수를 스캔 기록(`ScanRecord`)에서 읽어 상단에 표시한다. 스캔을 한 번도 실행하지 않았으면 이 구간 전체를 생략한다(에러 아님).
+
 ### 우선순위
 
 - **P0 필수**
@@ -250,10 +254,16 @@ Blocked                  58.8GB
 
 ## 3.4 `libra projects`
 
-발견된 프로젝트 목록과 활동 상태를 보여준다.
+발견된 프로젝트 목록과 활동 상태를 보여준다. 기본은 상위 20개까지만 표시하고
+`--all`로 전체를 볼 수 있다(issue #41).
 
 ```bash
 libra projects
+libra projects --all
+libra projects --sort size
+libra projects --sort modified
+libra projects --name frontend
+libra projects --under D:\Work
 libra projects --type node
 libra projects --drive D:
 libra projects --status stale
@@ -270,6 +280,12 @@ libra projects --status stale
 - 마지막 관찰 시각
 - 활동 상태
 - 연결된 리소스 수
+
+> 구현됨(2026-07-21, issue #41): `--sort size`/`--sort modified` 지원.
+> `--sort size`는 처음엔 뺐었다 — 그때는 `BuildProject.LogicalSize`를 계산하는
+> detector가 없어(issue #38) 모든 프로젝트가 0으로 동률이었기 때문. 같은 날
+> Windows B가 `AnalysisOrchestrator`에 실측 로직을 추가해(#38 해결) 의미가
+> 생겨서 추가했다.
 
 ### 프로젝트 상태
 
@@ -453,6 +469,13 @@ libra plan --project D:\Projects\OldWeb
 - 시스템 리소스 자동 제외
 - `SAFE`라도 Dependency 80, CleanupSafety 90, ScanCoverage 80 미만이면 자동 선택하지 않고 REVIEW로 표시
 - 계획 ID 생성
+
+> 구현됨(2026-07-21, issue #41): 출력 경로는 항상 실제 대소문자를 보존한
+> `DisplayPath`를 쓴다 — 이전에는 SAFE 항목이 비교/ID 전용 필드인
+> `NormalizedPath`를 그대로 출력해 Windows에서 전부 소문자로 보였다.
+> "왜 SAFE인지"/신뢰도/근거 표시(§9의 판단 근거 렌더링)는 issue #40으로
+> 남아있다 — 관련 데이터(Reason/Evidence)가 아직 저장되지 않아 공동 결정이
+> 필요하다.
 
 ### 출력 예시
 

@@ -72,7 +72,7 @@ the confidence of the analysis.`,
 			})
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "resources").Print(view)
 	},
 }
 

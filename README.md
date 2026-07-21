@@ -948,18 +948,23 @@ Libra
 --dry-run
 ```
 
+전역 `--json`은 `init`, `events`, `export`, `daemon start/status/stop`을 포함한 모든 결과 명령에 `{command, schema_version, outcome, data, issues, unverified}` envelope를 적용한다. `export --format json`은 이와 별개인 portable report 포맷이며, `libra --json export`가 envelope 형식이다.
+
 ## 종료 코드
 
-| 코드 | 의미            |
-| -: | ------------- |
-|  0 | 성공            |
-|  1 | 일반 오류         |
-|  2 | 잘못된 입력        |
-|  3 | 일부 경로 스캔 실패   |
-|  4 | 권한 부족         |
-|  5 | 안전 정책으로 작업 거부 |
-|  6 | 복구 충돌         |
-|  7 | 데이터베이스 오류     |
+> 이 표는 `docs/libra_integration_contracts.md` §13(권위 있는 계약 문서)과 동기화되어 있다 — 코드 값이나 의미를 바꿀 때는 그쪽을 먼저 갱신한다.
+
+| 코드 | 의미 | 상태 |
+| -: | --- | --- |
+|  0 | 성공 또는 dry-run 성공 | 구현됨 |
+|  1 | 인자·일반 명령 오류 | 구현됨 |
+|  2 | target/plan/transaction 없음 | 구현됨 |
+|  3 | DB·파일시스템 내부 오류 | 구현됨 |
+|  4 | safety 차단 | 구현됨 |
+|  5 | 부분 clean/restore/purge | 구현됨 |
+|130 | 사용자 취소 | 구현됨 |
+
+`cmd.ExitCode`가 wrapped sentinel error와 부분 cleanup transaction 상태를 위 코드로 변환한다(issue #62).
 
 ---
 

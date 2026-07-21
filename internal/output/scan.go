@@ -5,14 +5,7 @@ import (
 	"io"
 )
 
-// ScanView is the rendered result of `libra scan` (issue #42). scan was the
-// last command still writing plain text directly with fmt.Fprintln and no
-// --json support at all -- every other command already goes through
-// Printer/Renderable (see docs/libra_integration_contracts.md §13's "남은
-// 작업" 2, common JSON envelope migration). This gives scan the same
-// text/--json pair every other command has; it does not introduce the
-// shared envelope/schema_version itself, which is a separate, larger,
-// cross-command decision left for a follow-up.
+// ScanView is the rendered result of `libra scan` (issue #42).
 type ScanView struct {
 	RootsScanned   int         `json:"roots_scanned"`
 	ProjectsFound  int         `json:"projects_found"`
@@ -46,4 +39,25 @@ func (v ScanView) RenderText(w io.Writer) error {
 	fmt.Fprintf(w, "Files inspected: %d\n", v.FilesInspected)
 	fmt.Fprintf(w, "Warnings:        %d\n", len(v.Warnings))
 	return nil
+}
+
+// Envelope maps ScanView onto the shared JSON envelope (issue #59): a scan
+// that hit any recoverable issue is PARTIAL, not SUCCESS -- it still
+// produced a usable result, but not a complete one, the same distinction
+// `summary`'s Coverage line already draws for a scan record after the
+// fact. Warnings become envelope Issues directly; ScanIssue and
+// EnvelopeIssue share the same field set by design (scan was the shape
+// EnvelopeIssue was modeled on), so this is a plain copy.
+func (v ScanView) Envelope() EnvelopeOptions {
+	opts := EnvelopeOptions{Outcome: OutcomeSuccess}
+	if len(v.Warnings) > 0 {
+		opts.Outcome = OutcomePartial
+	}
+	for _, w := range v.Warnings {
+		opts.Issues = append(opts.Issues, EnvelopeIssue{
+			Code: w.Code, Severity: w.Severity, Phase: w.Phase,
+			Path: w.Path, Operation: w.Operation, Message: w.Message,
+		})
+	}
+	return opts
 }

@@ -36,6 +36,7 @@ default to --dry-run.`,
 
 // Execute runs the root command.
 func Execute() error {
+	resultExitCode = ExitSuccess
 	return rootCmd.Execute()
 }
 

@@ -82,7 +82,7 @@ see what was considered and why it was left out. Run "libra clean --plan
 		if err != nil {
 			return err
 		}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "plan").PrintEnvelope(view, view.Envelope())
 	},
 }
 

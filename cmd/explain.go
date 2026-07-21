@@ -64,7 +64,7 @@ confidence of the analysis.`,
 			return err
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "explain").Print(view)
 	},
 }
 

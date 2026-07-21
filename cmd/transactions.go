@@ -22,7 +22,7 @@ var transactionsCmd = &cobra.Command{
 		for _, transaction := range transactions {
 			view.Transactions = append(view.Transactions, output.CleanupTransactionViewFromDomain(transaction))
 		}
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "transactions").Print(view)
 	},
 }
 

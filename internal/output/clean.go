@@ -39,6 +39,26 @@ type CleanItemLine struct {
 	Detail       string          `json:"detail,omitempty"`
 }
 
+// Envelope maps CleanView onto the shared JSON envelope (issue #59): a
+// dry-run where every item still matches the plan snapshot (WOULD_MOVE) is
+// SUCCESS; any CHANGED/MISSING item means the plan is stale for at least
+// part of itself, which is exactly the PARTIAL case the envelope exists to
+// flag. Detail already explains why for each such item, so it becomes the
+// EnvelopeIssue Message directly.
+func (v CleanView) Envelope() EnvelopeOptions {
+	opts := EnvelopeOptions{Outcome: OutcomeSuccess}
+	for _, item := range v.Items {
+		if item.Status == CleanItemWouldMove {
+			continue
+		}
+		opts.Outcome = OutcomePartial
+		opts.Issues = append(opts.Issues, EnvelopeIssue{
+			Code: string(item.Status), Severity: "WARNING", Path: item.Path, Message: item.Detail,
+		})
+	}
+	return opts
+}
+
 // RenderText implements Renderable.
 func (v CleanView) RenderText(w io.Writer) error {
 	fmt.Fprintf(w, "Plan ID: %s\n", v.PlanID)

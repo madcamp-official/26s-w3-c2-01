@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 )
 
@@ -50,8 +50,8 @@ func TestCleanCommandDryRunPreviewsSeededSafeResource(t *testing.T) {
 	var planView struct {
 		PlanID string `json:"plan_id"`
 	}
-	if err := json.Unmarshal([]byte(planOut), &planView); err != nil {
-		t.Fatalf("unmarshal plan output: %v\n%s", err, planOut)
+	if _, err := output.DecodeEnvelope([]byte(planOut), &planView); err != nil {
+		t.Fatalf("decode plan output: %v\n%s", err, planOut)
 	}
 
 	cleanOut := run("clean", "--plan", planView.PlanID, "--json").String()
@@ -64,8 +64,8 @@ func TestCleanCommandDryRunPreviewsSeededSafeResource(t *testing.T) {
 			Status            string `json:"status"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal([]byte(cleanOut), &cleanView); err != nil {
-		t.Fatalf("unmarshal clean output: %v\n%s", err, cleanOut)
+	if _, err := output.DecodeEnvelope([]byte(cleanOut), &cleanView); err != nil {
+		t.Fatalf("decode clean output: %v\n%s", err, cleanOut)
 	}
 	if !cleanView.DryRun {
 		t.Fatal("dry_run = false, want true")
@@ -119,8 +119,8 @@ func TestCleanCommandFlagsDriftSincePlanning(t *testing.T) {
 	var planView struct {
 		PlanID string `json:"plan_id"`
 	}
-	if err := json.Unmarshal([]byte(planOut), &planView); err != nil {
-		t.Fatalf("unmarshal plan output: %v\n%s", err, planOut)
+	if _, err := output.DecodeEnvelope([]byte(planOut), &planView); err != nil {
+		t.Fatalf("decode plan output: %v\n%s", err, planOut)
 	}
 
 	// Re-scanning the resource as REVIEW simulates the world drifting after
@@ -143,8 +143,8 @@ func TestCleanCommandFlagsDriftSincePlanning(t *testing.T) {
 			Detail string `json:"detail"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal([]byte(cleanOut), &cleanView); err != nil {
-		t.Fatalf("unmarshal clean output: %v\n%s", err, cleanOut)
+	if _, err := output.DecodeEnvelope([]byte(cleanOut), &cleanView); err != nil {
+		t.Fatalf("decode clean output: %v\n%s", err, cleanOut)
 	}
 	if len(cleanView.Items) != 1 || cleanView.Items[0].Status != "CHANGED" {
 		t.Fatalf("items = %#v, want single CHANGED item", cleanView.Items)

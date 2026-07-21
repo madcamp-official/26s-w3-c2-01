@@ -23,6 +23,45 @@ type CleanupTransactionsView struct {
 	Transactions []CleanupTransactionView `json:"transactions"`
 }
 
+// transactionOutcome maps a domain.CleanupTransactionStatus onto the shared
+// JSON envelope's Outcome (issue #59). Shared by CleanupTransactionView
+// (clean --execute, restore) and PurgeView, which both carry the same
+// status type. PLANNED/RUNNING should never actually reach a Printer call
+// (RunE only prints after Execute/Purge returns a terminal transaction),
+// but map to PARTIAL rather than SUCCESS if one ever does, since neither
+// means the operation actually finished.
+func transactionOutcome(status domain.CleanupTransactionStatus) Outcome {
+	switch status {
+	case domain.TransactionQuarantined, domain.TransactionRestored, domain.TransactionPurged:
+		return OutcomeSuccess
+	case domain.TransactionFailed:
+		return OutcomeFailed
+	default:
+		return OutcomePartial
+	}
+}
+
+// Envelope maps CleanupTransactionView onto the shared JSON envelope
+// (issue #59). Only FAILED/SKIPPED items become issues -- MOVED/RESTORED/
+// PURGED/PENDING items succeeded or simply haven't run yet, neither of
+// which is a problem to surface.
+func (v CleanupTransactionView) Envelope() EnvelopeOptions {
+	opts := EnvelopeOptions{Outcome: transactionOutcome(v.Status)}
+	for _, item := range v.Items {
+		if item.Status != domain.TransactionItemFailed && item.Status != domain.TransactionItemSkipped {
+			continue
+		}
+		severity := "WARNING"
+		if item.Status == domain.TransactionItemFailed {
+			severity = "ERROR"
+		}
+		opts.Issues = append(opts.Issues, EnvelopeIssue{
+			Code: string(item.Status), Severity: severity, Path: item.OriginalPath, Message: item.Reason,
+		})
+	}
+	return opts
+}
+
 func CleanupTransactionViewFromDomain(transaction domain.CleanupTransaction) CleanupTransactionView {
 	view := CleanupTransactionView{ID: transaction.ID, PlanID: transaction.PlanID, Status: transaction.Status}
 	for _, item := range transaction.Items {

@@ -124,7 +124,7 @@ the top 20 by default (use --all to see every match).`,
 			})
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "projects").Print(view)
 	},
 }
 

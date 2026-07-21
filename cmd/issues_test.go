@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 )
 
@@ -47,7 +47,7 @@ func TestIssuesCommandUsesLatestScanAndFilters(t *testing.T) {
 		ScanID string `json:"scan_id"`
 		Issues []any  `json:"issues"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &view); err != nil {
+	if _, err := output.DecodeEnvelope(out.Bytes(), &view); err != nil {
 		t.Fatalf("decode JSON: %v\n%s", err, out)
 	}
 	if view.ScanID != "scan-old" || len(view.Issues) != 0 {

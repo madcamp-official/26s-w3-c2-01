@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/config"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -29,15 +30,14 @@ excluded automatically.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := configFilePath()
+		created := false
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 			if err := config.Save(path, config.Default()); err != nil {
 				return fmt.Errorf("write config: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Created config file: %s\n", path)
+			created = true
 		} else if err != nil {
 			return fmt.Errorf("check config %q: %w", path, err)
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Config file already exists: %s\n", path)
 		}
 
 		db, err := openDatabase()
@@ -46,8 +46,8 @@ excluded automatically.`,
 		}
 		defer db.Close()
 
-		fmt.Fprintf(cmd.OutOrStdout(), "Database ready: %s\n", dbFilePath())
-		return nil
+		view := output.InitView{ConfigPath: path, DatabasePath: dbFilePath(), ConfigCreated: created}
+		return output.New(cmd.OutOrStdout(), jsonOutput, "init").Print(view)
 	},
 }
 

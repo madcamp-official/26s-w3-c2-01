@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/app"
+	"github.com/madcamp-official/26s-w3-c2-01/internal/output"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/store/sqlite"
 )
 
@@ -120,8 +120,8 @@ func TestScanCommandSupportsJSON(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"warnings"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &view); err != nil {
-		t.Fatalf("unmarshal scan --json output: %v\n%s", err, out)
+	if _, err := output.DecodeEnvelope(out.Bytes(), &view); err != nil {
+		t.Fatalf("decode scan --json output: %v\n%s", err, out)
 	}
 	if view.ProjectsFound != 7 {
 		t.Fatalf("projects_found = %d, want 7", view.ProjectsFound)

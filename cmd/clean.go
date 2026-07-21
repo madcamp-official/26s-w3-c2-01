@@ -62,7 +62,7 @@ Without --yes, execution asks for interactive confirmation.`,
 				fmt.Fprint(cmd.ErrOrStderr(), "Move verified plan items to quarantine? [y/N] ")
 				answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 				if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-					return errors.New("cleanup cancelled")
+					return fmt.Errorf("cleanup cancelled: %w", ErrUserCancelled)
 				}
 			}
 			classifier, err := safety.NewSystemPathClassifier()
@@ -74,7 +74,9 @@ Without --yes, execution asks for interactive confirmation.`,
 			if err != nil {
 				return fmt.Errorf("execute cleanup: %w", err)
 			}
-			return output.New(cmd.OutOrStdout(), jsonOutput).Print(output.CleanupTransactionViewFromDomain(transaction))
+			transactionView := output.CleanupTransactionViewFromDomain(transaction)
+			recordTransactionExit(transaction.Status)
+			return output.New(cmd.OutOrStdout(), jsonOutput, "clean").PrintEnvelope(transactionView, transactionView.Envelope())
 		}
 		view := output.CleanView{PlanID: plan.ID, DryRun: true}
 		for _, item := range plan.Items {
@@ -85,7 +87,7 @@ Without --yes, execution asks for interactive confirmation.`,
 			view.Items = append(view.Items, line)
 		}
 
-		return output.New(cmd.OutOrStdout(), jsonOutput).Print(view)
+		return output.New(cmd.OutOrStdout(), jsonOutput, "clean").PrintEnvelope(view, view.Envelope())
 	},
 }
 

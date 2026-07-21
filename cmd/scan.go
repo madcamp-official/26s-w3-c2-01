@@ -140,7 +140,11 @@ not exist yet, so --full has no effect (see --help).`,
 				Path: issue.Path, Operation: issue.Operation, Message: issue.Message,
 			})
 		}
-		if err := output.New(cmd.OutOrStdout(), jsonOutput).Print(view); err != nil {
+		envelope := view.Envelope()
+		for _, scope := range result.Unverified {
+			envelope.Unverified = append(envelope.Unverified, fmt.Sprintf("%s (%s): %s", scope.Path, scope.Phase, scope.Reason))
+		}
+		if err := output.New(cmd.OutOrStdout(), jsonOutput, "scan").PrintEnvelope(view, envelope); err != nil {
 			return err
 		}
 		if !jsonOutput {

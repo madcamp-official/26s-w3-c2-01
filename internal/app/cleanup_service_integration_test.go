@@ -66,6 +66,56 @@ func TestCleanupServiceExecutesAndRestoresVerifiedPlan(t *testing.T) {
 	}
 }
 
+func TestEcosystemTargetPlanExecutesAndRestores(t *testing.T) {
+	root := t.TempDir()
+	projectRoot := filepath.Join(root, "maven-project")
+	artifact := filepath.Join(projectRoot, "target")
+	if err := os.MkdirAll(artifact, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, "pom.xml"), []byte("<project/>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(artifact, "app.jar"), []byte("generated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	normalizedArtifact, _ := pathutil.Normalize(artifact)
+	normalizedRoot, _ := pathutil.Normalize(projectRoot)
+	measured, err := scanner.MeasureResource(context.Background(), scanner.New(1), artifact)
+	if err != nil || !measured.SizeKnown || measured.LastModifiedAt == nil {
+		t.Fatalf("measure = %#v, %v", measured, err)
+	}
+	resource := domain.Resource{ID: "maven-target", Type: domain.ResourceTypeBuildOutput,
+		NormalizedPath: normalizedArtifact, Regenerable: true, Risk: domain.RiskSafe}
+	plan := domain.CleanupPlan{ID: "maven-plan", Items: []domain.CleanupPlanItem{{
+		ID: "maven-item", ResourceID: resource.ID, NormalizedPath: normalizedArtifact,
+		ExpectedType: resource.Type, ExpectedSize: measured.LogicalSize,
+		ExpectedModifiedTime: *measured.LastModifiedAt, RiskAtPlanning: domain.RiskSafe, OwnerProjectID: "maven-project",
+	}}}
+	classifier, err := safety.NewPathClassifier(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewCleanupService(&cleanupPlanRepositoryFake{plan: plan}, &cleanupResourceRepositoryFake{resource: resource},
+		&cleanupProjectRepositoryFake{project: domain.BuildProject{ID: "maven-project", NormalizedRootPath: normalizedRoot}},
+		&cleanupTransactionRepositoryFake{}, safety.CleanupValidator{Paths: classifier},
+		safety.QuarantineEngine{RootForPath: func(_, transactionID string) string { return filepath.Join(root, "quarantine", transactionID) }})
+	transaction, err := service.Execute(context.Background(), plan.ID)
+	if err != nil || transaction.Status != domain.TransactionQuarantined {
+		t.Fatalf("Execute() = %#v, %v", transaction, err)
+	}
+	if _, err := os.Stat(artifact); !os.IsNotExist(err) {
+		t.Fatalf("artifact still exists: %v", err)
+	}
+	restored, err := service.Restore(context.Background(), transaction.ID)
+	if err != nil || restored.Status != domain.TransactionRestored {
+		t.Fatalf("Restore() = %#v, %v", restored, err)
+	}
+	if _, err := os.Stat(filepath.Join(artifact, "app.jar")); err != nil {
+		t.Fatalf("restored artifact: %v", err)
+	}
+}
+
 type cleanupPlanRepositoryFake struct{ plan domain.CleanupPlan }
 
 func (*cleanupPlanRepositoryFake) Create(context.Context, domain.CleanupPlan) error { return nil }

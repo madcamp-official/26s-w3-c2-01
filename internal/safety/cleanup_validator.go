@@ -22,7 +22,8 @@ func cleanupBlocked(message string) error {
 
 var allowedArtifactNames = map[string]struct{}{
 	"node_modules": {}, "bin": {}, "obj": {}, "build": {}, "dist": {},
-	".next": {}, "out": {}, "debug": {}, "release": {},
+	"target": {},
+	".next":  {}, "out": {}, "debug": {}, "release": {},
 	// Python (docs/libra_integration_contracts.md §19.4 결정 6): venv is
 	// still gated on RiskPolicy/Regenerable elsewhere (only DECLARED/PINNED
 	// lockfile evidence sets Regenerable=true for it) -- this list only
@@ -75,6 +76,13 @@ func (v CleanupValidator) Validate(ctx context.Context, item domain.CleanupPlanI
 	}
 	if ownerRoot == "" {
 		return CleanupValidation{}, cleanupBlocked("owner project is not verified")
+	}
+	if strings.EqualFold(filepath.Base(item.NormalizedPath), "target") {
+		owner, normalizeErr := pathutil.Normalize(ownerRoot)
+		parent, parentErr := pathutil.Normalize(filepath.Dir(item.NormalizedPath))
+		if normalizeErr != nil || parentErr != nil || parent != owner {
+			return CleanupValidation{}, cleanupBlocked("target cleanup is allowed only directly under its owner project root")
+		}
 	}
 	owned, err := pathutil.IsSameOrChild(item.NormalizedPath, ownerRoot)
 	if err != nil || !owned {

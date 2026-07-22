@@ -12,12 +12,110 @@ import (
 	gitadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/git"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	projectmarkeradapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/projectmarker"
 	pythonadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/python"
 	swiftpmadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/swiftpm"
 	xcodeprojadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/xcodeproj"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
+
+func TestEcosystemProjectDetectorReportsOwnedBuildArtifacts(t *testing.T) {
+	tests := []struct {
+		name, manifest, manifestBody, artifact, extraFile, wantCommand string
+		projectType                                                    domain.ProjectType
+	}{
+		{name: "cargo", manifest: "Cargo.toml", manifestBody: "[package]\nname='app'", artifact: "target", extraFile: "Cargo.lock", wantCommand: "cargo build --locked", projectType: domain.ProjectTypeCargo},
+		{name: "maven", manifest: "pom.xml", manifestBody: "<project/>", artifact: "target", wantCommand: "mvn package", projectType: domain.ProjectTypeMaven},
+		{name: "gradle wrapper", manifest: "build.gradle.kts", manifestBody: "plugins { java }", artifact: "build", extraFile: "gradlew", wantCommand: "./gradlew build", projectType: domain.ProjectTypeGradle},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			manifest := filepath.Join(root, test.manifest)
+			if err := os.WriteFile(manifest, []byte(test.manifestBody), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if test.extraFile != "" {
+				if err := os.WriteFile(filepath.Join(root, test.extraFile), []byte("fixture"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Mkdir(filepath.Join(root, test.artifact), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			result := (EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}}).Observe(
+				context.Background(), scanner.Entry{Path: manifest, Kind: scanner.EntryFile})
+			if len(result.Items) != 1 || len(result.Items[0].ProjectResources) != 1 || len(result.Issues) != 0 {
+				t.Fatalf("result = %#v, want one project resource without issues", result)
+			}
+			candidate := result.Items[0]
+			resource := candidate.ProjectResources[0]
+			if candidate.Projects[0].Type != test.projectType || resource.OwnerManifestPath != manifest ||
+				resource.Resource.Type != domain.ResourceTypeBuildOutput || resource.Resource.Name != test.artifact ||
+				!resource.Resource.Regenerable || resource.Resource.RegenerationCommand != test.wantCommand || !resource.Cleanup.complete() {
+				t.Fatalf("candidate = %#v", candidate)
+			}
+		})
+	}
+}
+
+func TestEcosystemProjectDetectorDoesNotMarkCargoTargetRegenerableWithoutLock(t *testing.T) {
+	root := t.TempDir()
+	manifest := filepath.Join(root, "Cargo.toml")
+	if err := os.WriteFile(manifest, []byte("[package]\nname='app'"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	result := (EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}}).Observe(
+		context.Background(), scanner.Entry{Path: manifest, Kind: scanner.EntryFile})
+	resource := result.Items[0].ProjectResources[0]
+	if resource.Resource.Regenerable || resource.Resource.RegenerationCommand != "" || resource.Cleanup.KnownOutputPath {
+		t.Fatalf("resource = %#v, want non-regenerable target without lock", resource)
+	}
+}
+
+func TestEcosystemProjectDetectorDoesNotTreatArbitraryTargetAsProjectResource(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	result := (EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}}).Observe(
+		context.Background(), scanner.Entry{Path: target, Kind: scanner.EntryDirectory})
+	if len(result.Items) != 0 {
+		t.Fatalf("result = %#v, want no project without an ecosystem manifest", result)
+	}
+}
+
+func TestEcosystemProjectDetectorDoesNotVerifyTrackedTarget(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available on PATH")
+	}
+	root := t.TempDir()
+	runGit(t, root, "init", "-q")
+	manifest := filepath.Join(root, "pom.xml")
+	if err := os.WriteFile(manifest, []byte("<project/>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tracked := filepath.Join(target, "original.txt")
+	if err := os.WriteFile(tracked, []byte("user content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", tracked)
+	result := (EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}}).Observe(
+		context.Background(), scanner.Entry{Path: manifest, Kind: scanner.EntryFile})
+	cleanup := result.Items[0].ProjectResources[0].Cleanup
+	if cleanup.GitTrackedOriginalsAbsent || cleanup.complete() {
+		t.Fatalf("cleanup = %#v, want tracked original to prevent complete safety evidence", cleanup)
+	}
+}
 
 func TestNodeProjectDetectorAdaptsProjectFact(t *testing.T) {
 	root := t.TempDir()

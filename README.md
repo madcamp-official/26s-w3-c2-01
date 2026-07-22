@@ -49,6 +49,7 @@
 | Python (`pyproject.toml`/`Pipfile`/`setup.py`/`requirements.txt`) | ✅ |
 | Visual Studio Solution (`.sln`) | ⚠️ Workspace로만 취급되어 소속 프로젝트를 묶어줄 뿐, 그 자체가 독립된 분석 대상(BuildProject)은 아님 |
 | Java/Android (`pom.xml`, `build.gradle[.kts]`), Go (`go.mod`), Rust (`Cargo.toml`) | ✅ 매니페스트 기반 프로젝트 단위 탐지 (Android Gradle 플러그인 표식 구분) |
+| Cargo `target/`, Maven `target/`, Gradle `build/` | ✅ 프로젝트 소유 산출물 분석·격리 cleanup·restore (`Cargo.lock` 및 manifest/경로/Git/reparse 안전 gate 적용) |
 | Xcode (`.xcodeproj`), Xcode Workspace (`.xcworkspace`, 최상위 `<FileRef>` 멤버만) (macOS) | ✅ |
 | Swift Package (`Package.swift`, `// swift-tools-version:` 선언 파싱) (macOS) | ✅ |
 
@@ -61,7 +62,7 @@
 | .NET SDK / .NET Runtime | ✅ `dotnet --list-sdks` / `--list-runtimes` 결과 기반. 크로스플랫폼 CLI라 macOS/Linux도 지원(`exec.LookPath`), Windows만 고정 설치 경로를 그대로 사용 |
 | Node `node_modules`, 빌드 산출물(`bin`/`obj`/`build`/`dist`/`.next`/`out`/`Debug`/`Release`, Python `__pycache__`/`.pytest_cache`/`.mypy_cache` 포함) | ✅ |
 | Docker 리소스 사용량 | ✅ `docker system df --format '{{json .}}'` 결과를 읽어 Images/Containers/Build Cache/Volumes 집계 (read-only) |
-| Android SDK, Gradle 캐시, Cargo 레지스트리/git 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
+| Android SDK, Gradle 전역 캐시, Cargo 레지스트리/git 전역 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 프로젝트 산출물과 달리 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
 | Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행 |
 | iOS Simulator `Devices/`(기기별 설치 앱·데이터, 보통 가장 큰 소비처) (macOS) | ✅ analysis-only — seed된 상태를 담을 수 있어 Docker Volume처럼 항상 `REVIEW`, 격리/숙청 대상 아님, `xcrun simctl delete unavailable` 안내. runtime 이미지는 시스템 구성요소라 제외 |
 | Conda 환경 | ✅ 전역 named 환경은 정보 제공용(REQUIRES 관계), 프로젝트 내부 prefix 환경은 OWNS 관계로 구분 |

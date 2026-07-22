@@ -943,7 +943,7 @@ cleanup fixture는 임시 디렉터리만 사용하고 다음을 검증한다.
 |---:|---|
 | 1 | ~~typed CLI error와 exit code 2/3/4/5/130 연결~~ — `IMPLEMENTED` (issue #62) |
 | 2 | ~~모든 명령 공통 JSON envelope migration~~ — `IMPLEMENTED` (issue #42/#59) |
-| 3 | Windows 실제 volume에서 junction, ACL, hidden attribute 통합 테스트 |
+| 3 | ~~Windows 실제 volume에서 junction, ACL, hidden attribute 통합 테스트~~ — junction/ACL(icacls deny)/잠긴 파일/partial quarantine/DB-filesystem mismatch는 `IMPLEMENTED`(internal/safety/quarantine_windows_edgecases_test.go, internal/safety/cleanup_validator_windows_test.go, internal/app/cleanup_service_windows_edgecases_test.go). hidden attribute 단독 케이스는 아직 없음 |
 | 5 | incremental scan snapshot과 STALE 전환 |
 | 6 | daemon OS-native watcher/lock 완성 |
 | 7 | ~~`daemon status --json`을 공통 envelope로 편입~~ — `daemon start/status/stop` 모두 `IMPLEMENTED` (issue #42/#59) |

@@ -24,9 +24,16 @@ var (
 	assumeYes bool
 )
 
+// Version is the libra release version, stamped at build time via
+// -ldflags "-X github.com/madcamp-official/26s-w3-c2-01/cmd.Version=<version>"
+// (see scripts/windows/build-installer.ps1 and scripts/macos/build.sh).
+// Unstamped builds (`go run .`, plain `go build`) report "dev".
+var Version = "dev"
+
 var rootCmd = &cobra.Command{
-	Use:   "libra",
-	Short: "Analyze and manage local developer storage",
+	Use:     "libra",
+	Short:   "Analyze and manage local developer storage",
+	Version: Version,
 	Long: `libra analyzes the dependency relationships between local development
 projects and the SDKs, tools, caches, and build artifacts on disk. It explains
 what is taking up space and what breaks if you delete it.

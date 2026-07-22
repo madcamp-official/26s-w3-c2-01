@@ -166,6 +166,17 @@ go build -o libra .
 ./libra --help
 ```
 
+### macOS 설치 (Homebrew)
+
+이 저장소 자체를 tap으로 사용한다(저장소 이름이 `homebrew-`로 시작하지 않으므로 URL을 명시해야 한다):
+
+```bash
+brew tap madcamp-official/26s-w3-c2-01 https://github.com/madcamp-official/26s-w3-c2-01
+brew install libra
+```
+
+Formula(`Formula/libra.rb`)는 `go build`로 소스에서 빌드하며, 별도의 서명/공증 없이도 Gatekeeper 경고 없이 설치된다. 릴리스 태그(`vX.Y.Z`)가 아직 없다면 `brew install --HEAD libra`로 `main` 브랜치를 바로 빌드해 설치할 수 있다. universal(amd64+arm64) 바이너리를 tarball로 직접 뽑으려면 `scripts/macos/build.sh [version]`(Xcode Command Line Tools의 `lipo` 필요)을 사용한다.
+
 ### 전역 옵션
 
 모든 하위 명령이 공유하는 persistent flag (`cmd/root.go`):
@@ -176,6 +187,8 @@ go build -o libra .
 | `--json` | 결과를 표준 JSON envelope로 출력 |
 | `--verbose` | 추가 진단 정보 출력 (예: `scan`의 모든 warning) |
 | `--no-color` | 텍스트 출력에서 ANSI 색상 비활성화 |
+
+`--version`은 위 persistent flag들과 별개로 cobra가 자동 추가하는 플래그다(`rootCmd.Version`, `cmd/root.go`). Windows 인스톨러(`scripts/windows/build-installer.ps1`)와 macOS 빌드(`scripts/macos/build.sh`, `Formula/libra.rb`) 모두 빌드 시점에 `-ldflags -X .../cmd.Version=<version>`으로 실제 버전을 굽는다. `go run .`/`go build` 등 버전을 지정하지 않은 빌드는 `dev`로 표시된다.
 
 `--yes`(대화형 확인 프롬프트 생략)는 전역이 아니라 실제로 확인 프롬프트가 있는 `clean --execute`, `purge --execute` 두 명령에만 로컬 플래그로 존재한다. `clean`/`purge`는 별도의 `--dry-run` 플래그 없이 `--execute`를 주지 않으면 항상 미리보기(dry-run) 모드로 동작한다.
 
@@ -339,7 +352,7 @@ go test ./...
 | Windows 통합 | `vswhere.exe`(Visual Studio·MSBuild 설치 위치 탐지), `dotnet --list-sdks`/`--list-runtimes`, `docker system df --format '{{json .}}'`, `sdkmanager`/`conda env list` 등 외부 CLI 결과 파싱 |
 | 테스트 | Go 표준 `testing`, golden output 테스트(`summary`/`plan`/`impact`), fixture 기반 통합 테스트, 성능 테스트(`dependency_repository_performance_test.go`) |
 | CI/CD | GitHub Actions — Windows·macOS 두 러너에서 빌드·테스트 (Windows 전용 어댑터는 다른 플랫폼에서 `RequireWindows`로 명시적 미지원 처리되어 CI가 깨지지 않음) |
-| 배포 형태 | 단일 실행 파일(`go build -o libra .`), 외부 런타임 의존성 없음 |
+| 배포 형태 | 단일 실행 파일, 외부 런타임 의존성 없음. Windows: `scripts/windows/build-installer.ps1` → Inno Setup `.exe` 인스톨러. macOS: Homebrew tap(`Formula/libra.rb`) 또는 `scripts/macos/build.sh`의 universal 바이너리 tarball. 두 경로 모두 `-ldflags -X .../cmd.Version=<version>`으로 실제 버전을 굽는다 |
 
 ---
 

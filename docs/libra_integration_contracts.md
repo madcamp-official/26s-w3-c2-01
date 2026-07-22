@@ -627,7 +627,22 @@ type RiskAssessment struct {
 - scan 시 Node/MSBuild detector는 ownership/output 사실을 제공한다.
 - 실제 `clean --execute`는 reparse/Git/경로/크기/mtime을 다시 검사한다.
 
-## 8. allowlist, denylist와 link (`IMPLEMENTED`)
+### 20.4 Impact 판단 (`IMPLEMENTED`, 2026-07-22)
+
+`ImpactService.Assess`는 `RelationRequires`(프로젝트가 빌드에 필요하다고 선언한 리소스 — Windows SDK, 활성 Xcode 등)와 `RelationOwns`(리소스 자체가 프로젝트 산출물 — node_modules, Pods, bin/obj/dist, .build)에 서로 다른 규칙을 적용한다. 이전에는 `RelationOwns` edge를 전부 건너뛰어서, `node_modules`/`Pods`/build-output처럼 macOS·Node 생태계 대부분을 차지하는 리소스의 `explain` "Expected impact"가 항상 RUN/BUILD/DEBUG 세 줄 모두 `UNKNOWN`이었다 — 리소스를 소유한 프로젝트가 분명히 있는데도 "의존 프로젝트 없음"과 구분되지 않았다.
+
+`RelationRequires`(변경 없음): RUN `LOW` / BUILD `HIGH` / DEBUG `HIGH`(BUILD를 따름) / CI `UNKNOWN`.
+
+`RelationOwns`(신규): 리소스 자체를 두 가지로만 구분한다 — 그 외 타입(예: 프로젝트 소유 conda-env)은 아직 판단 규칙이 없어 이전과 동일하게 assessment를 만들지 않고 `UNKNOWN`으로 남는다.
+
+- `node-modules`, `cocoapods-pods` (빌드 시점에 소비되는 의존성 저장소, 산출물 자체가 아님): RUN `LOW`("이미 빌드·번들된 산출물은 런타임에 이 디렉터리를 읽지 않음 — 번들링 없이 패키지를 직접 로드하는 경우는 예외"), BUILD/DEBUG `HIGH`("재설치 전까지 다음 빌드 실패"). `Resource.Regenerable` 값과 무관하게 고정이다 — 재설치가 쉬운지와 별개로 없으면 빌드가 즉시 실패한다는 사실은 항상 참이기 때문이다.
+- `build-output`(bin/obj/dist/build/.next/out/.build 등, §19.3): RUN은 항상 `UNKNOWN`으로 남는다 — 이 타입은 최종 링크 산출물이 있는 OutDir과 중간 산출물만 있는 IntDir을 구분하지 않아, 이 디렉터리가 실제로 "지금 실행 중인 산출물"을 담고 있는지 libra가 판단할 근거가 없다. BUILD/DEBUG는 `Resource.Regenerable`을 그대로 따른다 — `true`면 `LOW`("재빌드가 소스에서 이 디렉터리를 재생성"), `false`면(예: build 스크립트 없는 Node dist) `UNKNOWN`("자동 재생성 경로를 찾지 못함") — 재생성 근거가 없는데 `LOW`를 주장하면 거짓 안심을 준다.
+
+`NewImpactService`가 이제 `ResourceRepository`도 받는다(`NewImpactService(dependencies, resources)`) — OWNS 판단에 리소스 자신의 `Type`/`Regenerable`이 필요해서다. `explain`은 관련 코드 변경 없이 그대로 이 값을 받는다(`explanation.Impact`를 scope로만 조회하는 기존 루프가 그대로 재사용됨).
+
+`libra impact`(cmd/impact.go)는 의도적으로 범위 밖이다 — "Affected projects"는 리소스 하나가 여러 프로젝트에 걸쳐 미치는 영향(교차 프로젝트 blast radius, REQUIRES 전용)을 답하도록 설계돼 있고, 프로젝트가 소유한 산출물 자기 자신의 삭제 영향은 `explain`의 "Used by → Owns" 섹션이 이미 별도로 보여준다. `cmd/impact.go`의 edge 필터는 `RelationRequires`로 그대로 유지하며, `TestImpactCommandNoDependentsIsZero`(cmd/impact_test.go)도 변경하지 않았다.
+
+
 
 allowlist basename:
 

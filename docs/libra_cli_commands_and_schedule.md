@@ -409,6 +409,10 @@ Unverified:
 - Remote CI configurations
 ```
 
+> 구현됨(2026-07-22, `docs/libra_integration_contracts.md` §20.4): "Expected impact"가 프로젝트가
+> 소유(OWNS)한 리소스 — `node_modules`, `Pods`, `bin`/`obj`/`dist` 등 macOS·Node 생태계 대부분 —
+> 에서는 항상 세 줄 다 UNKNOWN이던 문제를 고쳤다. `RelationOwns` edge도 판단 규칙을 갖는다.
+
 ### 우선순위
 
 - **P0 필수**

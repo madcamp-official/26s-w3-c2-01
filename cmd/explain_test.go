@@ -97,6 +97,49 @@ func TestExplainCommandDescribesProject(t *testing.T) {
 	}
 }
 
+// TestExplainCommandShowsImpactForOwnedResource covers a project-owned
+// resource (RelationOwns), not the windows-sdk RelationRequires case the
+// other tests here use. Before internal/app/impact_service.go learned to
+// judge RelationOwns edges, "Expected impact" was unconditionally UNKNOWN
+// for every OWNS resource -- node_modules, Pods, bin/obj/dist -- which is
+// most of what a macOS/Node user ever explains.
+func TestExplainCommandShowsImpactForOwnedResource(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+
+	fixture, err := filepath.Abs("../testdata/node")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	out := run("explain", filepath.Join(fixture, "basic", "node_modules"))
+	for _, want := range []string{
+		"Existing executable launch: LOW",
+		"Rebuild: HIGH",
+		"Visual Studio debugging: HIGH",
+	} {
+		if !bytes.Contains(out.Bytes(), []byte(want)) {
+			t.Fatalf("explain output missing %q (owned node_modules should get a real impact judgment, not UNKNOWN):\n%s", want, out)
+		}
+	}
+}
+
 func TestExplainCommandUnknownTargetErrors(t *testing.T) {
 	scanRoot = ""
 	cfgPath = ""

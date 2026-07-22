@@ -405,12 +405,20 @@ reclaimable 크기를 읽는다. Docker CLI가 없으면 빈 결과이며 daemon
 - `clean`, `purge`, daemon은 Docker prune/remove 명령을 실행하지 않는다.
 - 정리는 Docker 공식 명령을 사용자가 별도로 검토·실행해야 한다.
 
-### 19.7 Ecosystem SDK/cache adapters (`IMPLEMENTED`, analysis-only)
+### 19.7 Ecosystem SDK/cache adapters (`IMPLEMENTED`)
 
 - Android SDK: `ANDROID_HOME`, deprecated fallback `ANDROID_SDK_ROOT`, 플랫폼 기본 경로 순으로 탐지하고 `android-sdk`/`BLOCKED`로 저장한다. SDK 변경은 Android Studio 또는 `sdkmanager`에 맡긴다.
 - Gradle: `GRADLE_USER_HOME` 또는 `~/.gradle` 아래 `caches`만 `global-cache`로 탐지한다. `gradle.properties`, `init.d`, toolchain JDK는 포함하지 않는다.
-- Cargo: `CARGO_HOME` 또는 `~/.cargo` 아래 `registry`, `git`만 탐지한다. credentials와 설치 binary, 프로젝트 `target`은 포함하지 않는다.
+- Cargo: `CARGO_HOME` 또는 `~/.cargo` 아래 `registry`, `git`은 analysis-only다. 프로젝트 root의 `target/`은 `Cargo.lock`이 있을 때 `cargo build --locked`로 재생성 가능한 project-owned build output으로 기록한다. lock이 없으면 관찰은 하되 자동 cleanup 후보가 아니다.
 - Maven: `~/.m2/settings.xml`의 `localRepository` 또는 기본 `~/.m2/repository`를 탐지한다. settings/credentials 자체는 포함하지 않는다.
+
+프로젝트 산출물은 전역 캐시와 별도 정책이다. `pom.xml` 바로 아래 `target/`은
+`mvn package`, `build.gradle[.kts]` 바로 아래 `build/`은 wrapper가 있으면
+`./gradlew build`/`.\gradlew.bat build`, 없으면 `gradle build`로 재생성한다.
+세 산출물 모두 manifest 소유 관계, project root 직계 위치, Git tracked 원본 부재,
+non-reparse 검사를 통과해야 SAFE가 될 수 있다. 이름만 `target`인 일반 폴더는
+project resource로 관찰되지 않으며 cleanup validator도 owner root의 직계 자식이
+아닌 `target`을 거부한다.
 - npm: 설치된 CLI의 `npm config get cache` 결과를 사용한다.
 - pnpm: 설치된 CLI의 `pnpm store path` 결과를 사용한다.
 
@@ -723,7 +731,7 @@ Cleanup 사실은 `VerifiedFact`의 `VERIFIED_TRUE`, `VERIFIED_FALSE`, `UNVERIFI
 allowlist basename:
 
 ```text
-node_modules, bin, obj, build, dist, .next, out, Debug, Release
+node_modules, bin, obj, build, target, dist, .next, out, Debug, Release
 .venv, venv, env, __pycache__, .pytest_cache, .mypy_cache, *.egg-info(suffix)
 ```
 

@@ -4,6 +4,9 @@
 *.test
 *.out
 
+# Installer build output
+/dist/
+
 # Local development files
 .idea/
 .vscode/

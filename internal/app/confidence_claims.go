@@ -13,12 +13,16 @@ import (
 func AssessClaim(claim domain.ClaimType, evidence []domain.Evidence, now time.Time) domain.ClaimAssessment {
 	strongest := map[string]int{}
 	ids := make([]string, 0, len(evidence))
-	contradicted, stale := false, false
+	contradicted, stale, hasUnknown := false, false, false
 	for _, item := range evidence {
 		if item.Claim != claim {
 			continue
 		}
 		ids = append(ids, item.ID)
+		if item.Kind == domain.EvidenceUnknown {
+			hasUnknown = true
+			continue
+		}
 		if item.Polarity == domain.EvidenceContradicts {
 			contradicted = true
 			continue
@@ -49,14 +53,19 @@ func AssessClaim(claim domain.ClaimType, evidence []domain.Evidence, now time.Ti
 	if len(scores) > 0 {
 		score = scores[0]
 	}
-	for range scores[1:] {
-		bonus := (100 - score) / 4
-		if bonus > 5 {
-			bonus = 5
+	if len(scores) > 1 {
+		for range scores[1:] {
+			bonus := (100 - score) / 4
+			if bonus > 5 {
+				bonus = 5
+			}
+			score += bonus
 		}
-		score += bonus
 	}
 	status := domain.ConfidenceKnown
+	if hasUnknown {
+		status = domain.ConfidencePartial
+	}
 	if contradicted {
 		if score > 49 {
 			score = 49

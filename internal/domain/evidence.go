@@ -54,11 +54,10 @@ const (
 // internal/adapter/msbuild/artifacts.go each had their own placeholder
 // scale, unrelated to internal/adapter/msbuild/resolve.go's).
 //
-// This governs the *base* score for a single piece of evidence only.
-// Combining multiple Evidence for the same Dependency (limited additive
-// credit for corroborating facts) and UnverifiedScope penalties are not
-// implemented yet -- no resource today carries more than one Evidence, so
-// there is nothing to combine in practice.
+// This governs the base score for one evidence item. Deduplication,
+// corroboration bonuses, contradiction handling, and expiry caps are
+// implemented by app.AssessClaim. UnverifiedScope penalties and SourceHash
+// validation are not connected yet.
 var DefaultConfidence = map[EvidenceKind]int{
 	EvidenceResolved: 90,
 	EvidenceObserved: 85,
@@ -89,8 +88,11 @@ type Evidence struct {
 // EvidenceID identifies the content of a fact. CollectedAt is intentionally
 // excluded so observing the same fact again refreshes it instead of creating
 // an unbounded duplicate row.
-func EvidenceID(dependencyID string, kind EvidenceKind, sourcePath, property, rawValue, resolvedValue string) string {
-	key := strings.Join([]string{dependencyID, string(kind), sourcePath, property, rawValue, resolvedValue}, "\x00")
+func EvidenceID(dependencyID string, kind EvidenceKind, claim ClaimType, polarity EvidencePolarity, sourcePath, property, rawValue, resolvedValue string) string {
+	if polarity == "" {
+		polarity = EvidenceSupports
+	}
+	key := strings.Join([]string{dependencyID, string(kind), string(claim), string(polarity), sourcePath, property, rawValue, resolvedValue}, "\x00")
 	digest := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(digest[:])
 }

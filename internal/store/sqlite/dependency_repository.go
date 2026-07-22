@@ -211,11 +211,11 @@ func validateEvidence(dependencyID string, evidence domain.Evidence) error {
 		return errors.New("evidence source path and collection time are required")
 	}
 	switch evidence.Kind {
-	case domain.EvidenceDeclared, domain.EvidenceResolved, domain.EvidenceObserved, domain.EvidenceInferred, domain.EvidenceUnknown:
+	case domain.EvidenceDeclared, domain.EvidenceResolved, domain.EvidenceObserved, domain.EvidencePinned, domain.EvidenceInferred, domain.EvidenceUnknown:
 	default:
 		return fmt.Errorf("invalid evidence kind %q", evidence.Kind)
 	}
-	wantID := domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath,
+	wantID := domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath,
 		evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 	if evidence.ID != wantID {
 		return fmt.Errorf("evidence ID %q does not match stable ID %q", evidence.ID, wantID)

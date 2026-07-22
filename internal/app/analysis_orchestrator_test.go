@@ -406,7 +406,7 @@ func (d *dependencyAnalyzerFake) Analyze(_ context.Context, input ProjectAnalysi
 	dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
 	evidence := domain.Evidence{DependencyID: dependency.ID, Kind: domain.EvidenceDeclared,
 		SourcePath: project.ManifestPath, CollectedAt: project.LastObservedAt}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, "", "", "")
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, "", "", "")
 	return DetectionResult[DependencyBundle]{Items: []DependencyBundle{{Dependency: dependency, Evidence: []domain.Evidence{evidence}}}}
 }
 

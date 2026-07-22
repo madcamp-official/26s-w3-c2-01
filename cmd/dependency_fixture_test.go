@@ -74,7 +74,7 @@ func seedWindowsSDKDependency(t *testing.T, projectName string) (domain.Resource
 		SourcePath: project.ManifestPath, Property: "WindowsTargetPlatformVersion",
 		RawValue: "10.0.22621.0", ResolvedValue: "10.0.22621.0", CollectedAt: time.Now().UTC(),
 	}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath,
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath,
 		evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 
 	// evidence.scan_id has a foreign key to scans(id), so reuse the scan row
@@ -139,7 +139,7 @@ func seedSafeResource(t *testing.T, name string, reclaimableSize int64) domain.R
 	edge := domain.Dependency{SourceType: domain.NodeProject, SourceID: project.ID, TargetType: domain.NodeResource, TargetID: resource.ID, Relation: domain.RelationOwns, Confidence: domain.DefaultConfidence[domain.EvidenceObserved]}
 	edge.ID = domain.DependencyID(edge.SourceType, edge.SourceID, edge.Relation, edge.TargetType, edge.TargetID)
 	evidence := domain.Evidence{DependencyID: edge.ID, Kind: domain.EvidenceObserved, SourcePath: manifest, Property: "project-output", ResolvedValue: normalizedPath, CollectedAt: time.Now().UTC()}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 	if err := sqlite.NewDependencyRepository(db).UpsertGraph(ctx, scan.ID, edge, []domain.Evidence{evidence}); err != nil {
 		t.Fatalf("seed ownership edge: %v", err)
 	}

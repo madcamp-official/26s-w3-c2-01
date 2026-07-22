@@ -94,13 +94,18 @@ func testGraph() (domain.Dependency, []domain.Evidence) {
 	evidence := domain.Evidence{
 		DependencyID:  dependency.ID,
 		Kind:          domain.EvidenceDeclared,
+		Claim:         domain.ClaimRequiredDependency,
+		Polarity:      domain.EvidenceSupports,
+		Method:        "fixture-resolution",
+		SourceFamily:  "fixture-manifest",
+		SourceHash:    "sha256:fixture",
 		SourcePath:    `D:\Projects\Game\Game.vcxproj`,
 		Property:      "WindowsTargetPlatformVersion",
 		RawValue:      "10.0",
 		ResolvedValue: "10.0.22621.0",
 		CollectedAt:   time.Date(2026, 7, 18, 8, 0, 0, 0, time.UTC),
 	}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath,
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath,
 		evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 	return dependency, []domain.Evidence{evidence}
 }

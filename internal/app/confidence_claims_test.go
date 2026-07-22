@@ -44,3 +44,31 @@ func TestAssessAxisUsesLimitingRequiredClaim(t *testing.T) {
 		t.Fatalf("assessment = %#v, want score 40 limited by build command", got)
 	}
 }
+
+func TestAssessClaimTreatsUnknownKindAsEvaluationState(t *testing.T) {
+	now := time.Now()
+	unknown := AssessClaim(domain.ClaimProjectOwnership, []domain.Evidence{{
+		ID: "unknown", Claim: domain.ClaimProjectOwnership, Kind: domain.EvidenceUnknown,
+	}}, now)
+	if unknown.Score != 0 || unknown.Status != domain.ConfidenceUnknown {
+		t.Fatalf("unknown assessment = %#v, want UNKNOWN score 0", unknown)
+	}
+
+	partial := AssessClaim(domain.ClaimProjectOwnership, []domain.Evidence{
+		{ID: "known", Claim: domain.ClaimProjectOwnership, Kind: domain.EvidenceResolved},
+		{ID: "unknown", Claim: domain.ClaimProjectOwnership, Kind: domain.EvidenceUnknown},
+	}, now)
+	if partial.Score != 90 || partial.Status != domain.ConfidencePartial {
+		t.Fatalf("mixed assessment = %#v, want PARTIAL score 90", partial)
+	}
+}
+
+func TestAssessClaimContradictionWithoutSupportIsConflicted(t *testing.T) {
+	got := AssessClaim(domain.ClaimProjectOwnership, []domain.Evidence{{
+		ID: "negative", Claim: domain.ClaimProjectOwnership, Kind: domain.EvidenceObserved,
+		Polarity: domain.EvidenceContradicts,
+	}}, time.Now())
+	if got.Score != 0 || got.Status != domain.ConfidenceConflicted {
+		t.Fatalf("assessment = %#v, want CONFLICTED score 0", got)
+	}
+}

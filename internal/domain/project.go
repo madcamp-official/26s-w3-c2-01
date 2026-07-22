@@ -20,8 +20,9 @@ import (
 type WorkspaceType string
 
 const (
-	WorkspaceTypeVSSolution WorkspaceType = "vs-solution" // .sln
-	WorkspaceTypeNode       WorkspaceType = "node"        // package.json or pnpm-workspace.yaml
+	WorkspaceTypeVSSolution     WorkspaceType = "vs-solution"     // .sln
+	WorkspaceTypeNode           WorkspaceType = "node"            // package.json or pnpm-workspace.yaml
+	WorkspaceTypeXcodeWorkspace WorkspaceType = "xcode-workspace" // .xcworkspace
 )
 
 // Workspace is a grouping file that references one or more BuildProjects
@@ -54,6 +55,8 @@ const (
 	ProjectTypeCargo   ProjectType = "cargo"
 	ProjectTypeGo      ProjectType = "go"
 	ProjectTypeAndroid ProjectType = "android"
+	ProjectTypeXcode   ProjectType = "xcode"   // .xcodeproj
+	ProjectTypeSwiftPM ProjectType = "swiftpm" // Package.swift
 )
 
 // ProjectStatus describes the activity state of a project.

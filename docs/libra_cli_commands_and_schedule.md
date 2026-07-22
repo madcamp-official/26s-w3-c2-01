@@ -175,6 +175,9 @@ libra scan --full
 | `.csproj` | MSBuild .NET 프로젝트 |
 | `package.json` | Node.js 프로젝트 |
 | `.git` | Git 저장소 |
+| `.xcodeproj` | Xcode 프로젝트 (macOS) |
+| `.xcworkspace` | Xcode Workspace, `.xcodeproj` 그룹 (macOS) |
+| `Package.swift` | Swift Package (macOS) |
 
 ### 탐지할 프로젝트 산출물
 
@@ -329,6 +332,8 @@ libra resources --risk review
 | npm·pnpm 전역 캐시 | IMPLEMENTED (read-only) |
 | Android SDK·Gradle cache | IMPLEMENTED (read-only) |
 | Cargo·Maven cache | IMPLEMENTED (read-only) |
+| Xcode DerivedData, CocoaPods·SwiftPM·Homebrew·iOS Simulator cache (macOS) | IMPLEMENTED (read-only) |
+| Xcode 설치 자체(`xcode-install`), 프로젝트 소유 `Pods`/`.build` (macOS) | IMPLEMENTED |
 | Docker 이미지·컨테이너·빌드 캐시·Volume 용량 | IMPLEMENTED (read-only) |
 
 ### 출력 정보
@@ -557,7 +562,7 @@ libra clean --plan plan-20260717-001 --execute
 격리한 파일을 원래 위치로 복구한다.
 
 ```bash
-libra restore tx-20260717-001
+libra restore --transaction tx-20260717-001
 ```
 
 ### 주요 기능
@@ -1171,7 +1176,7 @@ libra impact windows-sdk:10.0.22621.0
 libra plan --target 5GB
 libra clean --plan <plan-id>
 libra clean --plan <plan-id> --execute
-libra restore <transaction-id>
+libra restore --transaction <transaction-id>
 ```
 
 데몬이 완성된 경우:

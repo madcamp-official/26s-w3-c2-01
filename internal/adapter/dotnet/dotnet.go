@@ -2,22 +2,25 @@
 // official `dotnet` CLI (SDKLister) rather than guessing install
 // directories, per docs/libra_cli_commands_and_schedule.md's F-04
 // ("공식 .NET CLI가 설치된 SDK와 Runtime 목록을 제공하므로 직접 설치 폴더만
-// 추측하지 않고 명령 결과를 우선 사용한다"). Windows-only in practice, guarded
-// by adapter.RequireWindows rather than a //go:build tag -- see
-// windowsdk.FilesystemDetector's doc comment for why that's the pattern
-// this whole codebase uses instead of platform-specific files here.
+// 추측하지 않고 명령 결과를 우선 사용한다"). Originally gated to Windows via
+// adapter.RequireWindows even though `dotnet` itself is cross-platform --
+// that was a product-scope decision (docs/libra_cli_commands_and_schedule.md
+// 우선 지원 OS), not a technical limitation, and is now lifted: the `dotnet`
+// CLI's own output format is identical on every OS, only the well-known
+// install path differs (see resolvePath).
 package dotnet
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
-	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 )
@@ -36,19 +39,51 @@ const defaultDotnetPath = `C:\Program Files\dotnet\dotnet.exe`
 // its output. A missing dotnet executable means no .NET SDK is installed --
 // that is a valid result, not an error.
 type CLISDKLister struct {
-	// DotnetPath overrides defaultDotnetPath. Used by tests; production
-	// callers should leave it empty.
+	// DotnetPath overrides the resolved dotnet executable path. Used by
+	// tests (and matches the historical Windows default install location);
+	// production callers should leave it empty.
 	DotnetPath string
+	// LookPath resolves "dotnet" on PATH when DotnetPath is empty and GOOS
+	// isn't windows (which has its own well-known install path instead, see
+	// resolvePath). Overridable for tests; defaults to exec.LookPath.
+	LookPath func(string) (string, error)
 	// Run executes the dotnet command and returns its stdout. Overridable
 	// for tests; defaults to actually running the command.
 	Run func(ctx context.Context, path string, args ...string) ([]byte, error)
 }
 
-func (l CLISDKLister) path() string {
-	if l.DotnetPath != "" {
-		return l.DotnetPath
+// resolvePath finds the dotnet executable. An explicit DotnetPath override
+// or Windows's well-known install location is checked with os.Stat, exactly
+// as before. Without an override on non-Windows there is no single
+// well-known path to hardcode the way Windows has one (the official
+// installer, Homebrew, and Linux distro packages all place it differently),
+// so dotnet is resolved via PATH instead -- the same approach every other
+// CLI-based ecosystem adapter here uses (npm/pnpm/homebrew).
+func (l CLISDKLister) resolvePath() (string, error) {
+	path := l.DotnetPath
+	if path == "" && runtime.GOOS == "windows" {
+		path = defaultDotnetPath
 	}
-	return defaultDotnetPath
+	if path != "" {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return "", nil
+		} else if err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+	look := l.LookPath
+	if look == nil {
+		look = exec.LookPath
+	}
+	resolved, err := look("dotnet")
+	if errors.Is(err, exec.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return resolved, nil
 }
 
 func (l CLISDKLister) run(ctx context.Context, path string, args ...string) ([]byte, error) {
@@ -65,11 +100,11 @@ func (l CLISDKLister) run(ctx context.Context, path string, args ...string) ([]b
 }
 
 func (l CLISDKLister) ListSDKs(ctx context.Context) ([]domain.Resource, error) {
-	if err := adapter.RequireWindows("Windows .NET SDK detection"); err != nil {
+	dotnetPath, err := l.resolvePath()
+	if err != nil {
 		return nil, err
 	}
-	dotnetPath := l.path()
-	if _, err := os.Stat(dotnetPath); os.IsNotExist(err) {
+	if dotnetPath == "" {
 		return nil, nil
 	}
 

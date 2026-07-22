@@ -93,6 +93,10 @@ func RecoveryHint(resourceType domain.ResourceType) string {
 		return "packages are re-downloaded to the cache on next install"
 	case domain.ResourceTypeDockerCache:
 		return "images and layers are re-pulled or rebuilt on next use"
+	case domain.ResourceTypeXcodeInstall:
+		return "reinstall via the App Store or the Apple Developer downloads page"
+	case domain.ResourceTypePods:
+		return "reinstall with pod install"
 	default:
 		return "no known recovery method"
 	}

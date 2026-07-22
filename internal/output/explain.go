@@ -38,10 +38,17 @@ type ExplainView struct {
 	Recovery       string              `json:"recovery,omitempty"`
 
 	// Project-only fields.
-	ProjectType    domain.ProjectType   `json:"project_type,omitempty"`
-	Status         domain.ProjectStatus `json:"status,omitempty"`
-	LastModifiedAt time.Time            `json:"last_modified_at,omitempty"`
-	Requires       []ExplainUsage       `json:"requires,omitempty"`
+	ProjectType domain.ProjectType   `json:"project_type,omitempty"`
+	Status      domain.ProjectStatus `json:"status,omitempty"`
+	// LastModifiedAt is a *time.Time, not time.Time, because JSON's
+	// "omitempty" has no effect on a non-pointer struct field -- a bare
+	// time.Time here would still marshal the Go zero value
+	// ("0001-01-01T00:00:00Z") into a resource-kind view's JSON even though
+	// this field is never set for one, unlike the text renderer, which
+	// never prints "Last modified" for a resource at all (see
+	// renderResource). nil means "not a project view", not "date unknown".
+	LastModifiedAt *time.Time     `json:"last_modified_at,omitempty"`
+	Requires       []ExplainUsage `json:"requires,omitempty"`
 	// SizeKnown is nil for a resource-kind view (LogicalSize is always
 	// measured for a resource, per domain.Resource.SizeKnown's own
 	// semantics being out of scope here); non-nil for a project-kind view,
@@ -135,7 +142,11 @@ func (v ExplainView) renderProject(w io.Writer) error {
 	fmt.Fprintf(w, "Path: %s\n", v.Path)
 	fmt.Fprintf(w, "Size: %s\n", formatProjectSize(v.LogicalSize, v.SizeKnown))
 	fmt.Fprintf(w, "Status: %s\n", v.Status)
-	fmt.Fprintf(w, "Last modified: %s\n", formatTime(v.LastModifiedAt))
+	var lastModifiedAt time.Time
+	if v.LastModifiedAt != nil {
+		lastModifiedAt = *v.LastModifiedAt
+	}
+	fmt.Fprintf(w, "Last modified: %s\n", formatTime(lastModifiedAt))
 	fmt.Fprintf(w, "Last observed: %s\n", formatTime(v.LastObservedAt))
 	fmt.Fprintln(w)
 

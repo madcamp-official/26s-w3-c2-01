@@ -419,6 +419,14 @@ Unverified:
 > `Pods`·활성 Xcode처럼 Xcode가 명확한 리소스는 "Xcode debugging", 그 외(예:
 > `node_modules`, `bin`/`obj`/`dist`처럼 여러 생태계가 공유하는 타입)는 중립적인
 > "IDE debugging"을 쓴다.
+>
+> 구현됨(2026-07-22, 3차, `docs/libra_integration_contracts.md` §20.2): 위 예시의
+> "Confidence: 88%" 아래에 이제 7축 breakdown("Confidence breakdown:")과 `libra plan`
+> 자동 선택 가능 여부("Cleanup eligibility: ...")가 추가로 출력된다. 필수 출력 정보의
+> "분석하지 못한 범위"("Unverified:")도 이번에 처음 실제로 채워진다 — `ConfidenceProfile`의
+> 7개 axis 중 `KNOWN`이 아닌 것을 그대로 나열한다. `explain`이 `resources`/`plan`과 동일하게
+> `ApplyFreshness`를 적용하도록 함께 고쳐서, 오래된 스캔 결과를 explain으로 볼 때 다른 명령과
+> 다른(더 낙관적인) 위험도를 보여주던 불일치도 해소됐다.
 
 ### 우선순위
 

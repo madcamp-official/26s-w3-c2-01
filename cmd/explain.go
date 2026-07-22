@@ -106,20 +106,24 @@ func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, 
 		return output.ExplainView{}, fmt.Errorf("explain resource %q: %w", resourceID, err)
 	}
 	resource := explanation.Resource
+	confidenceSummary := resource.ConfidenceProfile.CleanupSummary()
 
 	view := output.ExplainView{
-		Kind:           output.ExplainKindResource,
-		Name:           resource.Name,
-		Path:           resource.DisplayPath,
-		ResourceType:   resource.Type,
-		Version:        resource.Version,
-		Regenerable:    &resource.Regenerable,
-		Risk:           resource.Risk,
-		Confidence:     &resource.Confidence,
-		RiskReasons:    resource.RiskReasons,
-		LogicalSize:    resource.LogicalSize,
-		LastObservedAt: resource.LastObservedAt,
-		Recovery:       output.RecoveryHint(resource.Type),
+		Kind:              output.ExplainKindResource,
+		Name:              resource.Name,
+		Path:              resource.DisplayPath,
+		ResourceType:      resource.Type,
+		Version:           resource.Version,
+		Regenerable:       &resource.Regenerable,
+		Risk:              resource.Risk,
+		Confidence:        &resource.Confidence,
+		ConfidenceProfile: &resource.ConfidenceProfile,
+		ConfidenceSummary: &confidenceSummary,
+		RiskReasons:       resource.RiskReasons,
+		LogicalSize:       resource.LogicalSize,
+		LastObservedAt:    resource.LastObservedAt,
+		Recovery:          output.RecoveryHint(resource.Type),
+		Unverified:        explainUnverifiedFromConfidence(resource.ConfidenceProfile),
 	}
 	for _, usage := range explanation.UsedBy {
 		view.UsedBy = append(view.UsedBy, output.ExplainUsage{
@@ -171,6 +175,38 @@ func renderProjectExplanation(cmd *cobra.Command, service *app.ExplainService, p
 		})
 	}
 	return view, nil
+}
+
+// explainUnverifiedFromConfidence turns each ConfidenceProfile axis whose
+// Status isn't KNOWN into one "분석하지 못한 범위" line. It reads directly off
+// whatever the claim-based confidence model (internal/app/confidence_claims.go)
+// already computed and persisted -- no separate UnverifiedScope wiring,
+// which stays scan-run-scoped and unpersisted (docs/libra_integration_contracts.md
+// §13). Dependency/ScanCoverage get a distinct message because their
+// non-KNOWN status isn't resource-specific -- every resource gets the same
+// conservative baseline today, pending per-resource UnverifiedScope
+// attribution (§20.2) -- while the rest (Ownership/Regenerability/PathSafety/
+// Freshness/Classification) vary per resource and get their LimitingClaim
+// surfaced when there is one. Returns nil for a legacy resource that was
+// never re-scanned since the claim-based model landed (no per-axis
+// Assessments to read, ModelVersion 0) rather than guessing.
+func explainUnverifiedFromConfidence(profile domain.ConfidenceProfile) []string {
+	var lines []string
+	for _, a := range profile.Assessments {
+		if a.Status == domain.ConfidenceKnown {
+			continue
+		}
+		if a.Axis == domain.AxisDependency || a.Axis == domain.AxisScanCoverage {
+			lines = append(lines, fmt.Sprintf("%s uses a conservative baseline (%d%%) until per-resource scope tracking is connected", a.Axis, a.Score))
+			continue
+		}
+		line := fmt.Sprintf("%s confidence is %s (%d%%)", a.Axis, a.Status, a.Score)
+		if a.LimitingClaim != "" {
+			line += fmt.Sprintf(" -- limited by %s", a.LimitingClaim)
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // toEvidenceLines drops Evidence fields explain has no use for (ID,

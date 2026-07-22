@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
@@ -45,6 +46,7 @@ type ExplainService struct {
 	projects     ProjectRepository
 	dependencies DependencyRepository
 	impact       *ImpactService
+	now          func() time.Time
 }
 
 // NewExplainService constructs the service from repositories only -- it
@@ -57,6 +59,7 @@ func NewExplainService(resources ResourceRepository, projects ProjectRepository,
 	return &ExplainService{
 		resources: resources, projects: projects, dependencies: dependencies,
 		impact: NewImpactService(dependencies, resources),
+		now:    time.Now,
 	}
 }
 
@@ -67,6 +70,13 @@ func (s *ExplainService) ExplainResource(ctx context.Context, resourceID string)
 	if err != nil {
 		return ResourceExplanation{}, fmt.Errorf("find resource %q: %w", resourceID, err)
 	}
+	// Recompute from the persisted observation time, same as `libra
+	// resources`/`libra plan` (resource_list_service.go, plan_service.go) --
+	// without this, explain showed a SAFE resource's confidence/risk exactly
+	// as they were at scan time, even after they'd gone stale enough that
+	// every other read path had already downgraded it to REVIEW with an
+	// EVIDENCE_STALE reason.
+	resource = ApplyFreshness(resource, s.now().UTC())
 
 	edges, err := s.dependencies.FindProjectsByResource(ctx, resourceID)
 	if err != nil {

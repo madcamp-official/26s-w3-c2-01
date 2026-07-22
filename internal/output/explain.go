@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"text/tabwriter"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -27,15 +28,23 @@ type ExplainView struct {
 	Path string      `json:"path"`
 
 	// Resource-only fields.
-	ResourceType   domain.ResourceType `json:"resource_type,omitempty"`
-	Version        string              `json:"version,omitempty"`
-	Regenerable    *bool               `json:"regenerable,omitempty"`
-	Risk           domain.RiskLevel    `json:"risk,omitempty"`
-	Confidence     *int                `json:"confidence,omitempty"`
-	RiskReasons    []domain.RiskReason `json:"risk_reasons,omitempty"`
-	UsedBy         []ExplainUsage      `json:"used_by,omitempty"`
-	ExpectedImpact []ExplainImpactLine `json:"expected_impact,omitempty"`
-	Recovery       string              `json:"recovery,omitempty"`
+	ResourceType domain.ResourceType `json:"resource_type,omitempty"`
+	Version      string              `json:"version,omitempty"`
+	Regenerable  *bool               `json:"regenerable,omitempty"`
+	Risk         domain.RiskLevel    `json:"risk,omitempty"`
+	// Confidence is the legacy single-number summary (min across every
+	// ConfidenceProfile axis) kept for schema compatibility. ConfidenceProfile
+	// and ConfidenceSummary carry the real breakdown -- which axis is
+	// actually limiting, and whether it's KNOWN, PARTIAL, UNKNOWN, or
+	// CONFLICTED -- that a bare percentage can't distinguish. Both are nil
+	// for a project-kind view, same as Regenerable/Risk not applying there.
+	Confidence        *int                      `json:"confidence,omitempty"`
+	ConfidenceProfile *domain.ConfidenceProfile `json:"confidence_profile,omitempty"`
+	ConfidenceSummary *domain.ConfidenceSummary `json:"confidence_summary,omitempty"`
+	RiskReasons       []domain.RiskReason       `json:"risk_reasons,omitempty"`
+	UsedBy            []ExplainUsage            `json:"used_by,omitempty"`
+	ExpectedImpact    []ExplainImpactLine       `json:"expected_impact,omitempty"`
+	Recovery          string                    `json:"recovery,omitempty"`
 
 	// Project-only fields.
 	ProjectType domain.ProjectType   `json:"project_type,omitempty"`
@@ -131,10 +140,46 @@ func (v ExplainView) renderResource(w io.Writer) error {
 	if v.Confidence != nil {
 		fmt.Fprintf(w, "Confidence: %d%%\n", *v.Confidence)
 	}
+	v.renderConfidenceProfile(w)
 	renderRiskReasons(w, v.RiskReasons)
 	fmt.Fprintf(w, "Recovery: %s\n", v.Recovery)
 
 	return v.renderUnverified(w)
+}
+
+// renderConfidenceProfile prints the per-axis breakdown behind the single
+// Confidence percentage, plus whether this resource would actually be
+// auto-selected by `libra plan` and, if not, which axis is stopping it --
+// answering the "why isn't this SAFE" question explain exists for, instead
+// of leaving the reader with just a collapsed number. A no-op when
+// ConfidenceProfile is nil (project-kind view) or has no per-axis
+// Assessments (a resource never re-scanned since the claim-based model
+// landed -- ModelVersion 0 rows only carry the legacy scalar).
+func (v ExplainView) renderConfidenceProfile(w io.Writer) {
+	if v.ConfidenceProfile == nil || len(v.ConfidenceProfile.Assessments) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "Confidence breakdown:")
+	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	for _, a := range v.ConfidenceProfile.Assessments {
+		fmt.Fprintf(tw, "  %s\t%d%%\t%s\n", a.Axis, a.Score, a.Status)
+	}
+	tw.Flush()
+
+	if v.ConfidenceSummary == nil {
+		return
+	}
+	if v.ConfidenceSummary.Eligible {
+		fmt.Fprintln(w, "Cleanup eligibility: eligible for automatic selection by `libra plan`")
+		return
+	}
+	// Deliberately reports the limiting axis's Overall score here, not
+	// ConfidenceSummary.Status -- that field means "this is a legacy
+	// (pre-claim-model) profile", not "this axis's own verification status",
+	// despite the name; the breakdown table above already shows each axis's
+	// real Status, so repeating the wrong one here would contradict it.
+	fmt.Fprintf(w, "Cleanup eligibility: not eligible for automatic selection by `libra plan` (limited by %s at %d%%)\n",
+		v.ConfidenceSummary.LimitingAxis, v.ConfidenceSummary.Overall)
 }
 
 func (v ExplainView) renderProject(w io.Writer) error {
@@ -208,11 +253,16 @@ func renderEvidence(w io.Writer, evidence []ExplainEvidenceLine, indent string) 
 	}
 }
 
-// renderUnverified is a no-op when there's nothing to say -- ExplainView
-// currently never actually populates Unverified (no caller wires
-// UnverifiedScope data into it yet), so this only ever prints the "no
-// output" branch today. Kept as a real field/method pair, not deleted,
-// since F-07 requires a "분석하지 못한 범위" section once that data exists.
+// renderUnverified is a no-op when there's nothing to say. cmd/explain.go's
+// explainUnverifiedFromConfidence populates Unverified from any
+// ConfidenceProfile axis whose Status isn't KNOWN -- Dependency/ScanCoverage
+// (still a conservative baseline pending per-resource UnverifiedScope
+// attribution, docs/libra_integration_contracts.md §20.2) and whatever else
+// genuinely came back PARTIAL/UNKNOWN/CONFLICTED for this resource. This is
+// separate from app.UnverifiedScope, which stays scan-run-scoped and isn't
+// persisted (§13) -- Unverified here is a resource-kind-only field (nil
+// Confidence axes for a project-kind view means nothing to report), unlike
+// F-07's original "분석하지 못한 범위" framing, which didn't distinguish the two.
 func (v ExplainView) renderUnverified(w io.Writer) error {
 	if len(v.Unverified) == 0 {
 		return nil

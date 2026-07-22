@@ -245,6 +245,8 @@ libra issues --scan scan-20260721-120000
 libra issues --code ACCESS_DENIED --severity warning
 ```
 
+> **알려진 환경 문제 — `check git tracked files` 오류가 `exit status 128`로 반복될 때:** 버그가 아니라 Git 2.35.2+의 ownership 보호 기능(CVE-2022-24765 대응)이다. 리포지토리 디렉터리의 NTFS 소유자가 현재 로그인 계정과 다르면(외장 드라이브·다른 PC에서 그대로 옮겨온 폴더 등) git이 해당 저장소의 모든 명령을 거부한다. 이 검증이 실패한 산출물은 `PathSafety` 축이 0으로 떨어져 실제로는 안전할 수 있는 `node_modules` 등도 `SAFE`가 아닌 `REVIEW`(신뢰도 0%)로 분류된다 — 확정된 위험이 아니라 단순 미검증 상태다. 해결: `git config --global --add safe.directory <해당 저장소 경로>` 등록 후 `libra scan` 재실행.
+
 - `libra explain <target>` — 프로젝트 또는 리소스 하나를 골라 종류·경로·크기·근거·영향·복구법·위험도·신뢰도를 전부 보여준다. `<target>` 문법: `<타입>:<버전>`(예: `windows-sdk:10.0.22621.0`), `project:"경로 또는 이름"`, 따옴표로 감싼 절대 경로, 또는 ID/이름. 언제: "이 폴더/SDK가 정확히 뭔지, 왜 여기 있는지" 알고 싶을 때. 리소스 대상은 축약된 `Confidence` 퍼센트 아래에 7축 `Confidence breakdown:` 표(축·점수·상태)와 `Cleanup eligibility:`(`libra plan` 자동 선택 대상 여부, 아니라면 어느 축이 원인인지)를 함께 출력하고(JSON: `confidence_profile`/`confidence_summary`), `KNOWN`이 아닌 축은 `Unverified`(분석하지 못한 범위) 섹션에도 나열한다.
 ```bash
 libra explain windows-sdk:10.0.22621.0

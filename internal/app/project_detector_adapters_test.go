@@ -236,6 +236,30 @@ func TestPythonProjectDetectorAdaptsProjectFact(t *testing.T) {
 	}
 }
 
+func TestPythonProjectDetectorDetectsRequirementsProjectWithAppSource(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "requirements.txt"), []byte("fastapi==0.115.12\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "main.py"), []byte("from fastapi import FastAPI\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (PythonProjectDetector{Detector: pythonadapter.FilesystemDetector{}}).
+		Observe(context.Background(), scanner.Entry{Path: root})
+	if len(got.Items) != 1 || len(got.Items[0].Projects) != 1 || len(got.Issues) != 0 {
+		t.Fatalf("Observe() = %#v", got)
+	}
+	project := got.Items[0].Projects[0]
+	if project.Type != domain.ProjectTypePython || project.ManifestPath != filepath.Join(root, "requirements.txt") {
+		t.Fatalf("project = %#v", project)
+	}
+}
+
 func TestPythonProjectDetectorReportsVenvAndCacheAsProjectResources(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "poetry.lock"), []byte(""), 0o644); err != nil {

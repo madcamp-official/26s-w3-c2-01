@@ -65,6 +65,32 @@ func TestDetectMarkers_RequirementsOnlyNeedsPythonFile(t *testing.T) {
 			t.Errorf("Primary = %q, want %q", markers.Primary, markerRequirements)
 		}
 	})
+
+	t.Run("with Python source in immediate app directory: accepted", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, "requirements.txt", "fastapi==0.115.12\n")
+		write(t, root, filepath.Join("app", "main.py"), "from fastapi import FastAPI\n")
+		markers, err := DetectMarkers(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if markers.Primary != markerRequirements {
+			t.Errorf("Primary = %q, want %q", markers.Primary, markerRequirements)
+		}
+	})
+
+	t.Run("with only deeply nested Python file: not a project", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, "requirements.txt", "example==1.0.0\n")
+		write(t, root, filepath.Join("fixtures", "vendor", "setup.py"), "")
+		markers, err := DetectMarkers(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if markers.Primary != "" {
+			t.Errorf("Primary = %q, want empty for deeply nested source only", markers.Primary)
+		}
+	})
 }
 
 func TestFilesystemDetector_CanDetect(t *testing.T) {

@@ -31,7 +31,70 @@ func (d EcosystemProjectDetector) Observe(ctx context.Context, entry scanner.Ent
 	if !matched {
 		return DetectionResult[ProjectCandidate]{}
 	}
-	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{{Projects: []domain.BuildProject{project}}}}
+	candidate := ProjectCandidate{Projects: []domain.BuildProject{project}}
+	resource, found, err := ecosystemBuildArtifact(project)
+	if err != nil {
+		return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: []Issue{
+			cleanupEvidenceIssue(project.RootPath, "detect ecosystem build artifact", err),
+		}}
+	}
+	if found {
+		cleanup, issues := projectArtifactCleanupEvidence(ctx, project.RootPath, resource)
+		candidate.ProjectResources = append(candidate.ProjectResources, ProjectResourceCandidate{
+			OwnerManifestPath: project.ManifestPath, Resource: resource, Cleanup: cleanup,
+		})
+		return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}, Issues: issues}
+	}
+	return DetectionResult[ProjectCandidate]{Items: []ProjectCandidate{candidate}}
+}
+
+func ecosystemBuildArtifact(project domain.BuildProject) (domain.Resource, bool, error) {
+	name := ""
+	command := ""
+	regenerable := false
+	confidence := domain.DefaultConfidence[domain.EvidenceDeclared]
+	switch project.Type {
+	case domain.ProjectTypeCargo:
+		name = "target"
+		if _, err := os.Stat(filepath.Join(project.RootPath, "Cargo.lock")); err == nil {
+			regenerable, command = true, "cargo build --locked"
+		} else if !os.IsNotExist(err) {
+			return domain.Resource{}, false, err
+		} else {
+			confidence = domain.DefaultConfidence[domain.EvidenceInferred]
+		}
+	case domain.ProjectTypeMaven:
+		name, regenerable, command = "target", true, "mvn package"
+	case domain.ProjectTypeGradle, domain.ProjectTypeAndroid:
+		name, regenerable, command = "build", true, gradleBuildCommand(project.RootPath)
+	default:
+		return domain.Resource{}, false, nil
+	}
+	path := filepath.Join(project.RootPath, name)
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return domain.Resource{}, false, nil
+	}
+	if err != nil {
+		return domain.Resource{}, false, err
+	}
+	if !info.IsDir() && !scanner.IsLinkLike(info) {
+		return domain.Resource{}, false, nil
+	}
+	return domain.Resource{
+		Name: name, Type: domain.ResourceTypeBuildOutput, DisplayPath: path,
+		Regenerable: regenerable, RegenerationCommand: command, Confidence: confidence,
+	}, true, nil
+}
+
+func gradleBuildCommand(root string) string {
+	if _, err := os.Stat(filepath.Join(root, "gradlew.bat")); err == nil {
+		return `.\gradlew.bat build`
+	}
+	if _, err := os.Stat(filepath.Join(root, "gradlew")); err == nil {
+		return "./gradlew build"
+	}
+	return "gradle build"
 }
 
 // project_detector_adapters.go wraps each internal/adapter/* package's own

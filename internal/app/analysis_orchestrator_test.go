@@ -10,10 +10,53 @@ import (
 	"time"
 
 	nodeadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/node"
+	projectmarkeradapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/projectmarker"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/pathutil"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/scanner"
 )
+
+func TestAnalysisOrchestratorObservesEcosystemBuildArtifacts(t *testing.T) {
+	root := t.TempDir()
+	fixtures := []struct{ dir, manifest, body, artifact, extra string }{
+		{"cargo", "Cargo.toml", "[package]\nname='app'", "target", "Cargo.lock"},
+		{"maven", "pom.xml", "<project/>", "target", ""},
+		{"gradle", "build.gradle", "plugins { id 'java' }", "build", "gradlew"},
+	}
+	for _, fixture := range fixtures {
+		projectRoot := filepath.Join(root, fixture.dir)
+		if err := os.MkdirAll(filepath.Join(projectRoot, fixture.artifact), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(projectRoot, fixture.manifest), []byte(fixture.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if fixture.extra != "" {
+			if err := os.WriteFile(filepath.Join(projectRoot, fixture.extra), []byte("fixture"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	projects := &projectRepositoryCapture{}
+	dependencies := &dependencyRepositoryCapture{}
+	orchestrator := NewAnalysisOrchestrator(scanner.New(2), &scanRepositoryCapture{}, projects,
+		&workspaceRepositoryCapture{}, resourceObserverFake{observedAt: time.Now()}, dependencies).
+		WithDetectors([]ProjectDetector{EcosystemProjectDetector{Detector: projectmarkeradapter.Detector{}}}, nil, nil)
+	result, err := orchestrator.Run(context.Background(), AnalysisOptions{
+		ScanID: "scan-ecosystem-artifacts", Scan: scanner.Options{Roots: []string{root}, MaxDepth: 4},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Projects) != 3 || len(result.Resources) != 3 || len(result.Dependencies) != 3 {
+		t.Fatalf("result projects/resources/dependencies = %d/%d/%d, want 3/3/3", len(result.Projects), len(result.Resources), len(result.Dependencies))
+	}
+	for _, dependency := range result.Dependencies {
+		if dependency.Relation != domain.RelationOwns {
+			t.Fatalf("dependency = %#v, want OWNS", dependency)
+		}
+	}
+}
 
 func TestAnalysisOrchestratorRunsPipelineInContractOrder(t *testing.T) {
 	root := t.TempDir()

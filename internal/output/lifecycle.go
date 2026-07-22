@@ -14,6 +14,7 @@ type InitView struct {
 
 func (v InitView) RenderText(w io.Writer) error {
 	if v.ConfigCreated {
+		printBanner(w)
 		fmt.Fprintf(w, "Created config file: %s\n", v.ConfigPath)
 	} else {
 		fmt.Fprintf(w, "Config file already exists: %s\n", v.ConfigPath)

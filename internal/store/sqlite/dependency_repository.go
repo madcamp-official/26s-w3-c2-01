@@ -57,11 +57,16 @@ func (r *DependencyRepository) UpsertGraph(ctx context.Context, scanID string, d
 	}
 
 	for _, item := range evidence {
+		var validUntil any
+		if item.ValidUntil != nil {
+			validUntil = item.ValidUntil.UTC().Format(time.RFC3339Nano)
+		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO evidence (
 				id, dependency_id, scan_id, evidence_type, source_path,
-				property_name, raw_value, resolved_value, collected_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				property_name, raw_value, resolved_value, collected_at,
+				claim, method, source_family, source_hash, valid_until, polarity
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				dependency_id = excluded.dependency_id,
 				scan_id = excluded.scan_id,
@@ -70,10 +75,17 @@ func (r *DependencyRepository) UpsertGraph(ctx context.Context, scanID string, d
 				property_name = excluded.property_name,
 				raw_value = excluded.raw_value,
 				resolved_value = excluded.resolved_value,
-				collected_at = excluded.collected_at
+				collected_at = excluded.collected_at,
+				claim = excluded.claim,
+				method = excluded.method,
+				source_family = excluded.source_family,
+				source_hash = excluded.source_hash,
+				valid_until = excluded.valid_until,
+				polarity = excluded.polarity
 		`, item.ID, item.DependencyID, scanID, item.Kind, item.SourcePath,
 			nullableString(item.Property), nullableString(item.RawValue), nullableString(item.ResolvedValue),
-			item.CollectedAt.UTC().Format(time.RFC3339Nano))
+			item.CollectedAt.UTC().Format(time.RFC3339Nano), nullableString(string(item.Claim)),
+			item.Method, item.SourceFamily, item.SourceHash, validUntil, item.Polarity)
 		if err != nil {
 			return fmt.Errorf("upsert evidence %q: %w", item.ID, err)
 		}
@@ -102,7 +114,8 @@ func (r *DependencyRepository) FindProjectsByResource(ctx context.Context, resou
 func (r *DependencyRepository) FindEvidence(ctx context.Context, dependencyID string) ([]domain.Evidence, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, dependency_id, evidence_type, source_path, property_name,
-			raw_value, resolved_value, collected_at
+			raw_value, resolved_value, collected_at, claim, method,
+			source_family, source_hash, valid_until, polarity
 		FROM evidence
 		WHERE dependency_id = ?
 		ORDER BY evidence_type, source_path, property_name, id
@@ -115,18 +128,27 @@ func (r *DependencyRepository) FindEvidence(ctx context.Context, dependencyID st
 	items := make([]domain.Evidence, 0)
 	for rows.Next() {
 		var item domain.Evidence
-		var property, rawValue, resolvedValue sql.NullString
+		var property, rawValue, resolvedValue, claim, validUntil sql.NullString
 		var collectedAt string
 		if err := rows.Scan(&item.ID, &item.DependencyID, &item.Kind, &item.SourcePath,
-			&property, &rawValue, &resolvedValue, &collectedAt); err != nil {
+			&property, &rawValue, &resolvedValue, &collectedAt, &claim, &item.Method,
+			&item.SourceFamily, &item.SourceHash, &validUntil, &item.Polarity); err != nil {
 			return nil, fmt.Errorf("decode evidence for dependency %q: %w", dependencyID, err)
 		}
 		item.Property = property.String
 		item.RawValue = rawValue.String
 		item.ResolvedValue = resolvedValue.String
+		item.Claim = domain.ClaimType(claim.String)
 		item.CollectedAt, err = time.Parse(time.RFC3339Nano, collectedAt)
 		if err != nil {
 			return nil, fmt.Errorf("decode evidence %q collection time: %w", item.ID, err)
+		}
+		if validUntil.Valid {
+			parsed, parseErr := time.Parse(time.RFC3339Nano, validUntil.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("decode evidence %q validity: %w", item.ID, parseErr)
+			}
+			item.ValidUntil = &parsed
 		}
 		items = append(items, item)
 	}

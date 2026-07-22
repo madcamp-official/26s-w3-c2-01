@@ -31,10 +31,11 @@ func FreshnessScore(observedAt, now time.Time) int {
 // ApplyFreshness derives the current view from persisted observation time.
 // Staleness may lower SAFE to REVIEW, but never lowers BLOCKED.
 func ApplyFreshness(resource domain.Resource, now time.Time) domain.Resource {
-	if resource.ConfidenceProfile == (domain.ConfidenceProfile{}) && resource.Confidence > 0 {
+	if resource.ConfidenceProfile.IsZero() && resource.Confidence > 0 {
 		resource.ConfidenceProfile = domain.ConfidenceProfile{
 			Classification: resource.Confidence, Ownership: resource.Confidence,
-			Dependency: resource.Confidence, CleanupSafety: resource.Confidence,
+			Dependency: resource.Confidence, Regenerability: resource.Confidence,
+			PathSafety:   resource.Confidence,
 			ScanCoverage: resource.Confidence, Freshness: resource.Confidence,
 		}
 	}

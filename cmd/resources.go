@@ -58,17 +58,22 @@ the confidence of the analysis.`,
 		for _, listing := range listings {
 			resource := listing.Resource
 			view.Resources = append(view.Resources, output.ResourceLine{
-				Name:              resource.Name,
-				Type:              resource.Type,
-				Version:           resource.Version,
-				Path:              resource.DisplayPath,
-				LogicalSize:       resource.LogicalSize,
-				ProjectCount:      listing.ProjectCount,
-				Regenerable:       resource.Regenerable,
-				Risk:              resource.Risk,
-				Confidence:        resource.Confidence,
-				ConfidenceProfile: resource.ConfidenceProfile,
-				RiskReasons:       resource.RiskReasons,
+				Name:               resource.Name,
+				Type:               resource.Type,
+				Version:            resource.Version,
+				Path:               resource.DisplayPath,
+				LogicalSize:        resource.LogicalSize,
+				ProjectCount:       listing.ProjectCount,
+				Regenerable:        resource.Regenerable,
+				Risk:               resource.Risk,
+				CleanupDisposition: resource.CleanupDisposition,
+				RiskImpact:         resource.RiskImpact,
+				RiskLikelihood:     resource.RiskLikelihood,
+				RiskRecoverability: resource.RiskRecoverability,
+				RiskUncertainty:    resource.RiskUncertainty,
+				Confidence:         resource.Confidence,
+				ConfidenceProfile:  resource.ConfidenceProfile,
+				RiskReasons:        resource.RiskReasons,
 			})
 		}
 

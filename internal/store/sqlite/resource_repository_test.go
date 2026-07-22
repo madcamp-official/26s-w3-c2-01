@@ -55,7 +55,7 @@ func TestResourceRepositoryRoundTripsRegenerationCommand(t *testing.T) {
 func TestResourceRepositoryRoundTripsConfidenceProfileAndRiskReasons(t *testing.T) {
 	repository := newTestResourceRepository(t)
 	resource := testResource(t, domain.ResourceTypeBuildOutput, "")
-	resource.ConfidenceProfile = domain.ConfidenceProfile{Classification: 90, Ownership: 100, Dependency: 80, CleanupSafety: 100, ScanCoverage: 80, Freshness: 100}
+	resource.ConfidenceProfile = domain.ConfidenceProfile{Classification: 90, Ownership: 100, Dependency: 80, Regenerability: 90, PathSafety: 100, ScanCoverage: 80, Freshness: 100}
 	resource.Confidence = resource.ConfidenceProfile.Overall()
 	resource.RiskReasons = []domain.RiskReason{{Code: "CLEANUP_EVIDENCE_COMPLETE", Severity: domain.RiskReasonSafeguard, Message: "verified"}}
 	if err := repository.Upsert(context.Background(), resource); err != nil {

@@ -190,7 +190,7 @@ func safeResource(id string, confidence int, reclaimable int64) domain.Resource 
 		Risk:           domain.RiskSafe, Confidence: confidence,
 		ConfidenceProfile: domain.ConfidenceProfile{
 			Classification: confidence, Ownership: 100, Dependency: 80,
-			CleanupSafety: 100, ScanCoverage: 80, Freshness: 100,
+			Regenerability: 100, PathSafety: 100, ScanCoverage: 80, Freshness: 100,
 		},
 	}
 }

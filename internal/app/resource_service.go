@@ -103,6 +103,11 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Confidence:    detected.ConfidenceProfile,
 	})
 	detected.Risk = assessment.Level
+	detected.CleanupDisposition = assessment.Disposition
+	detected.RiskImpact = assessment.Impact
+	detected.RiskLikelihood = assessment.Likelihood
+	detected.RiskRecoverability = assessment.Recoverability
+	detected.RiskUncertainty = assessment.Uncertainty
 	detected.RiskReasons = assessment.Reasons()
 	detected.Confidence = detected.ConfidenceProfile.Overall()
 	switch detected.Risk {
@@ -165,12 +170,17 @@ func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID str
 
 	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
 	resource.Risk = assessment.Level
+	resource.CleanupDisposition = assessment.Disposition
+	resource.RiskImpact = assessment.Impact
+	resource.RiskLikelihood = assessment.Likelihood
+	resource.RiskRecoverability = assessment.Recoverability
+	resource.RiskUncertainty = assessment.Uncertainty
+	resource.RiskReasons = assessment.Reasons()
 	resource.ReclaimableSize = 0
 
 	if err := s.repository.Upsert(ctx, resource); err != nil {
 		return ResourceObservation{}, fmt.Errorf("persist reclassified resource: %w", err)
 	}
-	resource.RiskReasons = assessment.Reasons()
 	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons()}, nil
 }
 
@@ -189,7 +199,8 @@ func confidenceProfile(classification int, cleanup CleanupEvidence) domain.Confi
 		profile.Ownership = 100
 	}
 	if cleanup.complete() {
-		profile.CleanupSafety = 100
+		profile.Regenerability = 100
+		profile.PathSafety = 100
 	}
 	return profile
 }

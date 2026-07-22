@@ -57,20 +57,25 @@ const (
 
 // Resource is an SDK, tool, cache, or build artifact discovered by scan.
 type Resource struct {
-	ID              string
-	Name            string
-	Type            ResourceType
-	Version         string
-	DisplayPath     string
-	NormalizedPath  string
-	LogicalSize     int64
-	SizeKnown       bool
-	ReclaimableSize int64
-	Regenerable     bool
-	SystemManaged   bool
-	LastModifiedAt  *time.Time
-	LastObservedAt  time.Time
-	Risk            RiskLevel
+	ID                 string
+	Name               string
+	Type               ResourceType
+	Version            string
+	DisplayPath        string
+	NormalizedPath     string
+	LogicalSize        int64
+	SizeKnown          bool
+	ReclaimableSize    int64
+	Regenerable        bool
+	SystemManaged      bool
+	LastModifiedAt     *time.Time
+	LastObservedAt     time.Time
+	Risk               RiskLevel
+	CleanupDisposition CleanupDisposition
+	RiskImpact         int
+	RiskLikelihood     int
+	RiskRecoverability int
+	RiskUncertainty    int
 	// Confidence is analysis-coverage confidence (0-100), not a real
 	// probability. See EvidenceKind weighting in evidence.go.
 	Confidence int

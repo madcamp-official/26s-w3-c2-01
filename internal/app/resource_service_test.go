@@ -86,6 +86,7 @@ func TestResourceServiceSetsMeasuredSizeReclaimableForSafeArtifact(t *testing.T)
 			ReparsePointFree:          true,
 			GitTrackedOriginalsAbsent: true,
 		},
+		ProjectScoped: true,
 	})
 	if err != nil {
 		t.Fatalf("Observe() error = %v", err)

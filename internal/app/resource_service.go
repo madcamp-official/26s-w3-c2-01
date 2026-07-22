@@ -33,6 +33,13 @@ type ResourceObservation struct {
 type ResourceObservationInput struct {
 	Resource domain.Resource
 	Cleanup  CleanupEvidence
+	// ProjectScoped marks resources that go through project-ownership
+	// cleanup verification (node_modules, build outputs, venvs, ...).
+	// System-wide resources (SDKs, IDEs, global caches) leave this false:
+	// PhaseDiscoverSystemResources never attempts cleanup verification
+	// for them, so their Ownership/Regenerability/PathSafety axes are not
+	// applicable rather than failed (see confidenceProfile).
+	ProjectScoped bool
 }
 
 // ResourceService enriches one adapter-detected resource with filesystem and
@@ -95,7 +102,7 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 	}
 	detected.SystemManaged = classification.SystemManaged
 	cleanup := enrichCleanupEvidence(ctx, displayPath, input.Cleanup)
-	detected.ConfidenceProfile = confidenceProfile(detected, cleanup)
+	detected.ConfidenceProfile = confidenceProfile(detected, cleanup, input.ProjectScoped)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
@@ -184,12 +191,47 @@ func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID str
 	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons()}, nil
 }
 
-func confidenceProfile(resource domain.Resource, cleanup CleanupEvidence) domain.ConfidenceProfile {
+// notApplicableAxes are the axes system-wide resources never collect
+// evidence for: PhaseDiscoverSystemResources reports SDKs, IDEs, and global
+// caches without running cleanup verification against them, so their
+// Ownership/Regenerability/PathSafety claims are all Unknown by
+// construction, not by finding. Treating that as a genuine 0 would make
+// Overall() collapse to 0 for every system resource regardless of how well
+// understood it actually is (see docs/libra_integration_contracts.md §20.2).
+var notApplicableAxes = []domain.ConfidenceAxis{domain.AxisOwnership, domain.AxisRegenerability, domain.AxisPathSafety}
+
+func confidenceProfile(resource domain.Resource, cleanup CleanupEvidence, projectScoped bool) domain.ConfidenceProfile {
 	// Dependency and scan coverage are conservative compatibility baselines
 	// until the orchestrator maps its per-run UnverifiedScope collection into
 	// resource-specific scores. They meet, but never exceed, the auto-plan
 	// gate; any explicit lower score blocks automatic selection.
 	now := resource.LastObservedAt
+	profile := domain.ConfidenceProfile{
+		ModelVersion:   1,
+		Classification: resource.Confidence,
+		Dependency:     minimumAutoDependencyConfidence,
+		ScanCoverage:   minimumAutoScanCoverage,
+		Freshness:      100,
+	}
+	assessments := []domain.ConfidenceAssessment{
+		scalarAssessment(domain.AxisClassification, resource.Confidence, domain.ConfidenceKnown),
+		scalarAssessment(domain.AxisDependency, minimumAutoDependencyConfidence, domain.ConfidencePartial),
+		scalarAssessment(domain.AxisScanCoverage, minimumAutoScanCoverage, domain.ConfidencePartial),
+		scalarAssessment(domain.AxisFreshness, 100, domain.ConfidenceKnown),
+	}
+
+	if !projectScoped {
+		profile.Ownership, profile.Regenerability, profile.PathSafety = 100, 100, 100
+		profile.NotApplicable = notApplicableAxes
+		assessments = append(assessments,
+			scalarAssessment(domain.AxisOwnership, 100, domain.ConfidenceNotApplicable),
+			scalarAssessment(domain.AxisRegenerability, 100, domain.ConfidenceNotApplicable),
+			scalarAssessment(domain.AxisPathSafety, 100, domain.ConfidenceNotApplicable),
+		)
+		profile.Assessments = assessments
+		return profile
+	}
+
 	verification := cleanup.Normalize()
 	evidence := []domain.Evidence{
 		confidenceEvidence("ownership", domain.ClaimProjectOwnership, verification.ProjectOwned),
@@ -209,25 +251,10 @@ func confidenceProfile(resource domain.Resource, cleanup CleanupEvidence) domain
 		domain.ClaimOutputDeclared, domain.ClaimBuildCommandKnown, domain.ClaimInputsAvailable, domain.ClaimToolchainAvailable,
 	}, evidence, now)
 	pathSafety := AssessAxis(domain.AxisPathSafety, []domain.ClaimType{domain.ClaimPathNotLinked, domain.ClaimNoTrackedOriginals}, evidence, now)
-	profile := domain.ConfidenceProfile{
-		ModelVersion:   1,
-		Classification: resource.Confidence,
-		Ownership:      ownership.Score,
-		Dependency:     minimumAutoDependencyConfidence,
-		Regenerability: regenerability.Score,
-		PathSafety:     pathSafety.Score,
-		ScanCoverage:   minimumAutoScanCoverage,
-		Freshness:      100,
-		Assessments: []domain.ConfidenceAssessment{
-			scalarAssessment(domain.AxisClassification, resource.Confidence, domain.ConfidenceKnown),
-			ownership,
-			scalarAssessment(domain.AxisDependency, minimumAutoDependencyConfidence, domain.ConfidencePartial),
-			regenerability,
-			pathSafety,
-			scalarAssessment(domain.AxisScanCoverage, minimumAutoScanCoverage, domain.ConfidencePartial),
-			scalarAssessment(domain.AxisFreshness, 100, domain.ConfidenceKnown),
-		},
-	}
+	profile.Ownership = ownership.Score
+	profile.Regenerability = regenerability.Score
+	profile.PathSafety = pathSafety.Score
+	profile.Assessments = append(assessments, ownership, regenerability, pathSafety)
 	return profile
 }
 

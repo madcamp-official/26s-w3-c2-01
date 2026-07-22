@@ -14,15 +14,33 @@ type ConfidenceProfile struct {
 	ScanCoverage   int                    `json:"scan_coverage"`
 	Freshness      int                    `json:"freshness"`
 	Assessments    []ConfidenceAssessment `json:"assessments,omitempty"`
+	// NotApplicable lists axes this resource category never collects
+	// evidence for (e.g. Ownership/Regenerability/PathSafety for
+	// system-wide resources such as SDKs and global caches, which
+	// PhaseDiscoverSystemResources never runs cleanup verification
+	// against). Overall() and CleanupSummary() skip these axes instead of
+	// letting their neutral placeholder score participate in the min --
+	// "never evaluated" must not read the same as "evaluated and bad".
+	NotApplicable []ConfidenceAxis `json:"not_applicable,omitempty"`
+}
+
+func (p ConfidenceProfile) applicable(axis ConfidenceAxis) bool {
+	for _, a := range p.NotApplicable {
+		if a == axis {
+			return false
+		}
+	}
+	return true
 }
 
 type ConfidenceStatus string
 
 const (
-	ConfidenceKnown      ConfidenceStatus = "KNOWN"
-	ConfidencePartial    ConfidenceStatus = "PARTIAL"
-	ConfidenceUnknown    ConfidenceStatus = "UNKNOWN"
-	ConfidenceConflicted ConfidenceStatus = "CONFLICTED"
+	ConfidenceKnown         ConfidenceStatus = "KNOWN"
+	ConfidencePartial       ConfidenceStatus = "PARTIAL"
+	ConfidenceUnknown       ConfidenceStatus = "UNKNOWN"
+	ConfidenceConflicted    ConfidenceStatus = "CONFLICTED"
+	ConfidenceNotApplicable ConfidenceStatus = "NOT_APPLICABLE"
 )
 
 type ConfidenceAxis string
@@ -71,17 +89,25 @@ func (p ConfidenceProfile) CleanupSummary() ConfidenceSummary {
 		{AxisScanCoverage, p.ScanCoverage},
 		{AxisFreshness, p.Freshness},
 	}
-	summary := ConfidenceSummary{Overall: values[0].score, LimitingAxis: values[0].axis, Status: ConfidenceKnown}
-	for _, value := range values[1:] {
-		if value.score < summary.Overall {
+	summary := ConfidenceSummary{Overall: 100, LimitingAxis: values[0].axis, Status: ConfidenceKnown}
+	found := false
+	for _, value := range values {
+		if !p.applicable(value.axis) {
+			continue
+		}
+		if !found || value.score < summary.Overall {
 			summary.Overall, summary.LimitingAxis = value.score, value.axis
+			found = true
 		}
 	}
 	if p.ModelVersion == 0 || len(p.Assessments) == 0 {
 		summary.Status = ConfidencePartial
 	}
-	summary.Eligible = p.Classification > 0 && p.Dependency >= 80 && p.Ownership >= 90 &&
-		p.Regenerability >= 90 && p.PathSafety >= 90 && p.ScanCoverage >= 80 && p.Freshness >= 80
+	summary.Eligible = p.Classification > 0 && p.Dependency >= 80 && p.Freshness >= 80 &&
+		(!p.applicable(AxisOwnership) || p.Ownership >= 90) &&
+		(!p.applicable(AxisRegenerability) || p.Regenerability >= 90) &&
+		(!p.applicable(AxisPathSafety) || p.PathSafety >= 90) &&
+		(!p.applicable(AxisScanCoverage) || p.ScanCoverage >= 80)
 	return summary
 }
 
@@ -92,11 +118,27 @@ func (p ConfidenceProfile) IsZero() bool {
 }
 
 func (p ConfidenceProfile) Overall() int {
-	values := []int{p.Classification, p.Ownership, p.Dependency, p.Regenerability, p.PathSafety, p.ScanCoverage, p.Freshness}
-	overall := values[0]
-	for _, value := range values[1:] {
-		if value < overall {
-			overall = value
+	values := []struct {
+		axis  ConfidenceAxis
+		score int
+	}{
+		{AxisClassification, p.Classification},
+		{AxisOwnership, p.Ownership},
+		{AxisDependency, p.Dependency},
+		{AxisRegenerability, p.Regenerability},
+		{AxisPathSafety, p.PathSafety},
+		{AxisScanCoverage, p.ScanCoverage},
+		{AxisFreshness, p.Freshness},
+	}
+	overall := 100
+	found := false
+	for _, value := range values {
+		if !p.applicable(value.axis) {
+			continue
+		}
+		if !found || value.score < overall {
+			overall = value.score
+			found = true
 		}
 	}
 	return overall

@@ -14,7 +14,7 @@ func TestConfidenceProfileConnectsCleanupFactsToClaimAssessments(t *testing.T) {
 	}, CleanupEvidence{
 		ProjectOwned: true, KnownOutputPath: true,
 		ReparsePointFree: true, GitTrackedOriginalsAbsent: true,
-	})
+	}, true)
 	if profile.ModelVersion != 1 || len(profile.Assessments) != 7 {
 		t.Fatalf("profile = %#v, want version 1 with seven assessments", profile)
 	}
@@ -29,7 +29,7 @@ func TestConfidenceProfileConnectsCleanupFactsToClaimAssessments(t *testing.T) {
 func TestConfidenceProfileLeavesUnverifiedPathSafetyUnknown(t *testing.T) {
 	profile := confidenceProfile(domain.Resource{Confidence: 95, Regenerable: true, LastObservedAt: time.Now()}, CleanupEvidence{
 		ProjectOwned: true, KnownOutputPath: true,
-	})
+	}, true)
 	if profile.PathSafety != 0 || profile.CleanupSummary().Eligible {
 		t.Fatalf("profile = %#v, want unknown path safety and ineligible cleanup", profile)
 	}

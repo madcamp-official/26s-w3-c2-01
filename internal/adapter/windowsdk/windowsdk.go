@@ -147,5 +147,10 @@ func newResource(resourceType domain.ResourceType, version, name, path string) (
 		Type:        resourceType,
 		Version:     version,
 		DisplayPath: displayPath,
+		// Declared: detected by listing a well-known, conventional install
+		// path (Windows Kits root), same tier as android-sdk's
+		// cachepath.Resource. Not set previously, which left Classification
+		// (and thus Overall()) at 0 for every windows-sdk/netfx-sdk resource.
+		Confidence: domain.DefaultConfidence[domain.EvidenceDeclared],
 	}, nil
 }

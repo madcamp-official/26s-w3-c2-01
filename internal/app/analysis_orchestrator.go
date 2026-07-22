@@ -237,7 +237,7 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 	// an explicit OWNS edge below.
 	projectResourceFacts := make([]ResourceObservationInput, 0, len(projectResourceCandidates))
 	for _, candidate := range projectResourceCandidates {
-		projectResourceFacts = append(projectResourceFacts, ResourceObservationInput{Resource: candidate.Resource, Cleanup: candidate.Cleanup})
+		projectResourceFacts = append(projectResourceFacts, ResourceObservationInput{Resource: candidate.Resource, Cleanup: candidate.Cleanup, ProjectScoped: true})
 	}
 	if err := o.observeResourceFacts(ctx, &result, projectResourceFacts); err != nil {
 		return o.fail(ctx, result, record, fmt.Errorf("observe project resource: %w", err))

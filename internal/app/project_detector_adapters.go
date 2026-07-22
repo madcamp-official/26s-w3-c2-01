@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	cocoapodsadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/cocoapods"
 	condaadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
@@ -425,14 +426,6 @@ func msbuildRegenerationCommand(project domain.BuildProject) string {
 // or under it -- alongside the ProjectOwned fact every project-owned build
 // artifact already carries just by being found under projectRoot.
 //
-// KnownOutputPath is true unconditionally for node_modules: npm/Yarn/pnpm
-// never let a project customize where it lives, so its location is known
-// regardless of how confident the *regenerability* evidence (the lockfile
-// check) is. Every other resource type only counts as KnownOutputPath when
-// its Confidence is at least DECLARED-strength -- i.e. DetectArtifacts found
-// it via a real declared OutputPath/OutDir-family property, not just a bin/
-// obj/dist name that happened to match (see msbuild/artifacts.go).
-//
 // A check that fails (can't stat the path, no git binary, etc.) is reported
 // as an Issue and leaves the corresponding evidence field unverified
 // (false), never guessed true -- CleanupEvidence.complete() requires an
@@ -440,7 +433,7 @@ func msbuildRegenerationCommand(project domain.BuildProject) string {
 func projectArtifactCleanupEvidence(ctx context.Context, projectRoot string, resource domain.Resource) (CleanupEvidence, []Issue) {
 	evidence := CleanupEvidence{
 		ProjectOwned:    true,
-		KnownOutputPath: resource.Type == domain.ResourceTypeNodeModules || resource.Confidence >= domain.DefaultConfidence[domain.EvidenceDeclared],
+		KnownOutputPath: knownOutputPath(resource),
 	}
 	var issues []Issue
 
@@ -469,6 +462,55 @@ func projectArtifactCleanupEvidence(ctx context.Context, projectRoot string, res
 
 	return evidence, issues
 }
+
+// knownOutputPath reports whether resource's directory location is
+// trustworthy independent of Confidence tier. Some resource types/names have
+// a location fixed by the tool or language itself -- never a build-config
+// choice a project could redirect elsewhere -- so gating them on
+// regenerability Confidence conflates two different questions and produces a
+// false "unknown output path" even when every other fact about the resource
+// is known:
+//
+//   - node_modules (npm/Yarn/pnpm never let a project relocate it), Pods
+//     (CocoaPods), and a confirmed python-venv (found via pyvenv.cfg, not a
+//     name guess) are exempt outright.
+//   - fixedLocationNames covers build-output basenames unique to one
+//     ecosystem (python cache dirs, SwiftPM's .build) per
+//     docs/libra_integration_contracts.md §19.4 결정 6 and §19.9.
+//     Deliberately excluded: "build"/"dist", which both Node and Python use
+//     for their own build-output resources with contradictory trust (Python
+//     trusts by name alone, Node requires a confirmed build script) -- since
+//     domain.Resource doesn't record which ecosystem reported an entry,
+//     exempting these names would also wrongly trust a Node bundler's
+//     redirectable output dir.
+//
+// Everything else only counts once DetectArtifacts found a real declared
+// OutputPath/OutDir-family property, not just a name match (msbuild/
+// artifacts.go, node §19.3).
+func knownOutputPath(resource domain.Resource) bool {
+	switch resource.Type {
+	case domain.ResourceTypeNodeModules, domain.ResourceTypePods, domain.ResourceTypeVenv:
+		return true
+	}
+	if resource.Type == domain.ResourceTypeBuildOutput {
+		if fixedLocationNames[resource.Name] || strings.HasSuffix(resource.Name, eggInfoSuffix) {
+			return true
+		}
+	}
+	return resource.Confidence >= domain.DefaultConfidence[domain.EvidenceDeclared]
+}
+
+// fixedLocationNames are build-output basenames unique to one ecosystem, so
+// they can't collide with a different ecosystem's *configurable* directory
+// of the same name (see knownOutputPath).
+var fixedLocationNames = map[string]bool{
+	"__pycache__":   true,
+	".pytest_cache": true,
+	".mypy_cache":   true,
+	".build":        true,
+}
+
+const eggInfoSuffix = ".egg-info"
 
 func cleanupEvidenceIssue(path, operation string, err error) Issue {
 	return Issue{Code: IssueAdapterFailed, Phase: PhaseDiscoverProjects, Adapter: "cleanup-evidence",

@@ -100,5 +100,10 @@ func newVSResource(name, version, path string) (domain.Resource, error) {
 		Type:        domain.ResourceTypeVisualStudio,
 		Version:     version,
 		DisplayPath: displayPath,
+		// Observed: reported by actually running vswhere.exe (the official
+		// installer's own discovery tool), not just matching a conventional
+		// path. Not set previously, which left Classification (and thus
+		// Overall()) at 0 for every detected Visual Studio installation.
+		Confidence: domain.DefaultConfidence[domain.EvidenceObserved],
 	}, nil
 }

@@ -31,7 +31,7 @@
 | 2026-07-19 | `resources`/`explain`/`impact` 명령 구현 완료, README·명령어 상태표 동기화 |
 | 2026-07-20 (Day 4 리뷰 · Day 5) | Day 4 코드 리뷰(협업/계약/구조적 이슈 정리), cleanup evidence·위험도 정책(risk policy) 도입, cleanup plan snapshot 저장, `plan --target`/`clean`(dry-run) 구현, 같은 볼륨 quarantine·복구 transaction(`clean --execute`, `restore`) 완성 |
 | 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가, macOS 전용 개발 캐시 어댑터 5종(Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator, analysis-only) 추가, macOS 시스템 경로(`/System`/`/Library`/`/usr` 등) 보호 분류 추가, 실제 별도 APFS 볼륨과 권한 오류(chmod 000) 시나리오로 clean/restore 안전성 검증 |
-| 2026-07-22 | `.NET SDK` 탐지를 macOS/Linux까지 확장(`dotnet` CLI는 원래 크로스플랫폼이었음), Xcode(`.xcodeproj`)·Xcode Workspace(`.xcworkspace`)·SwiftPM(`Package.swift`) 프로젝트 탐지 추가, 프로젝트 소유 `Pods`/`.build` 산출물을 `node_modules`와 동일한 SAFE 경로로 연결, 활성 Xcode 자체를 `xcode-install` 시스템 리소스로 탐지, `.xcodeproj` 프로젝트 → 활성 Xcode REQUIRES 의존성 분석기 추가(macOS 프로젝트도 Windows SDK/MSBuild와 동급으로 `explain`/`impact`의 의존성·삭제 영향 분석 대상이 됨; SwiftPM은 어떤 Swift toolchain으로도 빌드 가능해 Xcode 의존으로 보지 않음) |
+| 2026-07-22 | `.NET SDK` 탐지를 macOS/Linux까지 확장(`dotnet` CLI는 원래 크로스플랫폼이었음), Xcode(`.xcodeproj`)·Xcode Workspace(`.xcworkspace`)·SwiftPM(`Package.swift`) 프로젝트 탐지 추가, 프로젝트 소유 `Pods`/`.build` 산출물을 `node_modules`와 동일한 SAFE 경로로 연결, 활성 Xcode 자체를 `xcode-install` 시스템 리소스로 탐지, `.xcodeproj` 프로젝트 → 활성 Xcode REQUIRES 의존성 분석기 추가(macOS 프로젝트도 Windows SDK/MSBuild와 동급으로 `explain`/`impact`의 의존성·삭제 영향 분석 대상이 됨; SwiftPM은 어떤 Swift toolchain으로도 빌드 가능해 Xcode 의존으로 보지 않음), 실제 NTFS 볼륨(junction/reparse point, `icacls` ACL 거부, 다른 프로세스가 잠근 파일, DB-파일시스템 불일치)을 대상으로 한 Windows 전용 e2e 테스트 추가로 `docs/libra_integration_contracts.md`의 "Windows 실제 volume junction/ACL 통합 테스트" 오픈 항목을 대부분 구현 완료 처리(hidden attribute 단독 케이스는 아직 미포함), 실제 `WINDIR`/`ProgramFiles`/`ProgramFiles(x86)` 환경변수 기반 시스템 경로 negative fixture로 `C:\Windows`·Program Files·Windows SDK·Visual Studio·.NET Runtime·Docker Volume이 항상 `BLOCKED`임을 검증 |
 
 ---
 
@@ -103,6 +103,7 @@
 - `restore`는 원본 위치가 비어 있을 때만 복구하며 기존 파일을 덮어쓰지 않는다.
 - `purge`는 격리 후 지정한 보존 기간(`quarantine_days`, 기본 7일)이 지난 항목만 대상이며 기본도 dry-run이다. **`purge --execute`만이 되돌릴 수 없는 유일한 명령이다.**
 - **미지원:** 시스템 구성요소(Windows SDK, Visual Studio 등) 직접 삭제, AI가 판단해서 자동으로 삭제하는 기능, 삭제 전 자동 빌드 검증.
+- **실제 파일시스템 검증(Windows):** `internal/safety/quarantine_windows_edgecases_test.go`·`internal/safety/cleanup_validator_windows_test.go`·`internal/app/cleanup_service_windows_edgecases_test.go`가 실제 NTFS junction(`mklink`), `icacls`로 접근 거부된 경로, 다른 프로세스가 배타적으로 잠근 파일, 격리 항목이 사라진 뒤의 DB-파일시스템 불일치, 여러 항목 중 일부만 실패하는 partial quarantine을 실제 I/O로 재현해 `CleanupValidator`/`QuarantineEngine`/`CleanupService.Execute`가 안전하게 실패·롤업하는지 검증한다(`//go:build windows`). hidden attribute 단독 케이스는 아직 다루지 않는다.
 
 ### 백그라운드 데몬 (`daemon` / `events`)
 

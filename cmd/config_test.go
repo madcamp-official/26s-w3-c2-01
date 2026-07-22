@@ -36,6 +36,33 @@ func TestConfigShowValidateAndSet(t *testing.T) {
 	}
 }
 
+func TestConfigSetExcludeStillProtectsSafetyDirectories(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath = filepath.Join(dir, ".libra.yaml")
+	t.Cleanup(func() { cfgPath = "" })
+	if err := config.Save(cfgPath, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := setConfig(configSetCmd, []string{"exclude", `C:\Windows,node_modules`}); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`C:\Windows`, "node_modules", "$RECYCLE.BIN", "System Volume Information"}
+	if len(loaded.Exclude) != len(want) {
+		t.Fatalf("Exclude = %#v, want %#v", loaded.Exclude, want)
+	}
+	for i := range want {
+		if loaded.Exclude[i] != want[i] {
+			t.Fatalf("Exclude = %#v, want %#v", loaded.Exclude, want)
+		}
+	}
+}
+
 func TestConfigSetRejectsUnsupportedKeyWithoutChangingFile(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath = filepath.Join(dir, ".libra.yaml")

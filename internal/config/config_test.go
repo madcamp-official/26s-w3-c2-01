@@ -62,6 +62,41 @@ func TestLoadWithoutExcludeKeepsDefaultExcludes(t *testing.T) {
 	}
 }
 
+func TestLoadCustomExcludeStillProtectsSafetyDirectories(t *testing.T) {
+	path := writeConfig(t, `
+version: 1
+exclude:
+  - 'C:\Windows'
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"C:\\Windows", "$RECYCLE.BIN", "System Volume Information"}
+	if len(cfg.Exclude) != len(want) {
+		t.Fatalf("Exclude = %#v, want %#v", cfg.Exclude, want)
+	}
+	for i := range want {
+		if cfg.Exclude[i] != want[i] {
+			t.Fatalf("Exclude = %#v, want %#v", cfg.Exclude, want)
+		}
+	}
+}
+
+func TestEnsureSafetyExcludesIsCaseInsensitiveAndIdempotent(t *testing.T) {
+	got := EnsureSafetyExcludes([]string{"node_modules", "$recycle.bin"})
+	want := []string{"node_modules", "$recycle.bin", "System Volume Information"}
+	if len(got) != len(want) {
+		t.Fatalf("EnsureSafetyExcludes() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("EnsureSafetyExcludes() = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestLoadRejectsUnknownFields(t *testing.T) {
 	path := writeConfig(t, "version: 1\nunknown: true\n")
 

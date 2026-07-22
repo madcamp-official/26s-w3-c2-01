@@ -52,7 +52,7 @@ func setConfig(cmd *cobra.Command, args []string) error {
 	case "project_roots":
 		cfg.ProjectRoots = splitConfigList(value)
 	case "exclude":
-		cfg.Exclude = splitConfigList(value)
+		cfg.Exclude = config.EnsureSafetyExcludes(splitConfigList(value))
 	case "scan.max_depth":
 		cfg.Scan.MaxDepth, err = positiveInt()
 	case "scan.stale_days":

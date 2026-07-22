@@ -6,11 +6,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
 
 const CurrentVersion = 1
+
+// safetyExcludes are the entries in defaultExcludes that guard against real
+// harm (resurfacing deleted data as if it were an active project), not just
+// against misdetecting vendored/generated directories as projects. Unlike
+// the rest of defaultExcludes, a user-supplied exclude list must never be
+// able to drop these -- see EnsureSafetyExcludes, which Load and `config set
+// exclude` both call because YAML/CLI exclude overrides replace the list
+// wholesale rather than merging with it.
+var safetyExcludes = []string{"$RECYCLE.BIN", "System Volume Information"}
 
 var defaultExcludes = []string{
 	"node_modules",
@@ -50,6 +60,28 @@ var defaultExcludes = []string{
 	// ships a package.json per package that isn't an npm manifest; excluding
 	// the directory keeps the walker from ever reaching those files.
 	"PackageCache",
+}
+
+// EnsureSafetyExcludes appends any safetyExcludes missing from excludes.
+// Callers that accept a fully user-supplied exclude list (config.Load,
+// `libra config set exclude`) must run it through here so that list can
+// never drop Windows trash/system directory protection, even though it
+// otherwise replaces defaultExcludes wholesale rather than merging with it.
+func EnsureSafetyExcludes(excludes []string) []string {
+	result := excludes
+	for _, safe := range safetyExcludes {
+		found := false
+		for _, existing := range excludes {
+			if strings.EqualFold(existing, safe) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, safe)
+		}
+	}
+	return result
 }
 
 type Config struct {
@@ -101,6 +133,7 @@ func Load(path string) (Config, error) {
 	if err := decoder.Decode(&cfg); err != nil {
 		return Config{}, fmt.Errorf("decode config %q: %w", path, err)
 	}
+	cfg.Exclude = EnsureSafetyExcludes(cfg.Exclude)
 
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {

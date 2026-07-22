@@ -15,13 +15,6 @@ func renderRiskReasons(w io.Writer, reasons []domain.RiskReason) {
 	fmt.Fprintf(w, "Reason: %s\n", riskReasonMessages(reasons))
 }
 
-func renderRiskReasonsIndented(w io.Writer, reasons []domain.RiskReason) {
-	if len(reasons) == 0 {
-		return
-	}
-	fmt.Fprintf(w, "    Reason: %s\n", riskReasonMessages(reasons))
-}
-
 func riskReasonMessages(reasons []domain.RiskReason) string {
 	messages := make([]string, 0, len(reasons))
 	for _, reason := range reasons {

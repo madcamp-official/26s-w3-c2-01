@@ -248,6 +248,58 @@ func TestBuildPlanViewSafeUsesResourceDisplayPathNotSnapshotNormalizedPath(t *te
 	}
 }
 
+// TestPlanCommandAcceptsRiskFlagCaseInsensitively is a regression test:
+// validatePlanRiskFilter used to lowercase the --risk argument but compare
+// it against domain.RiskSafe/RiskReview/RiskBlocked's uppercase string
+// values, so no case of a genuinely valid --risk value (not even the exact
+// "safe"/"review"/"blocked" this command's own --help example uses) was
+// ever accepted -- every invocation fell through to the "invalid --risk"
+// error. showRisk's display filter a few lines below already compared
+// case-insensitively via strings.EqualFold; validatePlanRiskFilter now does
+// the same instead of ToLower-against-uppercase-constants.
+func TestPlanCommandAcceptsRiskFlagCaseInsensitively(t *testing.T) {
+	scanRoot = ""
+	jsonOutput = false
+	cfgPath = ""
+	planTarget = ""
+	planProject = ""
+	t.Cleanup(func() { planRisk = "" })
+	previousResourceDetectors := resourceDetectors
+	resourceDetectors = func() []app.ResourceDetector { return nil }
+	t.Cleanup(func() { resourceDetectors = previousResourceDetectors })
+
+	fixture, err := filepath.Abs("../testdata/node")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	for _, raw := range []string{"safe", "SAFE", "Safe", "review", "REVIEW", "blocked", "BLOCKED"} {
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs([]string{"plan", "--risk", raw})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(plan --risk %s) error = %v; output=%s", raw, err, out)
+		}
+	}
+}
+
 func TestPlanCommandRejectsInvalidRiskFlag(t *testing.T) {
 	scanRoot = ""
 	jsonOutput = false

@@ -2,17 +2,16 @@ Plan ID: <plan-id>
 Target: unlimited
 Selected: <size>
 
+SAFE    0 items  <size>    auto-selected
+REVIEW  5 items  <size>  needs your review
+
 SAFE
 (none)
 
 REVIEW
-[1] <size> <NODE_FIXTURE>/basic/dist
-    Reason: cleanup safety has not been fully verified
-[2] <size> <NODE_FIXTURE>/basic/node_modules
-    Reason: cleanup safety has not been fully verified
-[3] <size> <NODE_FIXTURE>/missing-lockfile/node_modules
-    Reason: cleanup safety has not been fully verified
-[4] <size> <NODE_FIXTURE>/workspace-npm/node_modules
-    Reason: cleanup safety has not been fully verified
-[5] <size> <NODE_FIXTURE>/workspace-npm/packages/app-b/node_modules
-    Reason: cleanup safety has not been fully verified
+Reason: cleanup safety has not been fully verified (5 items, <size>)
+- <size>  <NODE_FIXTURE>/workspace-npm/node_modules
+- <size>  <NODE_FIXTURE>/basic/node_modules
+- <size>  <NODE_FIXTURE>/missing-lockfile/node_modules
+- <size>  <NODE_FIXTURE>/workspace-npm/packages/app-b/node_modules
+- <size>  <NODE_FIXTURE>/basic/dist

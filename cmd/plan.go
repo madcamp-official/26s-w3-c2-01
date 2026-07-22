@@ -108,12 +108,11 @@ func parsePlanTarget(raw string) (int64, error) {
 }
 
 func validatePlanRiskFilter(raw string) error {
-	switch strings.ToLower(raw) {
-	case "", string(domain.RiskSafe), string(domain.RiskReview), string(domain.RiskBlocked):
+	if raw == "" || strings.EqualFold(raw, string(domain.RiskSafe)) ||
+		strings.EqualFold(raw, string(domain.RiskReview)) || strings.EqualFold(raw, string(domain.RiskBlocked)) {
 		return nil
-	default:
-		return fmt.Errorf("invalid --risk %q: must be one of safe, review, blocked", raw)
 	}
+	return fmt.Errorf("invalid --risk %q: must be one of safe, review, blocked", raw)
 }
 
 // buildPlanView assembles output.PlanView from a PlanResult, applying the

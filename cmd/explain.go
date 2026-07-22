@@ -11,13 +11,36 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// explainImpactLabels maps an impact scope to the sentence-style label used
+// explainImpactLabel returns the sentence-style label for one impact scope
 // in `libra explain`'s "Expected impact" section (F-07 in
-// docs/libra_cli_commands_and_schedule.md's example output).
-var explainImpactLabels = map[domain.ImpactScope]string{
-	domain.ImpactScopeRun:   "Existing executable launch",
-	domain.ImpactScopeBuild: "Rebuild",
-	domain.ImpactScopeDebug: "Visual Studio debugging",
+// docs/libra_cli_commands_and_schedule.md's example output). RUN and BUILD
+// are IDE-neutral ("Existing executable launch", "Rebuild"), but DEBUG names
+// a specific IDE only for resource types where that IDE is unambiguous --
+// a Windows/.NET SDK always implies Visual Studio, a CocoaPods Pods/
+// directory or the active Xcode install always implies Xcode -- and falls
+// back to the neutral "IDE debugging" for resource types (build-output,
+// node_modules, ...) that are shared across ecosystems and don't imply any
+// one editor. Previously this was a single fixed "Visual Studio debugging"
+// label regardless of resource type, which showed up verbatim even when
+// explaining a Node or Xcode resource on macOS.
+func explainImpactLabel(scope domain.ImpactScope, resourceType domain.ResourceType) string {
+	switch scope {
+	case domain.ImpactScopeRun:
+		return "Existing executable launch"
+	case domain.ImpactScopeBuild:
+		return "Rebuild"
+	case domain.ImpactScopeDebug:
+		switch resourceType {
+		case domain.ResourceTypeWindowsSDK, domain.ResourceTypeNetFXSDK, domain.ResourceTypeVisualStudio, domain.ResourceTypeMSBuild, domain.ResourceTypeDotNetSDK:
+			return "Visual Studio debugging"
+		case domain.ResourceTypeXcodeInstall, domain.ResourceTypePods:
+			return "Xcode debugging"
+		default:
+			return "IDE debugging"
+		}
+	default:
+		return string(scope)
+	}
 }
 
 // explainCmd represents the explain command.
@@ -111,7 +134,7 @@ func renderResourceExplanation(cmd *cobra.Command, service *app.ExplainService, 
 				level = a.Level
 			}
 		}
-		line := output.ExplainImpactLine{Label: explainImpactLabels[scope], Scope: scope, Level: level}
+		line := output.ExplainImpactLine{Label: explainImpactLabel(scope, resource.Type), Scope: scope, Level: level}
 		if scope == domain.ImpactScopeDebug && level == domain.ImpactLevelHigh {
 			line.Note = "when rebuild occurs"
 		}

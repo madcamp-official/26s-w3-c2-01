@@ -39,6 +39,7 @@ func TestExplainCommandDescribesResourceWithEvidence(t *testing.T) {
 		"Evidence: DECLARED",
 		"Property: WindowsTargetPlatformVersion",
 		"Rebuild: HIGH",
+		"Visual Studio debugging: HIGH",
 		"Risk: BLOCKED",
 		"Confidence: 75%",
 		"Recovery:",
@@ -132,11 +133,52 @@ func TestExplainCommandShowsImpactForOwnedResource(t *testing.T) {
 	for _, want := range []string{
 		"Existing executable launch: LOW",
 		"Rebuild: HIGH",
-		"Visual Studio debugging: HIGH",
+		// Not "Visual Studio debugging" -- node_modules isn't a Visual
+		// Studio/MSBuild resource, so the DEBUG label must stay neutral.
+		"IDE debugging: HIGH",
 	} {
 		if !bytes.Contains(out.Bytes(), []byte(want)) {
 			t.Fatalf("explain output missing %q (owned node_modules should get a real impact judgment, not UNKNOWN):\n%s", want, out)
 		}
+	}
+}
+
+// TestExplainCommandLabelsDebugByEcosystem locks down that the DEBUG scope's
+// label follows the resource's own ecosystem instead of the old fixed
+// "Visual Studio debugging" text -- a CocoaPods Pods/ directory always
+// implies Xcode, never Visual Studio, so explaining it on macOS must not
+// show a Windows-IDE-specific label.
+func TestExplainCommandLabelsDebugByEcosystem(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+
+	fixture, err := filepath.Abs("../testdata/xcode")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	out := run("explain", filepath.Join(fixture, "basic", "Pods"))
+	if !bytes.Contains(out.Bytes(), []byte("Xcode debugging: HIGH")) {
+		t.Fatalf("explain output missing %q:\n%s", "Xcode debugging: HIGH", out)
+	}
+	if bytes.Contains(out.Bytes(), []byte("Visual Studio")) {
+		t.Fatalf("explain output for a CocoaPods resource must not mention Visual Studio:\n%s", out)
 	}
 }
 

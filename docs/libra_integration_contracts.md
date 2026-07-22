@@ -642,6 +642,8 @@ type RiskAssessment struct {
 
 `libra impact`(cmd/impact.go)는 의도적으로 범위 밖이다 — "Affected projects"는 리소스 하나가 여러 프로젝트에 걸쳐 미치는 영향(교차 프로젝트 blast radius, REQUIRES 전용)을 답하도록 설계돼 있고, 프로젝트가 소유한 산출물 자기 자신의 삭제 영향은 `explain`의 "Used by → Owns" 섹션이 이미 별도로 보여준다. `cmd/impact.go`의 edge 필터는 `RelationRequires`로 그대로 유지하며, `TestImpactCommandNoDependentsIsZero`(cmd/impact_test.go)도 변경하지 않았다.
 
+**DEBUG 라벨(2026-07-22, 2차)**: `cmd/explain.go`의 `explainImpactLabel(scope, resourceType)`이 DEBUG 줄의 문구를 리소스 타입별로 고른다 — 이전에는 `explainImpactLabels`가 스코프별 고정 map이라 DEBUG는 리소스 종류와 무관하게 항상 `"Visual Studio debugging"`이었다. Windows SDK/.NET SDK/Visual Studio/MSBuild류만 그 문구를 유지하고, `Pods`·활성 Xcode처럼 Xcode가 유일하게 성립하는 타입은 `"Xcode debugging"`, 나머지(여러 생태계가 공유하는 `build-output`, `node-modules` 등)는 중립적인 `"IDE debugging"`을 쓴다. RUN/BUILD 라벨은 원래부터 IDE 중립적이라(`"Existing executable launch"`/`"Rebuild"`) 변경하지 않았다. `libra impact`(internal/output/impact.go의 `ImpactPhrase`)는 애초에 스코프 이름(`RUN`/`BUILD`/`DEBUG`)만 그대로 찍고 이런 문장형 라벨을 쓰지 않아 이 변경과 무관하다.
+
 
 
 allowlist basename:

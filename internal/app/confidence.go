@@ -40,6 +40,14 @@ func ApplyFreshness(resource domain.Resource, now time.Time) domain.Resource {
 		}
 	}
 	resource.ConfidenceProfile.Freshness = FreshnessScore(resource.LastObservedAt, now)
+	for index := range resource.ConfidenceProfile.Assessments {
+		if resource.ConfidenceProfile.Assessments[index].Axis == domain.AxisFreshness {
+			resource.ConfidenceProfile.Assessments[index].Score = resource.ConfidenceProfile.Freshness
+			if resource.ConfidenceProfile.Freshness < minimumAutoFreshness {
+				resource.ConfidenceProfile.Assessments[index].Status = domain.ConfidencePartial
+			}
+		}
+	}
 	resource.Confidence = resource.ConfidenceProfile.Overall()
 	if resource.Risk == domain.RiskSafe && resource.ConfidenceProfile.Freshness < minimumAutoFreshness {
 		resource.Risk = domain.RiskReview

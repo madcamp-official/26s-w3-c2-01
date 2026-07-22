@@ -1,6 +1,7 @@
 ALTER TABLE resources ADD COLUMN confidence_regenerability INTEGER NOT NULL DEFAULT 0 CHECK (confidence_regenerability BETWEEN 0 AND 100);
 ALTER TABLE resources ADD COLUMN confidence_path_safety INTEGER NOT NULL DEFAULT 0 CHECK (confidence_path_safety BETWEEN 0 AND 100);
 ALTER TABLE resources ADD COLUMN confidence_assessments TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE resources ADD COLUMN confidence_model_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE resources ADD COLUMN cleanup_disposition TEXT NOT NULL DEFAULT 'MANUAL_REVIEW';
 ALTER TABLE resources ADD COLUMN risk_impact INTEGER NOT NULL DEFAULT 0 CHECK (risk_impact BETWEEN 0 AND 100);
 ALTER TABLE resources ADD COLUMN risk_likelihood INTEGER NOT NULL DEFAULT 0 CHECK (risk_likelihood BETWEEN 0 AND 100);

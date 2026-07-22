@@ -34,6 +34,7 @@ type ResourceLine struct {
 	RiskUncertainty    int                       `json:"risk_uncertainty"`
 	Confidence         int                       `json:"confidence"`
 	ConfidenceProfile  domain.ConfidenceProfile  `json:"confidence_profile"`
+	ConfidenceSummary  domain.ConfidenceSummary  `json:"confidence_summary"`
 	RiskReasons        []domain.RiskReason       `json:"risk_reasons,omitempty"`
 }
 

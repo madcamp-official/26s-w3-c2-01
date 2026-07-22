@@ -95,11 +95,7 @@ func (s *PlanService) Build(ctx context.Context, opts PlanOptions) (PlanResult, 
 		profile := effectiveConfidenceProfile(r)
 		switch r.Risk {
 		case domain.RiskSafe:
-			if profile.Dependency >= minimumAutoDependencyConfidence &&
-				profile.Regenerability >= minimumAutoCleanupConfidence &&
-				profile.PathSafety >= minimumAutoCleanupConfidence &&
-				profile.ScanCoverage >= minimumAutoScanCoverage &&
-				profile.Freshness >= minimumAutoFreshness {
+			if profile.CleanupSummary().Eligible {
 				safe = append(safe, r)
 			} else {
 				review = append(review, r)

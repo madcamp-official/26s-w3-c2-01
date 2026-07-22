@@ -31,11 +31,33 @@ type DependencyImpact struct {
 // project artifact may be classified SAFE. Zero values mean unverified, not
 // false evidence.
 type CleanupEvidence struct {
+	// Deprecated: use Verification. These fields remain for adapter migration.
 	ProjectOwned              bool
 	KnownOutputPath           bool
 	ReparsePointFree          bool
 	GitTrackedOriginalsAbsent bool
 	Verification              CleanupVerification
+}
+
+func (e CleanupEvidence) Normalize() CleanupVerification {
+	result := e.Verification
+	result.ProjectOwned = normalizeFact(result.ProjectOwned, e.ProjectOwned)
+	result.KnownOutputPath = normalizeFact(result.KnownOutputPath, e.KnownOutputPath)
+	result.ReparsePointFree = normalizeFact(result.ReparsePointFree, e.ReparsePointFree)
+	result.GitTrackedOriginalsAbsent = normalizeFact(result.GitTrackedOriginalsAbsent, e.GitTrackedOriginalsAbsent)
+	return result
+}
+
+func normalizeFact(fact domain.VerifiedFact, legacy bool) domain.VerifiedFact {
+	if fact.Status != "" {
+		return fact
+	}
+	if legacy {
+		fact.Status = domain.VerifiedTrue
+	} else {
+		fact.Status = domain.Unverified
+	}
+	return fact
 }
 
 type CleanupVerification struct {
@@ -46,13 +68,11 @@ type CleanupVerification struct {
 }
 
 func (e CleanupEvidence) complete() bool {
-	if e.Verification != (CleanupVerification{}) {
-		return e.Verification.ProjectOwned.Status == domain.VerifiedTrue &&
-			e.Verification.KnownOutputPath.Status == domain.VerifiedTrue &&
-			e.Verification.ReparsePointFree.Status == domain.VerifiedTrue &&
-			e.Verification.GitTrackedOriginalsAbsent.Status == domain.VerifiedTrue
-	}
-	return e.ProjectOwned && e.KnownOutputPath && e.ReparsePointFree && e.GitTrackedOriginalsAbsent
+	verification := e.Normalize()
+	return verification.ProjectOwned.Status == domain.VerifiedTrue &&
+		verification.KnownOutputPath.Status == domain.VerifiedTrue &&
+		verification.ReparsePointFree.Status == domain.VerifiedTrue &&
+		verification.GitTrackedOriginalsAbsent.Status == domain.VerifiedTrue
 }
 
 type RiskAssessment struct {
@@ -118,10 +138,28 @@ func (DefaultRiskPolicy) Classify(context ResourceContext) RiskAssessment {
 			Blockers: []domain.RiskReason{{Code: "SYSTEM_MANAGED", Severity: domain.RiskReasonBlocker, Message: "resource is inside an operating-system managed path"}},
 		}
 	}
-	if context.RequiredByProject && !(context.Resource.Regenerable && isProjectLocalArtifact(context.Resource.Type)) {
+	hasDependency := context.RequiredByProject || context.DependencyImpact.RequiredByProjects > 0
+	projectLocalRecoverable := context.Resource.Regenerable && isProjectLocalArtifact(context.Resource.Type) &&
+		(context.DependencyImpact.RequiredByProjects == 0 || context.DependencyImpact.Recoverable)
+	if hasDependency && !projectLocalRecoverable &&
+		(context.DependencyImpact.ActiveProjects > 0 || context.DependencyImpact.RequiredByProjects == 0) &&
+		context.DependencyImpact.RelationStrength.Status != domain.ConfidencePartial &&
+		context.DependencyImpact.RelationStrength.Status != domain.ConfidenceUnknown {
 		return RiskAssessment{
 			Level: domain.RiskBlocked, Disposition: domain.DispositionNeverDelete, Impact: 90, Likelihood: 80, Recoverability: 30, Confidence: context.Confidence,
 			Blockers: []domain.RiskReason{{Code: "REQUIRED_BY_PROJECT", Severity: domain.RiskReasonBlocker, Message: "a scanned project currently depends on this resource"}},
+		}
+	}
+	if hasDependency && !projectLocalRecoverable {
+		return RiskAssessment{
+			Level: domain.RiskReview, Disposition: domain.DispositionManualReview,
+			Impact: 70, Likelihood: 50, Recoverability: 50, Uncertainty: 60,
+			Confidence: context.Confidence,
+			Warnings: []domain.RiskReason{{
+				Code: "DEPENDENCY_IMPACT_REVIEW", Severity: domain.RiskReasonWarning,
+				Message: "dependency impact is inactive, inferred, or incompletely resolved; review before cleanup",
+				Axis:    domain.AxisDependency, Remediation: context.DependencyImpact.RecoveryAction,
+			}},
 		}
 	}
 	if len(context.CriticalUnknowns) > 0 {

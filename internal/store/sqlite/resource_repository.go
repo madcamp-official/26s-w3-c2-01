@@ -49,9 +49,9 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			last_modified_at, last_observed_at, risk, confidence, regeneration_command,
 			confidence_classification, confidence_ownership, confidence_dependency,
 			confidence_regenerability, confidence_path_safety, confidence_scan_coverage,
-			confidence_freshness, confidence_assessments, risk_reasons, cleanup_disposition,
+			confidence_freshness, confidence_assessments, confidence_model_version, risk_reasons, cleanup_disposition,
 			risk_impact, risk_likelihood, risk_recoverability, risk_uncertainty
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			resource_type = excluded.resource_type,
 			name = excluded.name,
@@ -76,6 +76,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 			confidence_scan_coverage = excluded.confidence_scan_coverage,
 			confidence_freshness = excluded.confidence_freshness,
 			confidence_assessments = excluded.confidence_assessments,
+			confidence_model_version = excluded.confidence_model_version,
 			risk_reasons = excluded.risk_reasons
 			,cleanup_disposition = excluded.cleanup_disposition
 			,risk_impact = excluded.risk_impact
@@ -91,7 +92,7 @@ func (r *ResourceRepository) Upsert(ctx context.Context, resource domain.Resourc
 		resource.ConfidenceProfile.Classification, resource.ConfidenceProfile.Ownership,
 		resource.ConfidenceProfile.Dependency, resource.ConfidenceProfile.Regenerability,
 		resource.ConfidenceProfile.PathSafety, resource.ConfidenceProfile.ScanCoverage,
-		resource.ConfidenceProfile.Freshness, string(confidenceAssessments), string(riskReasons),
+		resource.ConfidenceProfile.Freshness, string(confidenceAssessments), resource.ConfidenceProfile.ModelVersion, string(riskReasons),
 		resource.CleanupDisposition, resource.RiskImpact, resource.RiskLikelihood,
 		resource.RiskRecoverability, resource.RiskUncertainty,
 	)
@@ -162,7 +163,7 @@ const resourceSelect = `
 		last_modified_at, last_observed_at, risk, confidence, regeneration_command,
 		confidence_classification, confidence_ownership, confidence_dependency,
 		confidence_regenerability, confidence_path_safety, confidence_scan_coverage,
-		confidence_freshness, confidence_assessments, risk_reasons, cleanup_disposition,
+		confidence_freshness, confidence_assessments, confidence_model_version, risk_reasons, cleanup_disposition,
 		risk_impact, risk_likelihood, risk_recoverability, risk_uncertainty
 	FROM resources`
 
@@ -190,7 +191,7 @@ func scanResource(row rowScanner) (domain.Resource, error) {
 		&resource.ConfidenceProfile.Classification, &resource.ConfidenceProfile.Ownership,
 		&resource.ConfidenceProfile.Dependency, &resource.ConfidenceProfile.Regenerability,
 		&resource.ConfidenceProfile.PathSafety, &resource.ConfidenceProfile.ScanCoverage,
-		&resource.ConfidenceProfile.Freshness, &confidenceAssessments, &riskReasons,
+		&resource.ConfidenceProfile.Freshness, &confidenceAssessments, &resource.ConfidenceProfile.ModelVersion, &riskReasons,
 		&resource.CleanupDisposition, &resource.RiskImpact, &resource.RiskLikelihood,
 		&resource.RiskRecoverability, &resource.RiskUncertainty,
 	)
@@ -253,6 +254,11 @@ func validateResource(resource domain.Resource) error {
 	}
 	if !resource.ConfidenceProfile.Valid() {
 		return errors.New("resource confidence profile values must be between 0 and 100")
+	}
+	for _, score := range []int{resource.RiskImpact, resource.RiskLikelihood, resource.RiskRecoverability, resource.RiskUncertainty} {
+		if score < 0 || score > 100 {
+			return errors.New("resource risk component scores must be between 0 and 100")
+		}
 	}
 	if resource.Risk != domain.RiskSafe && resource.Risk != domain.RiskReview && resource.Risk != domain.RiskBlocked {
 		return fmt.Errorf("invalid resource risk %q", resource.Risk)

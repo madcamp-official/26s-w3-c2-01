@@ -39,7 +39,7 @@ func TestMigrateCreatesContractTablesAndIsIdempotent(t *testing.T) {
 		t.Fatalf("migration count = %d, want 13", migrationCount)
 	}
 
-	for _, column := range []string{"confidence_classification", "confidence_ownership", "confidence_dependency", "confidence_regenerability", "confidence_path_safety", "confidence_scan_coverage", "confidence_freshness", "confidence_assessments", "risk_reasons", "cleanup_disposition", "risk_impact", "risk_likelihood", "risk_recoverability", "risk_uncertainty"} {
+	for _, column := range []string{"confidence_classification", "confidence_ownership", "confidence_dependency", "confidence_regenerability", "confidence_path_safety", "confidence_scan_coverage", "confidence_freshness", "confidence_assessments", "confidence_model_version", "risk_reasons", "cleanup_disposition", "risk_impact", "risk_likelihood", "risk_recoverability", "risk_uncertainty"} {
 		var found string
 		if err := db.QueryRow("SELECT name FROM pragma_table_info('resources') WHERE name = ?", column).Scan(&found); err != nil {
 			t.Fatalf("resources.%s was not created: %v", column, err)

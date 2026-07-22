@@ -5,6 +5,7 @@ import "time"
 // ConfidenceProfile separates facts that the legacy scalar Confidence mixed
 // together. Scores describe analysis coverage (0..100), never probability.
 type ConfidenceProfile struct {
+	ModelVersion   int                    `json:"model_version"`
 	Classification int                    `json:"classification"`
 	Ownership      int                    `json:"ownership"`
 	Dependency     int                    `json:"dependency"`
@@ -53,13 +54,39 @@ type ConfidenceAssessment struct {
 }
 
 type ConfidenceSummary struct {
-	Overall      int            `json:"overall"`
-	LimitingAxis ConfidenceAxis `json:"limiting_axis"`
-	Eligible     bool           `json:"eligible"`
+	Overall      int              `json:"overall"`
+	Status       ConfidenceStatus `json:"status"`
+	LimitingAxis ConfidenceAxis   `json:"limiting_axis"`
+	Eligible     bool             `json:"eligible"`
+}
+
+func (p ConfidenceProfile) CleanupSummary() ConfidenceSummary {
+	values := []struct {
+		axis  ConfidenceAxis
+		score int
+	}{
+		{AxisOwnership, p.Ownership},
+		{AxisRegenerability, p.Regenerability},
+		{AxisPathSafety, p.PathSafety},
+		{AxisScanCoverage, p.ScanCoverage},
+		{AxisFreshness, p.Freshness},
+	}
+	summary := ConfidenceSummary{Overall: values[0].score, LimitingAxis: values[0].axis, Status: ConfidenceKnown}
+	for _, value := range values[1:] {
+		if value.score < summary.Overall {
+			summary.Overall, summary.LimitingAxis = value.score, value.axis
+		}
+	}
+	if p.ModelVersion == 0 || len(p.Assessments) == 0 {
+		summary.Status = ConfidencePartial
+	}
+	summary.Eligible = p.Classification > 0 && p.Dependency >= 80 && p.Ownership >= 90 &&
+		p.Regenerability >= 90 && p.PathSafety >= 90 && p.ScanCoverage >= 80 && p.Freshness >= 80
+	return summary
 }
 
 func (p ConfidenceProfile) IsZero() bool {
-	return p.Classification == 0 && p.Ownership == 0 && p.Dependency == 0 &&
+	return p.ModelVersion == 0 && p.Classification == 0 && p.Ownership == 0 && p.Dependency == 0 &&
 		p.Regenerability == 0 && p.PathSafety == 0 && p.ScanCoverage == 0 &&
 		p.Freshness == 0 && len(p.Assessments) == 0
 }
@@ -76,9 +103,22 @@ func (p ConfidenceProfile) Overall() int {
 }
 
 func (p ConfidenceProfile) Valid() bool {
+	if p.ModelVersion < 0 {
+		return false
+	}
 	for _, value := range []int{p.Classification, p.Ownership, p.Dependency, p.Regenerability, p.PathSafety, p.ScanCoverage, p.Freshness} {
 		if value < 0 || value > 100 {
 			return false
+		}
+	}
+	for _, assessment := range p.Assessments {
+		if assessment.Score < 0 || assessment.Score > 100 {
+			return false
+		}
+		for _, claim := range assessment.Claims {
+			if claim.Score < 0 || claim.Score > 100 {
+				return false
+			}
 		}
 	}
 	return true

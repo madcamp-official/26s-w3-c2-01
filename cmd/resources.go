@@ -73,6 +73,7 @@ the confidence of the analysis.`,
 				RiskUncertainty:    resource.RiskUncertainty,
 				Confidence:         resource.Confidence,
 				ConfidenceProfile:  resource.ConfidenceProfile,
+				ConfidenceSummary:  resource.ConfidenceProfile.CleanupSummary(),
 				RiskReasons:        resource.RiskReasons,
 			})
 		}

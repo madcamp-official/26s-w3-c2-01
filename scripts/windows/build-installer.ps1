@@ -32,7 +32,8 @@ try {
     }
 
     Write-Host "Building libra.exe (installer version $Version)..."
-    go build -o libra.exe .
+    $ldflags = "-s -w -X github.com/madcamp-official/26s-w3-c2-01/cmd.Version=$Version"
+    go build -ldflags $ldflags -o libra.exe .
 
     $isccCmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
     if ($isccCmd) {

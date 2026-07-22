@@ -265,8 +265,11 @@ func (o *AnalysisOrchestrator) Run(ctx context.Context, options AnalysisOptions)
 		}
 		dependency := domain.Dependency{SourceType: domain.NodeProject, SourceID: owner.ID, TargetType: domain.NodeResource, TargetID: resourceID, Relation: domain.RelationOwns, Confidence: domain.DefaultConfidence[domain.EvidenceObserved]}
 		dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
-		evidence := domain.Evidence{DependencyID: dependency.ID, Kind: domain.EvidenceObserved, SourcePath: candidate.OwnerManifestPath, Property: "project-output", ResolvedValue: normalizedResource, CollectedAt: observedAt}
-		evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+		evidence := domain.Evidence{DependencyID: dependency.ID, Kind: domain.EvidenceObserved,
+			Claim: domain.ClaimProjectOwnership, Polarity: domain.EvidenceSupports,
+			Method: "project-output-detection", SourceFamily: candidate.OwnerManifestPath,
+			SourcePath: candidate.OwnerManifestPath, Property: "project-output", ResolvedValue: normalizedResource, CollectedAt: observedAt}
+		evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 		result.Dependencies = append(result.Dependencies, dependency)
 		result.Evidence = append(result.Evidence, evidence)
 	}

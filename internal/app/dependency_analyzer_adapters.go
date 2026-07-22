@@ -134,13 +134,17 @@ func (a CondaDependencyAnalyzer) Analyze(ctx context.Context, input ProjectAnaly
 	evidence := domain.Evidence{
 		DependencyID:  dependency.ID,
 		Kind:          kind,
+		Claim:         domain.ClaimRequiredDependency,
+		Polarity:      domain.EvidenceSupports,
+		Method:        "conda-environment-resolution",
+		SourceFamily:  declared.SourcePath,
 		SourcePath:    declared.SourcePath,
 		Property:      condaEnvPropertyName,
 		RawValue:      declared.Value,
 		ResolvedValue: matched.Name,
 		CollectedAt:   now(),
 	}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 
 	return DetectionResult[DependencyBundle]{
 		Items:      []DependencyBundle{{Dependency: dependency, Evidence: []domain.Evidence{evidence}}},
@@ -215,11 +219,14 @@ func (a XcodeDependencyAnalyzer) Analyze(ctx context.Context, input ProjectAnaly
 	dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
 
 	evidence := domain.Evidence{
-		DependencyID: dependency.ID, Kind: domain.EvidenceInferred, SourcePath: input.Project.ManifestPath,
-		Property: "xcode-install", ResolvedValue: target.Version,
+		DependencyID: dependency.ID, Kind: domain.EvidenceInferred,
+		Claim: domain.ClaimRequiredDependency, Polarity: domain.EvidenceSupports,
+		Method: "xcode-install-inference", SourceFamily: input.Project.ManifestPath,
+		SourcePath: input.Project.ManifestPath,
+		Property:   "xcode-install", ResolvedValue: target.Version,
 		CollectedAt: now(),
 	}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 
 	return DetectionResult[DependencyBundle]{Items: []DependencyBundle{{Dependency: dependency, Evidence: []domain.Evidence{evidence}}}}
 }

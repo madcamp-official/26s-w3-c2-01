@@ -163,13 +163,17 @@ func resolveDependency(
 	evidence := domain.Evidence{
 		DependencyID:  dependency.ID,
 		Kind:          kind,
+		Claim:         domain.ClaimRequiredDependency,
+		Polarity:      domain.EvidenceSupports,
+		Method:        "msbuild-property-resolution",
+		SourceFamily:  sourcePath,
 		SourcePath:    sourcePath,
 		Property:      declared.Name,
 		RawValue:      declared.Value,
 		ResolvedValue: resource.Version,
 		CollectedAt:   collectedAt,
 	}
-	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
+	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.Claim, evidence.Polarity, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)
 
 	return dependency, evidence, true
 }

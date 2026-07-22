@@ -35,7 +35,7 @@ func TestApplyFreshnessDowngradesStaleSafeResource(t *testing.T) {
 		Risk: domain.RiskSafe, LastObservedAt: now.Add(-31 * 24 * time.Hour),
 		ConfidenceProfile: domain.ConfidenceProfile{
 			Classification: 100, Ownership: 100, Dependency: 100,
-			CleanupSafety: 100, ScanCoverage: 100, Freshness: 100,
+			Regenerability: 100, PathSafety: 100, ScanCoverage: 100, Freshness: 100,
 		},
 	}
 	got := ApplyFreshness(resource, now)

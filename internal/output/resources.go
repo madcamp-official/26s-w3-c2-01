@@ -19,17 +19,23 @@ type ResourcesView struct {
 
 // ResourceLine is a single resource row in a ResourcesView.
 type ResourceLine struct {
-	Name              string                   `json:"name"`
-	Type              domain.ResourceType      `json:"type"`
-	Version           string                   `json:"version,omitempty"`
-	Path              string                   `json:"path"`
-	LogicalSize       int64                    `json:"logical_size_bytes"`
-	ProjectCount      int                      `json:"project_count"`
-	Regenerable       bool                     `json:"regenerable"`
-	Risk              domain.RiskLevel         `json:"risk"`
-	Confidence        int                      `json:"confidence"`
-	ConfidenceProfile domain.ConfidenceProfile `json:"confidence_profile"`
-	RiskReasons       []domain.RiskReason      `json:"risk_reasons,omitempty"`
+	Name               string                    `json:"name"`
+	Type               domain.ResourceType       `json:"type"`
+	Version            string                    `json:"version,omitempty"`
+	Path               string                    `json:"path"`
+	LogicalSize        int64                     `json:"logical_size_bytes"`
+	ProjectCount       int                       `json:"project_count"`
+	Regenerable        bool                      `json:"regenerable"`
+	Risk               domain.RiskLevel          `json:"risk"`
+	CleanupDisposition domain.CleanupDisposition `json:"cleanup_disposition"`
+	RiskImpact         int                       `json:"risk_impact"`
+	RiskLikelihood     int                       `json:"risk_likelihood"`
+	RiskRecoverability int                       `json:"risk_recoverability"`
+	RiskUncertainty    int                       `json:"risk_uncertainty"`
+	Confidence         int                       `json:"confidence"`
+	ConfidenceProfile  domain.ConfidenceProfile  `json:"confidence_profile"`
+	ConfidenceSummary  domain.ConfidenceSummary  `json:"confidence_summary"`
+	RiskReasons        []domain.RiskReason       `json:"risk_reasons,omitempty"`
 }
 
 // RenderText implements Renderable.

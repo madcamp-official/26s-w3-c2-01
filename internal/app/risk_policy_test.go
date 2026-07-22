@@ -139,3 +139,74 @@ func TestDefaultRiskPolicyKeepsDockerCleanupInOfficialTools(t *testing.T) {
 		t.Fatalf("Docker volume assessment = %#v", volume)
 	}
 }
+
+func TestDefaultRiskPolicyAllowsRegenerableProjectLocalDependency(t *testing.T) {
+	assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{
+		Resource:          domain.Resource{Type: domain.ResourceTypeNodeModules, Regenerable: true},
+		RequiredByProject: true,
+		Cleanup: CleanupEvidence{Verification: CleanupVerification{
+			ProjectOwned:              domain.VerifiedFact{Status: domain.VerifiedTrue},
+			KnownOutputPath:           domain.VerifiedFact{Status: domain.VerifiedTrue},
+			ReparsePointFree:          domain.VerifiedFact{Status: domain.VerifiedTrue},
+			GitTrackedOriginalsAbsent: domain.VerifiedFact{Status: domain.VerifiedTrue},
+		}},
+	})
+	if assessment.Level != domain.RiskSafe || assessment.Disposition != domain.DispositionAutoQuarantine {
+		t.Fatalf("assessment = %#v, want SAFE/AUTO_QUARANTINE", assessment)
+	}
+}
+
+func TestDefaultRiskPolicySeparatesDispositionFromRisk(t *testing.T) {
+	cache := (DefaultRiskPolicy{}).Classify(ResourceContext{Resource: domain.Resource{Type: domain.ResourceTypeGlobalCache}})
+	if cache.Level != domain.RiskReview || cache.Disposition != domain.DispositionUseOfficialTool {
+		t.Fatalf("assessment = %#v, want REVIEW/USE_OFFICIAL_TOOL", cache)
+	}
+}
+
+func TestDefaultRiskPolicyReviewsInferredOrInactiveDependency(t *testing.T) {
+	for _, impact := range []DependencyImpact{
+		{RequiredByProjects: 1, ActiveProjects: 1, RelationStrength: domain.ConfidenceAssessment{Status: domain.ConfidencePartial}},
+		{RequiredByProjects: 1, ActiveProjects: 0, RelationStrength: domain.ConfidenceAssessment{Status: domain.ConfidenceKnown}},
+	} {
+		assessment := (DefaultRiskPolicy{}).Classify(ResourceContext{DependencyImpact: impact})
+		if assessment.Level != domain.RiskReview || assessment.Disposition != domain.DispositionManualReview {
+			t.Fatalf("assessment = %#v, want REVIEW/MANUAL_REVIEW", assessment)
+		}
+	}
+}
+
+func TestDefaultRiskPolicyDispositionInvariants(t *testing.T) {
+	contexts := []ResourceContext{
+		{Resource: domain.Resource{Type: domain.ResourceTypeDockerVolume}},
+		{Resource: domain.Resource{Type: domain.ResourceTypeGlobalCache}},
+		{Resource: domain.Resource{Regenerable: true}, Cleanup: CleanupEvidence{
+			ProjectOwned: true, KnownOutputPath: true, ReparsePointFree: true, GitTrackedOriginalsAbsent: true,
+		}},
+		{CriticalUnknowns: []domain.RiskReason{{Code: "UNKNOWN", Severity: domain.RiskReasonUnknown}}},
+	}
+	for _, context := range contexts {
+		assessment := (DefaultRiskPolicy{}).Classify(context)
+		if assessment.Level == domain.RiskBlocked && assessment.Disposition == domain.DispositionAutoQuarantine {
+			t.Fatalf("BLOCKED assessment permits AUTO_QUARANTINE: %#v", assessment)
+		}
+		if assessment.Level == domain.RiskSafe && assessment.Disposition != domain.DispositionAutoQuarantine {
+			t.Fatalf("SAFE assessment has invalid disposition: %#v", assessment)
+		}
+		if assessment.Disposition == domain.DispositionNeverDelete && assessment.Level == domain.RiskSafe {
+			t.Fatalf("NEVER_DELETE assessment is SAFE: %#v", assessment)
+		}
+		if len(context.CriticalUnknowns) > 0 && assessment.Level == domain.RiskSafe {
+			t.Fatalf("critical unknown produced SAFE: %#v", assessment)
+		}
+	}
+}
+
+func TestCleanupEvidenceNormalizeFallsBackPerField(t *testing.T) {
+	got := (CleanupEvidence{
+		ProjectOwned: true, KnownOutputPath: true,
+		Verification: CleanupVerification{ProjectOwned: domain.VerifiedFact{Status: domain.VerifiedTrue}},
+	}).Normalize()
+	if got.KnownOutputPath.Status != domain.VerifiedTrue || got.ReparsePointFree.Status != domain.Unverified {
+		t.Fatalf("Normalize() = %#v, want per-field legacy fallback", got)
+	}
+}

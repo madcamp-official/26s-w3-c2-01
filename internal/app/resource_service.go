@@ -95,7 +95,7 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 	}
 	detected.SystemManaged = classification.SystemManaged
 	cleanup := enrichCleanupEvidence(ctx, displayPath, input.Cleanup)
-	detected.ConfidenceProfile = confidenceProfile(detected.Confidence, cleanup)
+	detected.ConfidenceProfile = confidenceProfile(detected, cleanup)
 	assessment := s.riskPolicy.Classify(ResourceContext{
 		Resource:      detected,
 		ProtectedPath: classification.SystemManaged,
@@ -103,6 +103,11 @@ func (s *ResourceService) Observe(ctx context.Context, input ResourceObservation
 		Confidence:    detected.ConfidenceProfile,
 	})
 	detected.Risk = assessment.Level
+	detected.CleanupDisposition = assessment.Disposition
+	detected.RiskImpact = assessment.Impact
+	detected.RiskLikelihood = assessment.Likelihood
+	detected.RiskRecoverability = assessment.Recoverability
+	detected.RiskUncertainty = assessment.Uncertainty
 	detected.RiskReasons = assessment.Reasons()
 	detected.Confidence = detected.ConfidenceProfile.Overall()
 	switch detected.Risk {
@@ -165,31 +170,80 @@ func (s *ResourceService) ReclassifyRequired(ctx context.Context, resourceID str
 
 	assessment := s.riskPolicy.Classify(ResourceContext{Resource: resource, RequiredByProject: true})
 	resource.Risk = assessment.Level
+	resource.CleanupDisposition = assessment.Disposition
+	resource.RiskImpact = assessment.Impact
+	resource.RiskLikelihood = assessment.Likelihood
+	resource.RiskRecoverability = assessment.Recoverability
+	resource.RiskUncertainty = assessment.Uncertainty
+	resource.RiskReasons = assessment.Reasons()
 	resource.ReclaimableSize = 0
 
 	if err := s.repository.Upsert(ctx, resource); err != nil {
 		return ResourceObservation{}, fmt.Errorf("persist reclassified resource: %w", err)
 	}
-	resource.RiskReasons = assessment.Reasons()
 	return ResourceObservation{Resource: resource, Reasons: assessment.Reasons()}, nil
 }
 
-func confidenceProfile(classification int, cleanup CleanupEvidence) domain.ConfidenceProfile {
+func confidenceProfile(resource domain.Resource, cleanup CleanupEvidence) domain.ConfidenceProfile {
 	// Dependency and scan coverage are conservative compatibility baselines
 	// until the orchestrator maps its per-run UnverifiedScope collection into
 	// resource-specific scores. They meet, but never exceed, the auto-plan
 	// gate; any explicit lower score blocks automatic selection.
+	now := resource.LastObservedAt
+	verification := cleanup.Normalize()
+	evidence := []domain.Evidence{
+		confidenceEvidence("ownership", domain.ClaimProjectOwnership, verification.ProjectOwned),
+		confidenceEvidence("output", domain.ClaimOutputDeclared, verification.KnownOutputPath),
+		confidenceEvidence("path-link", domain.ClaimPathNotLinked, verification.ReparsePointFree),
+		confidenceEvidence("tracked-originals", domain.ClaimNoTrackedOriginals, verification.GitTrackedOriginalsAbsent),
+	}
+	for _, claim := range []domain.ClaimType{domain.ClaimBuildCommandKnown, domain.ClaimInputsAvailable, domain.ClaimToolchainAvailable} {
+		kind := domain.EvidenceUnknown
+		if resource.Regenerable {
+			kind = domain.EvidenceResolved
+		}
+		evidence = append(evidence, domain.Evidence{ID: "resource:" + string(claim), Claim: claim, Kind: kind, SourceFamily: "resource-detector"})
+	}
+	ownership := AssessAxis(domain.AxisOwnership, []domain.ClaimType{domain.ClaimProjectOwnership}, evidence, now)
+	regenerability := AssessAxis(domain.AxisRegenerability, []domain.ClaimType{
+		domain.ClaimOutputDeclared, domain.ClaimBuildCommandKnown, domain.ClaimInputsAvailable, domain.ClaimToolchainAvailable,
+	}, evidence, now)
+	pathSafety := AssessAxis(domain.AxisPathSafety, []domain.ClaimType{domain.ClaimPathNotLinked, domain.ClaimNoTrackedOriginals}, evidence, now)
 	profile := domain.ConfidenceProfile{
-		Classification: classification,
+		ModelVersion:   1,
+		Classification: resource.Confidence,
+		Ownership:      ownership.Score,
 		Dependency:     minimumAutoDependencyConfidence,
+		Regenerability: regenerability.Score,
+		PathSafety:     pathSafety.Score,
 		ScanCoverage:   minimumAutoScanCoverage,
 		Freshness:      100,
-	}
-	if cleanup.ProjectOwned {
-		profile.Ownership = 100
-	}
-	if cleanup.complete() {
-		profile.CleanupSafety = 100
+		Assessments: []domain.ConfidenceAssessment{
+			scalarAssessment(domain.AxisClassification, resource.Confidence, domain.ConfidenceKnown),
+			ownership,
+			scalarAssessment(domain.AxisDependency, minimumAutoDependencyConfidence, domain.ConfidencePartial),
+			regenerability,
+			pathSafety,
+			scalarAssessment(domain.AxisScanCoverage, minimumAutoScanCoverage, domain.ConfidencePartial),
+			scalarAssessment(domain.AxisFreshness, 100, domain.ConfidenceKnown),
+		},
 	}
 	return profile
+}
+
+func confidenceEvidence(id string, claim domain.ClaimType, fact domain.VerifiedFact) domain.Evidence {
+	evidence := domain.Evidence{ID: id, Claim: claim, Kind: domain.EvidenceUnknown, SourceFamily: id}
+	switch fact.Status {
+	case domain.VerifiedTrue:
+		evidence.Kind = domain.EvidenceResolved
+		evidence.Polarity = domain.EvidenceSupports
+	case domain.VerifiedFalse:
+		evidence.Kind = domain.EvidenceResolved
+		evidence.Polarity = domain.EvidenceContradicts
+	}
+	return evidence
+}
+
+func scalarAssessment(axis domain.ConfidenceAxis, score int, status domain.ConfidenceStatus) domain.ConfidenceAssessment {
+	return domain.ConfidenceAssessment{Axis: axis, Score: score, Status: status}
 }

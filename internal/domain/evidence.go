@@ -23,6 +23,29 @@ const (
 	EvidenceUnknown  EvidenceKind = "UNKNOWN"
 )
 
+// ClaimType identifies what an Evidence item proves. EvidenceKind describes
+// how a fact was collected; ClaimType describes the decision it supports.
+type ClaimType string
+
+const (
+	ClaimResourceType       ClaimType = "RESOURCE_TYPE"
+	ClaimProjectOwnership   ClaimType = "PROJECT_OWNERSHIP"
+	ClaimRequiredDependency ClaimType = "REQUIRED_DEPENDENCY"
+	ClaimOutputDeclared     ClaimType = "OUTPUT_DECLARED"
+	ClaimBuildCommandKnown  ClaimType = "BUILD_COMMAND_KNOWN"
+	ClaimInputsAvailable    ClaimType = "INPUTS_AVAILABLE"
+	ClaimToolchainAvailable ClaimType = "TOOLCHAIN_AVAILABLE"
+	ClaimNoTrackedOriginals ClaimType = "NO_TRACKED_ORIGINALS"
+	ClaimPathNotLinked      ClaimType = "PATH_NOT_LINKED"
+)
+
+type EvidencePolarity string
+
+const (
+	EvidenceSupports    EvidencePolarity = "SUPPORTS"
+	EvidenceContradicts EvidencePolarity = "CONTRADICTS"
+)
+
 // DefaultConfidence is the CONFIRMED MVP score for each EvidenceKind
 // (docs/libra_integration_contracts.md §20.2). It is the single shared scale
 // every adapter's Confidence value must be drawn from -- adapter-local
@@ -31,11 +54,10 @@ const (
 // internal/adapter/msbuild/artifacts.go each had their own placeholder
 // scale, unrelated to internal/adapter/msbuild/resolve.go's).
 //
-// This governs the *base* score for a single piece of evidence only.
-// Combining multiple Evidence for the same Dependency (limited additive
-// credit for corroborating facts) and UnverifiedScope penalties are not
-// implemented yet -- no resource today carries more than one Evidence, so
-// there is nothing to combine in practice.
+// This governs the base score for one evidence item. Deduplication,
+// corroboration bonuses, contradiction handling, and expiry caps are
+// implemented by app.AssessClaim. UnverifiedScope penalties and SourceHash
+// validation are not connected yet.
 var DefaultConfidence = map[EvidenceKind]int{
 	EvidenceResolved: 90,
 	EvidenceObserved: 85,
@@ -55,13 +77,22 @@ type Evidence struct {
 	RawValue      string
 	ResolvedValue string
 	CollectedAt   time.Time
+	Claim         ClaimType
+	Method        string
+	SourceFamily  string
+	SourceHash    string
+	ValidUntil    *time.Time
+	Polarity      EvidencePolarity
 }
 
 // EvidenceID identifies the content of a fact. CollectedAt is intentionally
 // excluded so observing the same fact again refreshes it instead of creating
 // an unbounded duplicate row.
-func EvidenceID(dependencyID string, kind EvidenceKind, sourcePath, property, rawValue, resolvedValue string) string {
-	key := strings.Join([]string{dependencyID, string(kind), sourcePath, property, rawValue, resolvedValue}, "\x00")
+func EvidenceID(dependencyID string, kind EvidenceKind, claim ClaimType, polarity EvidencePolarity, sourcePath, property, rawValue, resolvedValue string) string {
+	if polarity == "" {
+		polarity = EvidenceSupports
+	}
+	key := strings.Join([]string{dependencyID, string(kind), string(claim), string(polarity), sourcePath, property, rawValue, resolvedValue}, "\x00")
 	digest := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(digest[:])
 }

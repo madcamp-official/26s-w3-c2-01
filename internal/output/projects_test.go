@@ -29,6 +29,21 @@ func TestProjectsViewRenderText_RendersLogicalSizeAsBytes(t *testing.T) {
 	}
 }
 
+func TestProjectsViewRenderText_ShowsDirectoryWhenManifestNameDiffers(t *testing.T) {
+	view := ProjectsView{Projects: []ProjectLine{{
+		Name: "@figma/my-make-file", Path: filepath.Join("repo", "frontend"),
+		Type: domain.ProjectTypeNode, Status: domain.ProjectStatusActive,
+	}}}
+
+	var buf bytes.Buffer
+	if err := view.RenderText(&buf); err != nil {
+		t.Fatalf("RenderText: %v", err)
+	}
+	if !strings.Contains(buf.String(), "frontend (@figma/my-make-file)") {
+		t.Errorf("RenderText should expose both directory and manifest name, got:\n%s", buf.String())
+	}
+}
+
 // TestProjectsViewJSON_StillCarriesLogicalSize confirms logical_size_bytes
 // round-trips through the JSON contract unchanged.
 func TestProjectsViewJSON_StillCarriesLogicalSize(t *testing.T) {

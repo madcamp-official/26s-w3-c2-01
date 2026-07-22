@@ -14,9 +14,9 @@
 //     for later use (e.g. lockfile discovery) but does not compete for
 //     identity.
 //   - requirements.txt alone is not trusted as a project marker unless the
-//     same directory also has at least one .py file (containsPythonFile) --
-//     unlike Node's package.json, a requirements.txt alone doesn't
-//     distinguish a real project from an unrelated dependency list.
+//     same directory or one of its immediate source directories has a .py
+//     file (containsPythonSource) -- unlike Node's package.json, a loose
+//     requirements file alone does not establish a project.
 //   - Regeneration evidence is a 4-tier scale (LockfileEvidence): a real
 //     lockfile (poetry.lock/Pipfile.lock/uv.lock) is DECLARED; a fully
 //     version-pinned requirements.txt is the new PINNED tier; a
@@ -172,8 +172,8 @@ func (FilesystemDetector) Detect(ctx context.Context, entry scanner.Entry) (doma
 
 // DetectMarkers reports which recognized Python project marker files exist
 // directly under root, in 결정 1's priority order. requirements.txt is only
-// accepted as Primary when root also contains at least one .py file -- see
-// containsPythonFile.
+// accepted as Primary when root or an immediate child directory contains a
+// Python source file -- see containsPythonSource.
 func DetectMarkers(root string) (Markers, error) {
 	var found []string
 	for _, name := range markerPriority {
@@ -187,7 +187,7 @@ func DetectMarkers(root string) (Markers, error) {
 		return Markers{}, nil
 	}
 	if found[0] == markerRequirements {
-		hasPy, err := containsPythonFile(root)
+		hasPy, err := containsPythonSource(root)
 		if err != nil {
 			return Markers{}, err
 		}
@@ -198,13 +198,12 @@ func DetectMarkers(root string) (Markers, error) {
 	return Markers{Primary: found[0], Secondary: found[1:]}, nil
 }
 
-// containsPythonFile reports whether root has at least one *.py file
-// directly under it. requirements.txt alone doesn't distinguish a real
-// project from a loose script folder or an unrelated dependency list, so
-// 결정 1 requires this extra signal before accepting it as a Primary marker
-// -- Node's CanDetect needs no equivalent because package.json alone is
-// never that ambiguous.
-func containsPythonFile(root string) (bool, error) {
+// containsPythonSource reports whether root or one of its immediate child
+// directories contains a *.py file. The one-level bound recognizes common
+// layouts such as app/main.py and src/package.py while avoiding an unbounded
+// walk that could turn a requirements file plus vendored/test data somewhere
+// deep below it into a false project marker.
+func containsPythonSource(root string) (bool, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return false, err
@@ -213,8 +212,29 @@ func containsPythonFile(root string) (bool, error) {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".py") {
 			return true, nil
 		}
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || isVendoredDirectory(entry.Name()) {
+			continue
+		}
+		children, err := os.ReadDir(filepath.Join(root, entry.Name()))
+		if err != nil {
+			return false, err
+		}
+		for _, child := range children {
+			if !child.IsDir() && strings.HasSuffix(child.Name(), ".py") {
+				return true, nil
+			}
+		}
 	}
 	return false, nil
+}
+
+func isVendoredDirectory(name string) bool {
+	for _, vendored := range vendoredDirs {
+		if name == vendored {
+			return true
+		}
+	}
+	return false
 }
 
 // LockfileEvidence reports how strongly root's dependency declarations back

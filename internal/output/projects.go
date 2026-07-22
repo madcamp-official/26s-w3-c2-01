@@ -161,8 +161,19 @@ func writeProjectTree(w io.Writer, node *projectTreeNode, linePrefix, childBase 
 
 func writeProjectLine(w io.Writer, p ProjectLine, namePrefix string) {
 	fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
-		namePrefix, p.Name, p.Type, p.Drive, formatProjectSize(p.LogicalSize, &p.SizeKnown),
+		namePrefix, projectDisplayName(p), p.Type, p.Drive, formatProjectSize(p.LogicalSize, &p.SizeKnown),
 		p.Status, p.ResourceCount, formatTime(p.LastModifiedAt), p.Path)
+}
+
+// projectDisplayName keeps the filesystem identity visible when a manifest
+// name differs from the directory users recognize. JSON retains the exact
+// manifest-derived Name; this only improves the human-readable project list.
+func projectDisplayName(p ProjectLine) string {
+	dirName := filepath.Base(filepath.Clean(p.Path))
+	if p.Path == "" || dirName == "." || strings.EqualFold(dirName, p.Name) {
+		return p.Name
+	}
+	return fmt.Sprintf("%s (%s)", dirName, p.Name)
 }
 
 // formatProjectSize renders a project's LogicalSize as "—" when it is known

@@ -4,9 +4,9 @@
 
 | 이름 | 학교 | GitHub | 역할 |
 |---|---|---|---|
-|양우현|KAIST|hyun020215|  |
-|임유빈|서울대학교|lunar-yoobin|  |
-|최재윤|KAIST|Jaeyun-18|  |
+| 양우현 | KAIST | hyun020215 | 플랫폼 기반, 파일 스캔·SQLite 저장소·설정·cleanup 안전 처리 |
+| 임유빈 | 서울대학교 | lunar-yoobin | CLI·출력, Node/macOS 어댑터, QA·테스트·문서화 |
+| 최재윤 | KAIST | Jaeyun-18 | Windows SDK·Visual Studio·MSBuild·.NET 탐지와 의존성 분석 |
 
 ## 선택 옵션
 
@@ -17,9 +17,9 @@
 
 ## 기획안
 
-- **산출물 주제:** 로컬 개발 프로젝트와 SDK·도구·캐시·빌드 산출물 사이의 의존 관계를 분석해, 무엇이 디스크 공간을 차지하고 있고 지우면 무엇이 깨지는지 근거와 함께 설명하는 Windows용 CLI 도구 `libra`.
+- **산출물 주제:** 로컬 개발 프로젝트와 SDK·도구·캐시·빌드 산출물 사이의 의존 관계를 분석해, 무엇이 디스크 공간을 차지하고 있고 지우면 무엇이 깨지는지 근거와 함께 설명하는 Windows 우선·macOS 지원 CLI 도구 `libra`.
 - **문제의식:** 기존 저장공간 분석기는 "이 폴더가 크다"까지만 보여줄 뿐, "이 SDK를 어떤 프로젝트가 쓰는가", "지우면 어떤 프로젝트가 영향을 받는가", "이건 원본인가 재생성 가능한 산출물인가"에는 답하지 못한다. `libra`는 파일 크기 대신 **프로젝트 ↔ 리소스 관계와 판단 근거**를 우선 제공한다.
-- **핵심 원칙:** 기본은 항상 read-only(scan/summary/explain/impact/plan은 파일을 건드리지 않음), 시스템 구성요소(Windows SDK, Visual Studio, `C:\Windows` 등)는 절대 직접 삭제하지 않고 계획·근거만 제공, 모든 의존 관계에는 근거 종류(DECLARED/RESOLVED/OBSERVED/INFERRED/UNKNOWN)를 함께 표시.
+- **핵심 원칙:** 분석 명령은 대상 파일시스템에 대해 read-only(`scan`과 `plan`은 분석 결과·계획만 DB에 기록), 시스템 구성요소(Windows SDK, Visual Studio, `C:\Windows` 등)는 절대 직접 삭제하지 않고 계획·근거만 제공, 모든 의존 관계에는 근거 종류(DECLARED/RESOLVED/OBSERVED/INFERRED/UNKNOWN)를 함께 표시.
 - **자세한 기능 명세와 개발 일정 원본:** `docs/libra_cli_commands_and_schedule.md`, 팀 협업 규칙은 `docs/libra_collaboration_rules.md`, cross-team 계약(스키마·JSON envelope·종료 코드 등 "권위 있는" 기준 문서)은 `docs/libra_integration_contracts.md`.
 
 ### 지금까지 진행한 일정 (git 커밋 기준)
@@ -30,14 +30,14 @@
 | 2026-07-18 (Day 2~4) | 경계 검증이 있는 병렬 파일 스캐너, 경로 정규화, cross-team 통합 계약 문서화, Windows SDK·.NET SDK·Visual Studio(vswhere) 리소스 탐지와 시스템 경로 차단(safety), Node 프로젝트·산출물 탐지, 프로젝트/리소스/의존성 그래프(evidence 포함)를 SQLite에 저장, `scan`이 실제 분석 파이프라인(AnalysisOrchestrator)에 연결되어 `projects`/`summary`가 실제 데이터를 조회하도록 완성, golden test 도입 |
 | 2026-07-19 | `resources`/`explain`/`impact` 명령 구현 완료, README·명령어 상태표 동기화 |
 | 2026-07-20 (Day 4 리뷰 · Day 5) | Day 4 코드 리뷰(협업/계약/구조적 이슈 정리), cleanup evidence·위험도 정책(risk policy) 도입, cleanup plan snapshot 저장, `plan --target`/`clean`(dry-run) 구현, 같은 볼륨 quarantine·복구 transaction(`clean --execute`, `restore`) 완성 |
-| 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가, macOS 전용 개발 캐시 어댑터 5종(Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator, analysis-only) 추가, macOS 시스템 경로(`/System`/`/Library`/`/usr` 등) 보호 분류 추가, 실제 별도 APFS 볼륨과 권한 오류(chmod 000) 시나리오로 clean/restore 안전성 검증 |
+| 2026-07-21 (Day 5) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 7축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가, macOS 전용 개발 캐시 어댑터 5종(Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator, analysis-only) 추가, macOS 시스템 경로(`/System`/`/Library`/`/usr` 등) 보호 분류 추가, 실제 별도 APFS 볼륨과 권한 오류(chmod 000) 시나리오로 clean/restore 안전성 검증 |
 | 2026-07-22 | `.NET SDK` 탐지를 macOS/Linux까지 확장(`dotnet` CLI는 원래 크로스플랫폼이었음), Xcode(`.xcodeproj`)·Xcode Workspace(`.xcworkspace`)·SwiftPM(`Package.swift`) 프로젝트 탐지 추가, 프로젝트 소유 `Pods`/`.build` 산출물을 `node_modules`와 동일한 SAFE 경로로 연결, 활성 Xcode 자체를 `xcode-install` 시스템 리소스로 탐지, `.xcodeproj` 프로젝트 → 활성 Xcode REQUIRES 의존성 분석기 추가(macOS 프로젝트도 Windows SDK/MSBuild와 동급으로 `explain`/`impact`의 의존성·삭제 영향 분석 대상이 됨; SwiftPM은 어떤 Swift toolchain으로도 빌드 가능해 Xcode 의존으로 보지 않음), 실제 NTFS 볼륨(junction/reparse point, `icacls` ACL 거부, 다른 프로세스가 잠근 파일, DB-파일시스템 불일치)을 대상으로 한 Windows 전용 e2e 테스트 추가로 `docs/libra_integration_contracts.md`의 "Windows 실제 volume junction/ACL 통합 테스트" 오픈 항목을 대부분 구현 완료 처리(hidden attribute 단독 케이스는 아직 미포함), 실제 `WINDIR`/`ProgramFiles`/`ProgramFiles(x86)` 환경변수 기반 시스템 경로 negative fixture로 `C:\Windows`·Program Files·Windows SDK·Visual Studio·.NET Runtime·Docker Volume이 항상 `BLOCKED`임을 검증 |
 
 ---
 
 ## 기능 명세서
 
-`libra`는 Windows 10/11의 NTFS 로컬 드라이브를 대상으로 하며 관리자 권한 없이 실행된다. macOS/Linux에서도 빌드와 테스트는 CI로 검증되지만(`internal/adapter/platform.go`의 `RequireWindows`), Windows SDK·Visual Studio·MSBuild(vswhere) 같은 OS 전용 리소스 탐지기는 그 플랫폼에서 실행 시 "unsupported platform" 오류로 명시적으로 미지원을 알린다.
+`libra`는 Windows 10/11의 NTFS 로컬 드라이브를 우선 대상으로 하며 관리자 권한 없이 실행된다. macOS에서는 Xcode·SwiftPM 프로젝트와 개발 캐시를 포함한 전용 분석을 지원하고, Windows SDK·Visual Studio·MSBuild(vswhere) 같은 Windows 전용 탐지기는 다른 플랫폼에서 "unsupported platform" 오류로 명시적으로 미지원을 알린다. Linux는 빌드·테스트와 .NET CLI 탐지만 검증하며 전체 기능 지원 대상은 아니다.
 
 ### 프로젝트 탐지
 
@@ -49,7 +49,7 @@
 | Python (`pyproject.toml`/`Pipfile`/`setup.py`/`requirements.txt`) | ✅ |
 | Visual Studio Solution (`.sln`) | ⚠️ Workspace로만 취급되어 소속 프로젝트를 묶어줄 뿐, 그 자체가 독립된 분석 대상(BuildProject)은 아님 |
 | Java/Android (`pom.xml`, `build.gradle[.kts]`), Go (`go.mod`), Rust (`Cargo.toml`) | ✅ 매니페스트 기반 프로젝트 단위 탐지 (Android Gradle 플러그인 표식 구분) |
-| Cargo `target/`, Maven `target/`, Gradle `build/` | ✅ 프로젝트 소유 산출물 분석·격리 cleanup·restore (`Cargo.lock` 및 manifest/경로/Git/reparse 안전 gate 적용) |
+| Cargo `target/`, Maven `target/`, Gradle `build/` | ✅ 프로젝트 root 바로 아래의 관례적 기본 경로를 프로젝트 소유 산출물로 분석·격리 cleanup·restore. manifest 소유 관계·경로·Git 추적 원본·reparse point 안전 gate를 적용한다. 설정으로 변경한 출력 경로(`CARGO_TARGET_DIR`, Maven `build.directory`, Gradle `buildDirectory`)는 아직 정적으로 해석하지 않는다. |
 | Xcode (`.xcodeproj`), Xcode Workspace (`.xcworkspace`, 최상위 `<FileRef>` 멤버만) (macOS) | ✅ |
 | Swift Package (`Package.swift`, `// swift-tools-version:` 선언 파싱) (macOS) | ✅ |
 
@@ -60,7 +60,7 @@
 | Windows SDK | ✅ 파일시스템 기반 탐지, 버전별 그룹핑 |
 | Visual Studio 설치본 · MSBuild | ✅ `vswhere.exe` 연동으로 설치 인스턴스와 MSBuild 위치 탐지 |
 | .NET SDK / .NET Runtime | ✅ `dotnet --list-sdks` / `--list-runtimes` 결과 기반. 크로스플랫폼 CLI라 macOS/Linux도 지원(`exec.LookPath`), Windows만 고정 설치 경로를 그대로 사용 |
-| Node `node_modules`, 빌드 산출물(`bin`/`obj`/`build`/`dist`/`.next`/`out`/`Debug`/`Release`, Python `__pycache__`/`.pytest_cache`/`.mypy_cache` 포함) | ✅ |
+| 프로젝트 로컬 산출물 | ✅ Node `node_modules`, `bin`/`obj`/`build`/`dist`/`.next`/`out`/`Debug`/`Release`, Python `__pycache__`/`.pytest_cache`/`.mypy_cache`, Cargo·Maven `target`, Gradle `build` |
 | Docker 리소스 사용량 | ✅ `docker system df --format '{{json .}}'` 결과를 읽어 Images/Containers/Build Cache/Volumes 집계 (read-only) |
 | Android SDK, Gradle 전역 캐시, Cargo 레지스트리/git 전역 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 프로젝트 산출물과 달리 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
 | Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행 |
@@ -87,14 +87,15 @@
 | Docker Volume | `BLOCKED` — 사용자 데이터 가능성 |
 | Docker 캐시(이미지/컨테이너/빌드 캐시) | `REVIEW` — Docker 공식 명령으로 정리 필요 |
 | 시스템 관리 경로 또는 `system_managed` 리소스 | `BLOCKED` |
-| 현재 스캔에서 어떤 프로젝트든 실제로 참조 중 | `BLOCKED` |
+| 활성 프로젝트가 참조하는 비재생성·시스템 리소스 | `BLOCKED` |
+| 프로젝트가 소유한 재생성 가능 산출물 | 소유·재생성·경로 안전성 gate가 모두 충족되면 `SAFE`; 불완전하면 `REVIEW` |
 | 판단에 결정적인 미확인 사항(critical unknown)이 있음 | `REVIEW` |
 | 재생성 가능하고, 프로젝트 소유·알려진 산출물 경로·reparse point 없음·Git 추적 원본 부재가 모두 검증됨 | `SAFE` |
 | 그 외 전부 | `REVIEW` |
 
 ### 신뢰도 모델 (7축, `internal/domain/risk_assessment.go` `ConfidenceProfile`)
 
-`Classification`/`Ownership`/`Dependency`/`Regenerability`/`PathSafety`/`ScanCoverage`/`Freshness` 일곱 축을 0~100으로 따로 매기고, 전체 신뢰도는 **가장 약한 축의 값**을 사용한다(통계적 확률이 아니라 분석 범위 충족도). `Freshness`는 마지막 관측 후 7일 이내 100, 30일 80, 90일 50, 그 이후 20이며, `SAFE`로 분류된 항목이라도 `Freshness < 80`이면 `EVIDENCE_STALE` 사유와 함께 자동으로 `REVIEW`로 강등된다. `libra explain`은 이 7축을 축별 `Status`(`KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`)와 함께 `Confidence breakdown:` 표로 보여주고, `libra plan`의 자동 선택 대상 여부를 `Cleanup eligibility:` 한 줄로 판정하며(JSON: `confidence_profile`/`confidence_summary`), `KNOWN`이 아닌 축은 `Unverified`(분석하지 못한 범위)로도 함께 보고한다.
+`Classification`/`Ownership`/`Dependency`/`Regenerability`/`PathSafety`/`ScanCoverage`/`Freshness` 일곱 축을 claim과 evidence로 각각 평가한다. 축 점수는 0~100이며, 전체 신뢰도는 해당 리소스에 적용되는 축 가운데 **가장 약한 축의 값**이다. 적용 대상이 아닌 축은 `NOT_APPLICABLE`로 표시하고 최솟값 계산에서 제외한다. 이는 통계적 확률이 아니라 분석 커버리지다. `Freshness`는 마지막 관측 후 7일 이내 100, 30일 80, 90일 50, 그 이후 20이며, `SAFE`로 분류된 항목이라도 `Freshness < 80`이면 `EVIDENCE_STALE` 사유와 함께 자동으로 `REVIEW`로 강등된다. `libra explain`은 축별 점수와 `Status`(`KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`/`NOT_APPLICABLE`), 제한 claim과 연결 evidence를 보여주고, `libra plan`의 자동 선택 대상 여부를 `Cleanup eligibility:`로 판정한다(JSON: `confidence_profile`/`confidence_summary`).
 
 ### 정리 파이프라인 (plan → clean → restore / purge)
 
@@ -175,7 +176,7 @@ brew tap madcamp-official/26s-w3-c2-01 https://github.com/madcamp-official/26s-w
 brew install libra
 ```
 
-Formula(`Formula/libra.rb`)는 `go build`로 소스에서 빌드하며, 별도의 서명/공증 없이도 Gatekeeper 경고 없이 설치된다. 릴리스 태그(`vX.Y.Z`)가 아직 없다면 `brew install --HEAD libra`로 `main` 브랜치를 바로 빌드해 설치할 수 있다. universal(amd64+arm64) 바이너리를 tarball로 직접 뽑으려면 `scripts/macos/build.sh [version]`(Xcode Command Line Tools의 `lipo` 필요)을 사용한다.
+Formula(`Formula/libra.rb`)는 현재 `v1.0.0` 소스를 `go build`로 빌드한다. `main`의 최신 개발 버전은 `brew install --HEAD libra`로 설치할 수 있다. universal(amd64+arm64) 바이너리를 tarball로 직접 뽑으려면 `scripts/macos/build.sh [version]`(Xcode Command Line Tools의 `lipo` 필요)을 사용한다.
 
 ### 전역 옵션
 
@@ -369,18 +370,18 @@ go test ./...
 | `workspaces` / `workspace_projects` | `.sln` 등 여러 프로젝트를 묶는 workspace와 그 소속 관계(하나의 프로젝트가 여러 workspace에 속할 수 있음) |
 | `resources` | 발견된 SDK·도구·캐시·산출물(타입/버전/경로/크기/재생성 가능 여부/시스템 관리 여부/위험도), 7축 신뢰도 컬럼(`confidence_classification`/`_ownership`/`_dependency`/`_regenerability`/`_path_safety`/`_scan_coverage`/`_freshness`)과 `confidence_assessments`(축별 상태 JSON 배열)·`risk_reasons`(JSON 배열) 포함 |
 | `dependencies` | 프로젝트 ↔ 리소스 의존 관계 edge(`source`/`target` 타입·ID, relation, confidence) |
-| `evidence` | 각 `dependency`를 뒷받침하는 근거(종류, 원본 경로, 속성명, 원본/해석된 값, 수집 시각) |
+| `evidence` | dependency와 confidence claim을 뒷받침하는 근거(종류·claim·수집 방법·source family/hash·원본 경로·속성·원본/해석값·유효 기한·polarity) |
 | `scan_issues` | 스캔 중 발생한 경고·오류(코드/phase/adapter/경로/operation/심각도/메시지) |
 | `cleanup_plans` / `cleanup_items` | `plan`이 저장하는 계획 스냅샷(목표·선택 바이트, 상태) 및 그 항목별 스냅샷(정규화 경로, 예상 타입·크기·수정시각, 계획 시점 신뢰도·위험도, 소유 프로젝트, 재생성 명령) |
 | `transactions` / `transaction_items` | `clean --execute`/`restore`/`purge`가 만드는 transaction(manifest 버전 포함)과 항목별 원본·격리 경로, manifest 경로, 상태(`MOVED`/`RESTORED`/`PURGED`/`FAILED` 등) |
 
 ### Go 도메인 모델 (`internal/domain`)
 
-- **`Workspace` / `BuildProject`** — Workspace는 `.sln` 등 여러 BuildProject를 묶는 그룹(그 자체는 빌드 의존성이 없음), BuildProject는 실제로 분석 가능한 프로젝트 단위(`ProjectType`: `msbuild-cpp`/`msbuild-dotnet`/`node`/`git`/`python`, `ProjectStatus`: `ACTIVE`/`STALE`/`ARCHIVED`/`UNKNOWN`).
-- **`Resource`** — `ResourceType`(`windows-sdk`/`netfx-sdk`/`visual-studio`/`msbuild`/`dotnet-sdk`/`android-sdk`/`node-modules`/`build-output`/`global-cache`/`docker-cache`/`docker-volume`/`python-venv`/`conda-env`), 논리 크기·재생성 가능 여부·`RiskLevel`(`SAFE`/`REVIEW`/`BLOCKED`)·`ConfidenceProfile`·`RiskReason` 목록·재생성 명령(`RegenerationCommand`)을 갖는다.
-- **`Dependency` / `Evidence`** — 프로젝트→리소스 관계와 그 근거(evidence 종류·출처 경로·속성명·원본/해석값).
-- **`ConfidenceProfile`** — `Classification`/`Ownership`/`Dependency`/`Regenerability`/`PathSafety`/`ScanCoverage`/`Freshness` 7축(각 0~100)과 축별 `ConfidenceAssessment`(`Status`: `KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`) 목록, `Overall()`은 최솟값을 반환.
-- **`RiskReason`** — `BLOCKER`/`WARNING`/`SAFEGUARD`/`UNKNOWN` 심각도와 코드·메시지로 위험도 판단 근거를 구조화.
+- **`Workspace` / `BuildProject`** — Workspace는 `.sln` 등 여러 BuildProject를 묶는 그룹(그 자체는 빌드 의존성이 없음), BuildProject는 실제 분석 단위다. `ProjectType`은 MSBuild C++/.NET, Node, Git, Python, Gradle, Maven, Cargo, Go, Android, Xcode, SwiftPM을 포함하며 상태는 `ACTIVE`/`STALE`/`ARCHIVED`/`UNKNOWN`이다.
+- **`Resource`** — Windows/.NET/Android/Xcode SDK·도구, Node/Python/CocoaPods/SwiftPM 프로젝트 산출물, 전역·Docker 캐시와 볼륨, Conda 환경 등을 표현한다. 논리 크기·재생성 가능 여부·`RiskLevel`(`SAFE`/`REVIEW`/`BLOCKED`)·`ConfidenceProfile`·`RiskReason`·재생성 명령을 갖는다.
+- **`Dependency` / `Evidence`** — 프로젝트→리소스 관계와 claim 판정 근거. Evidence에는 수집 방법·source family/hash·유효 기한·polarity까지 보존한다.
+- **`ConfidenceProfile`** — 7축 점수와 축·claim별 `ConfidenceAssessment`를 보존한다. 상태는 `KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`/`NOT_APPLICABLE`이며, `Overall()`은 적용 가능한 축의 최솟값을 반환한다.
+- **`RiskReason`** — `BLOCKER`/`WARNING`/`SAFEGUARD`/`UNKNOWN` 심각도와 코드·메시지·관련 축·scope·remediation·evidence ID로 정책 판정 근거를 구조화한다.
 - **`ImpactAssessment`** — `RUN`/`BUILD`/`DEBUG`/`CI` 범위(`ImpactScope`)별 `NONE`/`LOW`/`HIGH`/`UNKNOWN` 판단(`ImpactLevel`).
 - **`CleanupPlan` / `CleanupPlanItem`, `CleanupTransaction` / `CleanupTransactionItem`** — `plan`/`clean`/`restore`/`purge`가 공유하는 계획·트랜잭션 스냅샷과 상태 전이(`PLANNED`→`RUNNING`→`QUARANTINED`/`PARTIALLY_QUARANTINED`→`RESTORED`/`PURGED`/`PARTIALLY_*`/`FAILED`).
 - **`UnverifiedScope`** — 평가되지 않은 분석 범위(예: `Condition=` 게이트가 있는 MSBuild 속성)를 "평가 안 됨"과 "평가했더니 없음"을 구분해 기록.

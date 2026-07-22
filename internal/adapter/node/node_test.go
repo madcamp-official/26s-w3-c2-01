@@ -75,6 +75,32 @@ func TestFilesystemDetector_CanDetect_SkipsVendoredPackages(t *testing.T) {
 	}
 }
 
+// TestFilesystemDetector_CanDetect_SkipsUnityPackageManifests reproduces a
+// scan false positive: Unity's Library/PackageCache/com.unity.* directories
+// ship a package.json (Unity's own package-manager format, keyed by a
+// "unity" field) that isn't an npm manifest and must not be detected as a
+// Node project.
+func TestFilesystemDetector_CanDetect_SkipsUnityPackageManifests(t *testing.T) {
+	unityDir := t.TempDir()
+	unityManifest := `{"name":"com.unity.ads","version":"2.0.8","unity":"2018.1","displayName":"Advertisement"}`
+	if err := os.WriteFile(filepath.Join(unityDir, manifestFile), []byte(unityManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	npmDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(npmDir, manifestFile), []byte(`{"name":"real-app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var detector Detector = FilesystemDetector{}
+	if got := detector.CanDetect(scanner.Entry{Path: unityDir}); got {
+		t.Errorf("CanDetect(unity package.json) = %v, want false", got)
+	}
+	if got := detector.CanDetect(scanner.Entry{Path: npmDir}); !got {
+		t.Errorf("CanDetect(npm package.json) = %v, want true", got)
+	}
+}
+
 func TestIsVendoredPath(t *testing.T) {
 	j := filepath.Join
 	cases := []struct {

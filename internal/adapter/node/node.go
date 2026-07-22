@@ -107,8 +107,32 @@ func (FilesystemDetector) CanDetect(entry scanner.Entry) bool {
 	if isVendoredPath(entry.Path) {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(entry.Path, manifestFile))
-	return err == nil
+	manifestPath := filepath.Join(entry.Path, manifestFile)
+	if _, err := os.Stat(manifestPath); err != nil {
+		return false
+	}
+	return !isUnityPackageManifest(manifestPath)
+}
+
+// isUnityPackageManifest reports whether the package.json at path is Unity's
+// own package-manager manifest format (e.g. under Library/PackageCache or
+// Packages/) rather than an npm/Yarn/pnpm one. Unity packages declare a
+// "unity" field (target editor version) that no npm manifest uses. A read or
+// parse failure is not treated as a Unity manifest, so a malformed
+// package.json still reaches Detect() as a recoverable per-candidate issue,
+// same as before this check existed.
+func isUnityPackageManifest(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var manifest struct {
+		Unity string `json:"unity"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return false
+	}
+	return manifest.Unity != ""
 }
 
 // isVendoredPath reports whether path is, or lives beneath, a node_modules

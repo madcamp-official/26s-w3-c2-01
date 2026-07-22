@@ -35,6 +35,21 @@ var defaultExcludes = []string{
 	// small IDE-only metadata, not a correctness concern).
 	"Pods",
 	".build",
+	// Windows trash/system directories: not projects, and walking into
+	// $RECYCLE.BIN in particular resurfaces deleted projects as if they were
+	// still ACTIVE.
+	"$RECYCLE.BIN",
+	"System Volume Information",
+	// Python: installed third-party packages under a venv/site install,
+	// mirrors node_modules above -- without this, any dependency that ships
+	// its own setup.py/pyproject.toml (e.g. numpy) is walked into and
+	// misdetected as an authored top-level project.
+	"site-packages",
+	"dist-packages",
+	// Unity's own package manager cache (Library/PackageCache/com.unity.*)
+	// ships a package.json per package that isn't an npm manifest; excluding
+	// the directory keeps the walker from ever reaching those files.
+	"PackageCache",
 }
 
 type Config struct {

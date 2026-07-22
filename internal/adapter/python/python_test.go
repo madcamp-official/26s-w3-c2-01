@@ -92,6 +92,46 @@ func TestFilesystemDetector_CanDetect(t *testing.T) {
 	}
 }
 
+// TestFilesystemDetector_CanDetect_SkipsVendoredPackages reproduces a scan
+// false positive: a dependency installed under site-packages that ships its
+// own setup.py/pyproject.toml (e.g. numpy) must not be detected as an
+// authored top-level project, mirroring node's node_modules guard.
+func TestFilesystemDetector_CanDetect_SkipsVendoredPackages(t *testing.T) {
+	root := t.TempDir()
+	numpy := filepath.Join(root, "Lib", "site-packages", "numpy")
+	write(t, numpy, "setup.py", "")
+
+	realProject := t.TempDir()
+	write(t, realProject, "pyproject.toml", "[project]\nname=\"x\"\n")
+
+	var detector Detector = FilesystemDetector{}
+	if got := detector.CanDetect(scanner.Entry{Path: numpy}); got {
+		t.Errorf("CanDetect(vendored setup.py under site-packages) = %v, want false", got)
+	}
+	if got := detector.CanDetect(scanner.Entry{Path: realProject}); !got {
+		t.Errorf("CanDetect(real project) = %v, want true", got)
+	}
+}
+
+func TestIsVendoredPath(t *testing.T) {
+	j := filepath.Join
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{j("a", "b", "myproject"), false},
+		{j("a", "site-packages"), true},
+		{j("a", "site-packages", "numpy"), true},
+		{j("a", "dist-packages", "numpy"), true},
+		{j("a", "my-site-packages-notes"), false},
+	}
+	for _, tc := range cases {
+		if got := isVendoredPath(tc.path); got != tc.want {
+			t.Errorf("isVendoredPath(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestFilesystemDetector_Detect(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "pyproject.toml", "[project]\nname=\"x\"\n")

@@ -88,6 +88,29 @@ var cacheDirNames = map[string]struct{}{
 
 const eggInfoSuffix = ".egg-info"
 
+// vendoredDirs are directories that hold installed third-party packages, not
+// authored projects -- a marker file (setup.py, pyproject.toml, ...) at or
+// beneath one of these belongs to a dependency, mirroring node.isVendoredPath's
+// node_modules guard (issue #36). The default config exclude list also skips
+// walking into these by name (internal/config/config.go), but this guard
+// still applies if a scan root is pointed directly inside one, or a user's
+// config overrides the default excludes.
+var vendoredDirs = []string{"site-packages", "dist-packages"}
+
+// isVendoredPath reports whether path is, or lives beneath, a directory
+// listed in vendoredDirs. Matching is segment-wise so a sibling like
+// "my-site-packages-notes" is not treated as vendored.
+func isVendoredPath(path string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(path), "/") {
+		for _, vendored := range vendoredDirs {
+			if segment == vendored {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // venvAllowlistTiers is the minimum LockfileEvidence tier (결정 2) a venv
 // must have before 결정 6 allows it into the cleanup allowlist.
 var venvAllowlistTiers = map[domain.EvidenceKind]bool{
@@ -115,6 +138,9 @@ type Detector interface {
 type FilesystemDetector struct{}
 
 func (FilesystemDetector) CanDetect(entry scanner.Entry) bool {
+	if isVendoredPath(entry.Path) {
+		return false
+	}
 	markers, err := DetectMarkers(entry.Path)
 	if err != nil {
 		return false

@@ -182,6 +182,85 @@ func TestExplainCommandLabelsDebugByEcosystem(t *testing.T) {
 	}
 }
 
+// TestExplainCommandJSONOmitsLastModifiedAtForResource locks down that
+// explaining a resource never leaks last_modified_at into JSON. That field
+// is project-only (see output.ExplainView's doc comment), but when it was a
+// bare time.Time, JSON's "omitempty" silently had no effect on it -- a
+// resource-kind view marshaled the Go zero value
+// ("0001-01-01T00:00:00Z") unconditionally, even though the text renderer
+// never prints "Last modified" for a resource at all.
+func TestExplainCommandJSONOmitsLastModifiedAtForResource(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+	jsonOutput = false
+	t.Cleanup(func() { jsonOutput = false })
+
+	fixture, err := filepath.Abs("../testdata/node")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	out := run("explain", "--json", filepath.Join(fixture, "basic", "node_modules"))
+	if bytes.Contains(out.Bytes(), []byte("last_modified_at")) {
+		t.Fatalf("resource explain JSON must omit last_modified_at entirely, got:\n%s", out)
+	}
+}
+
+// TestExplainCommandJSONKeepsLastModifiedAtForProject is the project-kind
+// counterpart: last_modified_at must still be present and real once the
+// field became a pointer.
+func TestExplainCommandJSONKeepsLastModifiedAtForProject(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+	jsonOutput = false
+	t.Cleanup(func() { jsonOutput = false })
+
+	fixture, err := filepath.Abs("../testdata/node")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	out := run("explain", "--json", "project:"+filepath.Join(fixture, "basic"))
+	if bytes.Contains(out.Bytes(), []byte(`"last_modified_at":"0001-01-01T00:00:00Z"`)) {
+		t.Fatalf("project explain JSON must not report the zero-value timestamp:\n%s", out)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("last_modified_at")) {
+		t.Fatalf("project explain JSON must still report last_modified_at:\n%s", out)
+	}
+}
+
 func TestExplainCommandUnknownTargetErrors(t *testing.T) {
 	scanRoot = ""
 	cfgPath = ""

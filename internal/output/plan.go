@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sort"
@@ -83,7 +84,7 @@ func (v PlanView) RenderText(w io.Writer) error {
 	renderPlanSummary(w, v)
 
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "SAFE")
+	fmt.Fprintln(w, colorText(w, "SAFE", ansiGreen))
 	if len(v.Safe) == 0 {
 		fmt.Fprintln(w, "(none)")
 	} else {
@@ -92,13 +93,13 @@ func (v PlanView) RenderText(w io.Writer) error {
 
 	if len(v.Review) > 0 {
 		fmt.Fprintln(w)
-		fmt.Fprintln(w, "REVIEW")
+		fmt.Fprintln(w, colorText(w, "REVIEW", ansiOrange))
 		renderCandidateLines(w, v.Review)
 	}
 
 	if len(v.Blocked) > 0 {
 		fmt.Fprintln(w)
-		fmt.Fprintln(w, "BLOCKED")
+		fmt.Fprintln(w, colorText(w, "BLOCKED", ansiRed))
 		renderBlockedLines(w, v.Blocked)
 	}
 
@@ -112,7 +113,12 @@ func (v PlanView) RenderText(w io.Writer) error {
 // by --risk -- is left out here too, rather than printing a "0 items" that
 // would look like a real finding instead of a filter side effect.
 func renderPlanSummary(w io.Writer, v PlanView) {
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	// Rendered into a buffer first, then colorized by exact-prefix match:
+	// tabwriter aligns columns by counting each cell's rune width, so writing
+	// ANSI codes (which differ in length between "SAFE"/"REVIEW"/"BLOCKED")
+	// straight into the tabwriter would throw off the alignment it computes.
+	var buf bytes.Buffer
+	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(tw, "SAFE\t%s\t%s\tauto-selected\n", itemCount(len(v.Safe)), humanize.Bytes(uint64(sumCandidateSize(v.Safe))))
 	if len(v.Review) > 0 {
 		fmt.Fprintf(tw, "REVIEW\t%s\t%s\tneeds your review\n", itemCount(len(v.Review)), humanize.Bytes(uint64(sumCandidateSize(v.Review))))
@@ -121,6 +127,25 @@ func renderPlanSummary(w io.Writer, v PlanView) {
 		fmt.Fprintf(tw, "BLOCKED\t%s\t%s\tnot eligible\n", itemCount(len(v.Blocked)), humanize.Bytes(uint64(sumBlockedSize(v.Blocked))))
 	}
 	tw.Flush()
+	fmt.Fprint(w, colorizeTierLabels(w, buf.String()))
+}
+
+// colorizeTierLabels colors the leading SAFE/REVIEW/BLOCKED label on each
+// line of a rendered (and already column-aligned) block of text.
+func colorizeTierLabels(w io.Writer, rendered string) string {
+	if !colorEnabled(w) {
+		return rendered
+	}
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		for _, label := range []string{"SAFE", "REVIEW", "BLOCKED"} {
+			if strings.HasPrefix(line, label) {
+				lines[i] = riskLevelColor(label) + label + ansiReset + line[len(label):]
+				break
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func itemCount(n int) string {

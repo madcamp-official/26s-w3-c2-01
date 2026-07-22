@@ -412,6 +412,13 @@ Unverified:
 > 구현됨(2026-07-22, `docs/libra_integration_contracts.md` §20.4): "Expected impact"가 프로젝트가
 > 소유(OWNS)한 리소스 — `node_modules`, `Pods`, `bin`/`obj`/`dist` 등 macOS·Node 생태계 대부분 —
 > 에서는 항상 세 줄 다 UNKNOWN이던 문제를 고쳤다. `RelationOwns` edge도 판단 규칙을 갖는다.
+>
+> 구현됨(2026-07-22, 2차): DEBUG 줄의 라벨이 리소스 종류와 무관하게 항상
+> "Visual Studio debugging"으로 고정돼 있던 문제를 고쳤다. 위 예시(Windows SDK)처럼
+> Visual Studio/MSBuild 계열 리소스에서만 그대로 "Visual Studio debugging"을 쓰고,
+> `Pods`·활성 Xcode처럼 Xcode가 명확한 리소스는 "Xcode debugging", 그 외(예:
+> `node_modules`, `bin`/`obj`/`dist`처럼 여러 생태계가 공유하는 타입)는 중립적인
+> "IDE debugging"을 쓴다.
 
 ### 우선순위
 

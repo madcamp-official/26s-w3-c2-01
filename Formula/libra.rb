@@ -12,9 +12,9 @@ class Libra < Formula
   desc "Analyze and manage local developer storage"
   homepage "https://github.com/madcamp-official/26s-w3-c2-01"
   url "https://github.com/madcamp-official/26s-w3-c2-01.git",
-      tag:      "v1.0.0",
-      revision: "96622b10af1b50e81b449796be4c8375db3ba8b2"
-  version "1.0.0"
+      tag:      "v1.0.1",
+      revision: "2f87d27075fe0aaafc735e6f259fc7fc6a9e02cd"
+  version "1.0.1"
   head "https://github.com/madcamp-official/26s-w3-c2-01.git", branch: "main"
 
   depends_on "go" => :build

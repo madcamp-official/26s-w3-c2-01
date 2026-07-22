@@ -65,6 +65,7 @@ func defaultResourceDetectors() []app.ResourceDetector {
 		app.EcosystemResourceDetector{Name: "swiftpm-cache", Lister: swiftpm.CacheLister{}},
 		app.EcosystemResourceDetector{Name: "homebrew-cache", Lister: homebrew.CacheLister{}},
 		app.EcosystemResourceDetector{Name: "simulator-cache", Lister: simulator.CacheLister{}},
+		app.EcosystemResourceDetector{Name: "simulator-devices", Lister: simulator.DevicesLister{}},
 		app.EcosystemResourceDetector{Name: "xcode-install", Lister: xcode.InstallLister{}},
 		app.VisualStudioResourceDetector{Locator: msbuild.VSWhereToolLocator{}},
 		app.CondaResourceDetector{Lister: conda.CLIEnvLister{}},

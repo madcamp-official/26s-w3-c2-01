@@ -333,6 +333,7 @@ libra resources --risk review
 | Android SDK·Gradle cache | IMPLEMENTED (read-only) |
 | Cargo·Maven cache | IMPLEMENTED (read-only) |
 | Xcode DerivedData, CocoaPods·SwiftPM·Homebrew·iOS Simulator cache (macOS) | IMPLEMENTED (read-only) |
+| iOS Simulator `Devices/` (macOS, 항상 REVIEW·격리 대상 아님) | IMPLEMENTED (read-only) |
 | Xcode 설치 자체(`xcode-install`), 프로젝트 소유 `Pods`/`.build` (macOS) | IMPLEMENTED |
 | Docker 이미지·컨테이너·빌드 캐시·Volume 용량 | IMPLEMENTED (read-only) |
 

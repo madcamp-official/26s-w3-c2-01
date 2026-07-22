@@ -436,13 +436,13 @@ cleanup/retention 설정을 안내하고, Cargo는 전역 cache purge 명령이 
 - CocoaPods: `~/Library/Caches/CocoaPods`.
 - SwiftPM: `~/Library/Caches/org.swift.swiftpm` (macOS만 — Linux `~/.cache/org.swift.swiftpm` 경로는 실사용 검증 전이라 이번 범위에 포함하지 않는다).
 - Homebrew: 설치된 `brew` CLI의 `brew --cache` 결과를 사용한다(npm/pnpm과 동일한 CLI-resolved 방식). Homebrew Cellar(설치된 formula/cask 본체)는 캐시가 아닌 시스템 구성요소이므로 탐지 대상에서 제외한다.
-- iOS Simulator: `~/Library/Developer/CoreSimulator/Caches`만 탐지한다. `Devices/`(각 시뮬레이터의 설치 앱·앱 데이터)는 `simctl erase`로 공식적으로 disposable 취급되긴 하지만 개발자가 의도적으로 seed한 테스트 상태를 담고 있을 수 있어 순수 캐시와 다른 위험도 판단이 필요하므로 별도 결정 전까지 제외한다. runtime 이미지(`/Library/Developer/CoreSimulator`, `~/Library`가 아닌 시스템 전역 경로)도 Homebrew Cellar와 같은 이유로 제외한다.
+- iOS Simulator: `~/Library/Developer/CoreSimulator/Caches`(순수 캐시)와 `Devices/`(각 시뮬레이터의 설치 앱·앱 데이터, 보통 macOS 개발 공간에서 가장 큰 소비처) 둘 다 탐지한다. `Devices/`는 개발자가 의도적으로 seed한 상태(테스트 fixture·로그인 세션)를 담을 수 있어 순수 캐시가 아니라 **Docker Volume과 같은 성격**으로 본다 — 그래서 항상 `REVIEW`(자동 정리 대상 아님)로만 표시하고, 격리/숙청 경로에는 절대 넣지 않는다(2026-07-22 결정, §19.8이 "별도 결정 전까지 제외"로 남겨뒀던 항목). 구현상 `global-cache` 타입을 재사용하는데, 이는 캐시라서가 아니라 `DefaultRiskPolicy`에서 `global-cache`가 구조적으로 절대 SAFE에 도달하지 못해 이 user-data 디렉터리에 필요한 안전 속성과 정확히 일치하기 때문이다(새 `ResourceType`/migration 없음, version `simulator-devices`로 전용 simctl 안내 문구 선택). "unavailable"(정리해도 안전) 대 "available"(사용 중) 기기 구분은 `xcrun simctl list devices`가 필요해 실제 Simulator 설치된 머신에서 검증 가능해질 때까지 후속으로 남긴다. runtime 이미지(`/Library/Developer/CoreSimulator`, `~/Library`가 아닌 시스템 전역 경로)는 Homebrew Cellar와 같은 이유로 여전히 제외한다.
 
 전역 cache는 모두 `global-cache`/`REVIEW`이며 자동 plan/clean 대상이 아니다(§19.7과 동일 정책). 도구가 설치되지 않았거나 캐시 디렉터리가 없으면 빈 결과이고 scan issue를 만들지 않는다.
 
 구현은 `internal/adapter/xcode`, `cocoapods`, `swiftpm`, `homebrew`, `simulator` package로 분리하고 공통 `cachepath` helper를 재사용한다. `OFFICIAL_CLEANUP_GUIDANCE` reason으로 다음 안내만 제공한다: Xcode DerivedData는 통째로 삭제 가능(`rm -rf` 또는 Xcode Settings > Locations), CocoaPods는 `pod cache clean --all`, SwiftPM은 `rm -rf ~/Library/Caches/org.swift.swiftpm`(또는 `swift package purge-cache`), Homebrew는 `brew cleanup`/`brew cleanup -s`, iOS Simulator 캐시는 자동 재생성되며 설치된 runtime/device 관리는 Xcode Settings > Platforms 또는 `xcrun simctl`을 안내한다.
 
-**남은 범위**: Simulator `Devices`/runtime 이미지의 위험도 분류는 여전히 별도 결정 전까지 제외한다. (2026-07-21 갱신: symlink·APFS 별도 볼륨 경계는 실제 검증 완료 — §11 참고. macOS 시스템 경로 보호와 권한 오류 처리도 검증 완료 — §8 참고. Xcode/SwiftPM 프로젝트 타입 탐지와 의존성 그래프는 §19.9에서 구현됐다 — 더 이상 범위 밖이 아니다.)
+**남은 범위**: Simulator runtime 이미지의 위험도 분류, 그리고 `Devices/`의 available/unavailable 기기 구분(simctl 필요)은 여전히 후속으로 남긴다. (`Devices/` 자체의 read-only REVIEW 탐지는 2026-07-22에 추가됐다 — 위 iOS Simulator 항목 참고.) (2026-07-21 갱신: symlink·APFS 별도 볼륨 경계는 실제 검증 완료 — §11 참고. macOS 시스템 경로 보호와 권한 오류 처리도 검증 완료 — §8 참고. Xcode/SwiftPM 프로젝트 타입 탐지와 의존성 그래프는 §19.9에서 구현됐다 — 더 이상 범위 밖이 아니다.)
 
 > 같은 날 별도로: `.NET SDK` 탐지(`dotnet-sdk`, `internal/adapter/dotnet`)를 macOS/Linux에서도
 > 풀었다. `dotnet` CLI 자체는 원래 크로스플랫폼이라 `adapter.RequireWindows` 게이트는 기술적

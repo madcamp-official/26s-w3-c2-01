@@ -132,6 +132,8 @@ func officialCacheCleanupGuidance(version string) string {
 		return "use `brew cleanup` to remove old downloads, or `brew cleanup -s` to also clear the cache directory"
 	case "simulator-cache":
 		return "safe to delete; Simulator regenerates it automatically. Manage installed runtimes and devices separately via Xcode > Settings > Platforms or `xcrun simctl`"
+	case "simulator-devices":
+		return "may hold app data or state you seeded (test fixtures, logins) -- review first. Reclaim stale devices with `xcrun simctl delete unavailable`, or a specific one with `xcrun simctl delete <udid>`"
 	default:
 		return "use the owning package manager's official cleanup workflow"
 	}

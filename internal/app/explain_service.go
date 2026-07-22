@@ -48,15 +48,15 @@ type ExplainService struct {
 }
 
 // NewExplainService constructs the service from repositories only -- it
-// builds its own internal ImpactService from dependencies rather than
-// taking one as a parameter. ImpactService is stateless (holds only the
-// repository), so this and cmd/impact.go's own separate
-// app.NewImpactService(dependencies) call end up doing the same judgment
-// against the same data; there's no shared state to keep in sync.
+// builds its own internal ImpactService rather than taking one as a
+// parameter. ImpactService is stateless (holds only the repositories), so
+// this and cmd/impact.go's own separate app.NewImpactService(...) call end
+// up doing the same judgment against the same data; there's no shared state
+// to keep in sync.
 func NewExplainService(resources ResourceRepository, projects ProjectRepository, dependencies DependencyRepository) *ExplainService {
 	return &ExplainService{
 		resources: resources, projects: projects, dependencies: dependencies,
-		impact: NewImpactService(dependencies),
+		impact: NewImpactService(dependencies, resources),
 	}
 }
 

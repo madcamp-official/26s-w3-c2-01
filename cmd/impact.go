@@ -58,7 +58,7 @@ dependency, and any CI configuration that references it.`,
 			return fmt.Errorf("find projects depending on %q: %w", resource.ID, err)
 		}
 
-		assessments, err := app.NewImpactService(dependencies).Assess(cmd.Context(), resource.ID)
+		assessments, err := app.NewImpactService(dependencies, resourceRepo).Assess(cmd.Context(), resource.ID)
 		if err != nil {
 			return fmt.Errorf("assess impact of %q: %w", resource.ID, err)
 		}

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"path/filepath"
 	"testing"
+
+	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
 func TestExplainCommandDescribesResourceWithEvidence(t *testing.T) {
@@ -258,6 +260,91 @@ func TestExplainCommandJSONKeepsLastModifiedAtForProject(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("last_modified_at")) {
 		t.Fatalf("project explain JSON must still report last_modified_at:\n%s", out)
+	}
+}
+
+// TestExplainUnverifiedFromConfidence covers explainUnverifiedFromConfidence
+// directly: KNOWN axes produce nothing, Dependency/ScanCoverage (still a
+// system-wide baseline pending per-resource UnverifiedScope attribution,
+// docs/libra_integration_contracts.md §20.2) get a distinct message from
+// resource-specific axes, and a legacy profile with no per-axis Assessments
+// (ModelVersion 0) produces nothing rather than a guess.
+func TestExplainUnverifiedFromConfidence(t *testing.T) {
+	profile := domain.ConfidenceProfile{
+		ModelVersion: 1,
+		Assessments: []domain.ConfidenceAssessment{
+			{Axis: domain.AxisClassification, Score: 75, Status: domain.ConfidenceKnown},
+			{Axis: domain.AxisDependency, Score: 80, Status: domain.ConfidencePartial},
+			{Axis: domain.AxisScanCoverage, Score: 80, Status: domain.ConfidencePartial},
+			{Axis: domain.AxisPathSafety, Score: 0, Status: domain.ConfidenceUnknown, LimitingClaim: domain.ClaimNoTrackedOriginals},
+		},
+	}
+	got := explainUnverifiedFromConfidence(profile)
+	want := []string{
+		"DEPENDENCY uses a conservative baseline (80%) until per-resource scope tracking is connected",
+		"SCAN_COVERAGE uses a conservative baseline (80%) until per-resource scope tracking is connected",
+		"PATH_SAFETY confidence is UNKNOWN (0%) -- limited by NO_TRACKED_ORIGINALS",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("explainUnverifiedFromConfidence() = %#v, want %d lines", got, len(want))
+	}
+	for i, line := range want {
+		if got[i] != line {
+			t.Errorf("line %d = %q, want %q", i, got[i], line)
+		}
+	}
+
+	if lines := explainUnverifiedFromConfidence(domain.ConfidenceProfile{}); lines != nil {
+		t.Fatalf("legacy profile with no Assessments = %#v, want nil", lines)
+	}
+}
+
+// TestExplainCommandShowsConfidenceBreakdownAndUnverified is an E2E check
+// that the 7-axis ConfidenceProfile (Classification/Ownership/Dependency/
+// Regenerability/PathSafety/ScanCoverage/Freshness) and the Unverified
+// section actually reach real `explain` output against a real scan, not
+// just the unit-level helper.
+func TestExplainCommandShowsConfidenceBreakdownAndUnverified(t *testing.T) {
+	scanRoot = ""
+	cfgPath = ""
+	jsonOutput = false
+	t.Cleanup(func() { jsonOutput = false })
+
+	fixture, err := filepath.Abs("../testdata/node")
+	if err != nil {
+		t.Fatalf("resolve fixture path: %v", err)
+	}
+	t.Chdir(t.TempDir())
+
+	run := func(args ...string) *bytes.Buffer {
+		t.Helper()
+		out := &bytes.Buffer{}
+		rootCmd.SetOut(out)
+		rootCmd.SetErr(out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("Execute(%v) error = %v; output=%s", args, err, out)
+		}
+		return out
+	}
+
+	run("init")
+	run("scan", "--root", fixture)
+
+	target := filepath.Join(fixture, "basic", "node_modules")
+
+	textOut := run("explain", target)
+	for _, want := range []string{"Confidence breakdown:", "DEPENDENCY", "SCAN_COVERAGE", "Cleanup eligibility:", "Unverified:"} {
+		if !bytes.Contains(textOut.Bytes(), []byte(want)) {
+			t.Fatalf("explain text output missing %q:\n%s", want, textOut)
+		}
+	}
+
+	jsonOut := run("explain", "--json", target)
+	for _, want := range []string{`"confidence_profile"`, `"confidence_summary"`, `"assessments"`, `"unverified"`} {
+		if !bytes.Contains(jsonOut.Bytes(), []byte(want)) {
+			t.Fatalf("explain JSON output missing %q:\n%s", want, jsonOut)
+		}
 	}
 }
 

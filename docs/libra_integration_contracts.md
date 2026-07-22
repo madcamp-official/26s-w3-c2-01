@@ -636,6 +636,28 @@ UnverifiedScope = 항목별 감점    ── 미구현 (DECISION_REQUIRED로 남
 
 Confidence가 높다는 사실은 Risk가 SAFE라는 의미가 아니다.
 
+**`explain`에서의 노출(`IMPLEMENTED`, 2026-07-22)**: `libra explain <resource>`가 이제 위 7축
+`ConfidenceProfile`(각 axis의 `Score`/`Status`/`LimitingClaim`)과 `ConfidenceProfile.CleanupSummary()`를
+그대로 노출한다(`explain --json`의 `confidence_profile`/`confidence_summary`, 텍스트의 "Confidence
+breakdown:"/"Cleanup eligibility:"). 기존 `resources --json`은 이미 노출하고 있었지만 `explain`은
+scalar `Confidence` 하나만 보여줘서 어떤 축이 병목인지 알 수 없었다 — 이제 두 명령이 같은 모양을 노출한다.
+`ModelVersion=0`이거나 `Assessments`가 비어 있는 legacy row(예: 이 모델 이전에 만들어진 테스트 fixture)는
+breakdown 섹션 자체를 생략한다(추측해서 채우지 않음).
+
+같은 변경에서 `explain`의 `Unverified`(문서 §13 "분석하지 못한 범위") 필드도 실제로 채워지기
+시작했다 — 이전에는 어떤 caller도 채우지 않는 죽은 필드였다. `resource.ConfidenceProfile.Assessments`
+중 `Status != KNOWN`인 axis를 그대로 사람이 읽을 문장으로 변환한다(`cmd/explain.go`의
+`explainUnverifiedFromConfidence`). `Dependency`/`ScanCoverage`는 위에서 설명한 대로 resource별
+귀속 전까지 시스템 전체가 공유하는 80/PARTIAL baseline이라 모든 리소스에서 항상 나타나며, 이는
+버그가 아니라 정직한 고지다. 이 `Unverified`는 `app.UnverifiedScope`(scan 실행 중에만 존재, §13)와는
+별개 메커니즘이다 — 그쪽 pipeline 연결은 여전히 `CONFIRMED`(후속 구현) 상태로 남아 있으며 이번
+변경에 포함하지 않았다.
+
+`ExplainService.ExplainResource`가 이제 `resource_list_service.go`/`plan_service.go`와 동일하게
+`ApplyFreshness`를 호출한다 — 이전에는 `explain`만 이 호출이 빠져 있어서, `resources`/`plan`이 이미
+`EVIDENCE_STALE`로 `REVIEW` 강등한 리소스를 `explain`으로 보면 여전히 스캔 시점의 `SAFE`로 보이는
+불일치가 있었다(같은 리소스에 대해 명령마다 다른 답).
+
 ### 20.3 Risk 중앙 정책 (`CONFIRMED`)
 
 adapter는 사실과 Evidence만 반환하고 application의 `RiskPolicy`가 판정한다.

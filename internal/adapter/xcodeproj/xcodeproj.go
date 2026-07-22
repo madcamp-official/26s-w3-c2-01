@@ -7,6 +7,8 @@ package xcodeproj
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,13 +28,26 @@ func (Detector) CanDetect(entry scanner.Entry) bool {
 }
 
 func (Detector) Detect(_ context.Context, entry scanner.Entry) (domain.BuildProject, error) {
+	// A valid .xcodeproj bundle contains project.pbxproj; without it the
+	// directory is a leftover/backup/empty bundle, not a real project. Reject
+	// it so a nonexistent manifest never anchors a stored project's ID or
+	// evidence (the caller turns this error into a malformed-manifest issue).
+	manifestPath := filepath.Join(entry.Path, "project.pbxproj")
+	info, err := os.Stat(manifestPath)
+	if err != nil {
+		return domain.BuildProject{}, fmt.Errorf("missing %s: %w", manifestPath, err)
+	}
+	if info.IsDir() {
+		return domain.BuildProject{}, fmt.Errorf("%s is a directory, not a project manifest", manifestPath)
+	}
+
 	root := filepath.Dir(entry.Path)
 	name := strings.TrimSuffix(filepath.Base(entry.Path), projectSuffix)
 	return domain.BuildProject{
 		Name:           name,
 		Type:           domain.ProjectTypeXcode,
 		RootPath:       root,
-		ManifestPath:   filepath.Join(entry.Path, "project.pbxproj"),
+		ManifestPath:   manifestPath,
 		LastModifiedAt: entry.ModifiedAt,
 	}, nil
 }

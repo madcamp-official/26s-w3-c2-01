@@ -46,7 +46,13 @@ func (WorkspaceDetector) Detect(_ context.Context, entry scanner.Entry) (Workspa
 }
 
 // xcworkspaceLocationPrefixes are the URI-like schemes contents.xcworkspacedata
-// uses before the actual path in a FileRef's location attribute.
+// uses before the actual path in a FileRef's location attribute. They are all
+// stripped and the remainder joined onto the workspace's parent directory,
+// which is correct for the top-level flat case handled here. NOTE: once
+// nested <Group> support is added, group:/container:/self: can no longer be
+// treated identically -- group: is relative to the enclosing Group's own
+// path, container: to the workspace container -- so per-element base paths
+// will need to be tracked rather than always joining onto one base.
 var xcworkspaceLocationPrefixes = []string{"group:", "container:", "self:", "absolute:"}
 
 // resolveMembers parses contents.xcworkspacedata for top-level <FileRef

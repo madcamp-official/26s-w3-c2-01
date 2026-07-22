@@ -31,7 +31,7 @@
 | 2026-07-19 | `resources`/`explain`/`impact` 명령 구현 완료, README·명령어 상태표 동기화 |
 | 2026-07-20 (Day 4 리뷰 · Day 5) | Day 4 코드 리뷰(협업/계약/구조적 이슈 정리), cleanup evidence·위험도 정책(risk policy) 도입, cleanup plan snapshot 저장, `plan --target`/`clean`(dry-run) 구현, 같은 볼륨 quarantine·복구 transaction(`clean --execute`, `restore`) 완성 |
 | 2026-07-21 (Day 5, 오늘까지) | 버그 수정(node_modules 프로젝트 오탐, 프로젝트 크기 0B 오표시, scan 경고 노출 개선), `export`/`purge`/`daemon`/`events` 명령 추가, Docker·Android·Gradle·Cargo·Maven·npm·pnpm·Conda 생태계 어댑터(analysis-only) 추가, 6축 신뢰도(confidence profile)와 구조화된 risk reason 도입, 전역 `--json` envelope와 종료 코드 계약 확정, `init` 없이는 다른 명령을 실행할 수 없도록 하는 전역 가드(`requireInit`) 도입, `scan` 실행 중 실시간 진행률 바(progress bar) 표시 추가, macOS 전용 개발 캐시 어댑터 5종(Xcode DerivedData/CocoaPods/SwiftPM/Homebrew/iOS Simulator, analysis-only) 추가, macOS 시스템 경로(`/System`/`/Library`/`/usr` 등) 보호 분류 추가, 실제 별도 APFS 볼륨과 권한 오류(chmod 000) 시나리오로 clean/restore 안전성 검증 |
-| 2026-07-22 | `.NET SDK` 탐지를 macOS/Linux까지 확장(`dotnet` CLI는 원래 크로스플랫폼이었음), Xcode(`.xcodeproj`)·Xcode Workspace(`.xcworkspace`)·SwiftPM(`Package.swift`) 프로젝트 탐지 추가, 프로젝트 소유 `Pods`/`.build` 산출물을 `node_modules`와 동일한 SAFE 경로로 연결, 설치된 Xcode 자체를 `xcode-install` 시스템 리소스로 탐지, Xcode/SwiftPM 프로젝트 → 설치된 Xcode REQUIRES 의존성 분석기 추가(macOS 프로젝트도 Windows SDK/MSBuild와 동급으로 `explain`/`impact`의 의존성·삭제 영향 분석 대상이 됨) |
+| 2026-07-22 | `.NET SDK` 탐지를 macOS/Linux까지 확장(`dotnet` CLI는 원래 크로스플랫폼이었음), Xcode(`.xcodeproj`)·Xcode Workspace(`.xcworkspace`)·SwiftPM(`Package.swift`) 프로젝트 탐지 추가, 프로젝트 소유 `Pods`/`.build` 산출물을 `node_modules`와 동일한 SAFE 경로로 연결, 활성 Xcode 자체를 `xcode-install` 시스템 리소스로 탐지, `.xcodeproj` 프로젝트 → 활성 Xcode REQUIRES 의존성 분석기 추가(macOS 프로젝트도 Windows SDK/MSBuild와 동급으로 `explain`/`impact`의 의존성·삭제 영향 분석 대상이 됨; SwiftPM은 어떤 Swift toolchain으로도 빌드 가능해 Xcode 의존으로 보지 않음) |
 
 ---
 
@@ -64,14 +64,14 @@
 | Android SDK, Gradle 캐시, Cargo 레지스트리/git 캐시, Maven 로컬 저장소, npm 캐시, pnpm store | ✅ analysis-only — 탐지·크기 집계만 하고 공식 정리 명령을 안내(직접 정리 실행은 하지 않음) |
 | Xcode DerivedData, CocoaPods 캐시, SwiftPM 캐시, Homebrew 캐시, iOS Simulator 캐시 (macOS) | ✅ analysis-only — 위와 동일하게 탐지·크기 집계·공식 정리 명령 안내만 수행. Simulator의 `Devices/`(기기별 설치 앱·데이터)와 runtime 이미지는 순수 캐시가 아니라 별도 위험도 판단이 필요해 이번 범위에서 제외 |
 | Conda 환경 | ✅ 전역 named 환경은 정보 제공용(REQUIRES 관계), 프로젝트 내부 prefix 환경은 OWNS 관계로 구분 |
-| Xcode 설치 자체(`xcode-select`/`xcodebuild -version`), 프로젝트 소유 `Pods`/`.build` (macOS) | ✅ Xcode는 Visual Studio와 같은 급의 시스템 리소스(`BLOCKED`), `Pods`/`.build`는 각각 `Podfile.lock`/`Package.resolved` 있으면 `node_modules`처럼 `SAFE` 후보 |
+| 활성 Xcode 설치(`xcode-select`/`xcodebuild -version`), 프로젝트 소유 `Pods`/`.build` (macOS) | ✅ Xcode는 Visual Studio와 같은 급의 시스템 리소스(`BLOCKED`, 현재 활성 설치본만 — 비활성 Xcode는 미탐지), `Pods`/`.build`는 각각 `Podfile.lock`/`Package.resolved` 있으면 `node_modules`처럼 `SAFE` 후보 |
 | Docker Volume | ⚠️ 탐지는 되지만 사용자 데이터일 수 있어 항상 `BLOCKED`, 자동/수동 삭제 명령 모두 미제공 |
 | apt 등 macOS 외 패키지 매니저, 커널 드라이버/파일시스템 minifilter | ❌ 미지원 |
 | 완전한 block-level 중복 파일(dedup) 탐지 | ❌ 미지원 |
 
 ### 의존성 분석
 
-- **지원:** MSBuild 프로젝트 → Windows SDK/.NET SDK (XML property 기반, 근거를 `DECLARED`/`RESOLVED`/`INFERRED`/`UNKNOWN`으로 구분), Node 프로젝트 → `node_modules`/빌드 산출물(lockfile 존재 여부로 재생성 가능 여부 판단), Conda 의존성 분석기, Xcode/SwiftPM 프로젝트 → 설치된 Xcode(`swift-tools-version` 선언 있으면 `DECLARED`, 없으면 존재 매칭만으로 `INFERRED`).
+- **지원:** MSBuild 프로젝트 → Windows SDK/.NET SDK (XML property 기반, 근거를 `DECLARED`/`RESOLVED`/`INFERRED`/`UNKNOWN`으로 구분), Node 프로젝트 → `node_modules`/빌드 산출물(lockfile 존재 여부로 재생성 가능 여부 판단), Conda 의존성 분석기, `.xcodeproj` 프로젝트 → 활성 Xcode(`INFERRED`; 빌드에 전체 Xcode가 필요하므로). SwiftPM은 어떤 Swift toolchain으로도 빌드되므로 Xcode에 의존한다고 보지 않고, toolchain 관계를 `UnverifiedScope`로만 기록한다(거짓 삭제-영향 방지).
 - **미지원:** `Directory.Build.props` 상위 경로의 완전한 해석, MSBuild `-preprocess`/binary log 분석, `Condition=` 속성부 완전 평가(대신 `UnverifiedScope`에 "평가하지 못한 범위"로 별도 기록됨).
 
 ### 위험도 분류 (`internal/app/risk_policy.go`)

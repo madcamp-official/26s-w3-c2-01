@@ -8,7 +8,6 @@ import (
 
 	condaadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/conda"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/adapter/msbuild"
-	swiftpmadapter "github.com/madcamp-official/26s-w3-c2-01/internal/adapter/swiftpm"
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
@@ -149,21 +148,28 @@ func (a CondaDependencyAnalyzer) Analyze(ctx context.Context, input ProjectAnaly
 	}
 }
 
-// XcodeDependencyAnalyzer connects a detected Xcode or SwiftPM project to
-// the single installed Xcode.app resource (CondaResourceDetector-style
-// system resource, ResourceTypeXcodeInstall) -- the same "if the toolchain
-// that builds this disappears, so does the project's ability to build"
-// relationship MSBuildDependencyAnalyzer expresses for Windows SDK/.NET SDK.
+// XcodeDependencyAnalyzer connects a detected Xcode project (.xcodeproj) to
+// the active Xcode.app resource (ResourceTypeXcodeInstall) with a REQUIRES
+// edge -- the same "if the toolchain that builds this disappears, so does
+// the project's ability to build" relationship MSBuildDependencyAnalyzer
+// expresses for Windows SDK/.NET SDK. Building an .xcodeproj genuinely needs
+// full Xcode (`xcodebuild`), which is exactly what InstallLister reports (it
+// excludes a Command-Line-Tools-only install), so that edge is real.
 //
-// Unlike MSBuild, Xcode publishes no per-project "declared minimum Xcode
-// version" MSBuild's WindowsTargetPlatformVersion resolves against -- the
-// closest real signal is SwiftPM's swift-tools-version comment (carried as
-// a ProjectProperty by SwiftPMProjectDetector), which is DECLARED evidence
-// but not resolved against the installed Xcode's actual Swift version
-// (xcodebuild -version reports the Xcode version, not the Swift tools
-// version it ships). Plain Xcode projects have no such marker at all, so
-// the edge there is EvidenceInferred: "this project type requires some
-// Xcode to build, and exactly one was found," not a version match.
+// SwiftPM (Package.swift) is deliberately NOT given this edge. A Swift
+// package builds with `swift build` under *any* Swift toolchain -- Command
+// Line Tools, a standalone toolchain, or Linux's -- not only this Xcode.app,
+// so an unconditional REQUIRES-Xcode edge would make `impact
+// xcode-install:<version>` falsely report SwiftPM projects as breaking when
+// Xcode is removed. swift-tools-version, moreover, declares a Swift *tools
+// compatibility level*, not a dependency on a specific Xcode install. Until
+// a Swift-toolchain resource is modeled, SwiftPM records an UnverifiedScope
+// (the relationship exists but isn't analyzed) instead of a wrong edge.
+//
+// The edge for .xcodeproj is always EvidenceInferred: a plain .xcodeproj
+// carries no declared Xcode version, so this is "this project type requires
+// some Xcode to build, and exactly one active install was found," not a
+// version match.
 type XcodeDependencyAnalyzer struct {
 	// Now returns the collection timestamp recorded on resolved Evidence.
 	// Defaults to time.Now; tests may override it for determinism.
@@ -171,32 +177,29 @@ type XcodeDependencyAnalyzer struct {
 }
 
 func (a XcodeDependencyAnalyzer) Analyze(ctx context.Context, input ProjectAnalysisInput, index ResourceIndex) DetectionResult[DependencyBundle] {
-	if input.Project.Type != domain.ProjectTypeXcode && input.Project.Type != domain.ProjectTypeSwiftPM {
+	switch input.Project.Type {
+	case domain.ProjectTypeXcode:
+		// Proceed to build the REQUIRES edge below.
+	case domain.ProjectTypeSwiftPM:
+		return DetectionResult[DependencyBundle]{
+			Unverified: []UnverifiedScope{{Path: input.Project.ManifestPath, Phase: PhaseResolveDependencies,
+				Reason: "SwiftPM build toolchain is not modeled; a Package.swift builds with Command Line Tools, a standalone Swift toolchain, or Linux's Swift -- not only this Xcode.app -- so no REQUIRES edge to Xcode is asserted"}},
+		}
+	default:
 		return DetectionResult[DependencyBundle]{}
 	}
+
 	installs := index.ListByType(domain.ResourceTypeXcodeInstall)
 	if len(installs) == 0 {
 		return DetectionResult[DependencyBundle]{
 			Unverified: []UnverifiedScope{{Path: input.Project.ManifestPath, Phase: PhaseResolveDependencies,
-				Reason: "no Xcode installation detected on this machine to match against"}},
+				Reason: "no active Xcode installation detected on this machine to match against"}},
 		}
 	}
-	// xcode.InstallLister only ever reports the one active Xcode.app, so
-	// there is exactly one candidate to match, unlike Windows SDK/.NET SDK's
-	// multiple side-by-side versions.
+	// InstallLister only ever reports the one active Xcode.app, so there is
+	// exactly one candidate to match, unlike Windows SDK/.NET SDK's multiple
+	// side-by-side versions.
 	target := installs[0]
-
-	kind := domain.EvidenceInferred
-	sourcePath := input.Project.ManifestPath
-	var declaredValue string
-	for _, property := range input.Properties {
-		if property.Name == swiftpmadapter.ToolsVersionPropertyName {
-			kind = domain.EvidenceDeclared
-			declaredValue = property.Value
-			sourcePath = property.SourcePath
-			break
-		}
-	}
 
 	now := a.Now
 	if now == nil {
@@ -207,13 +210,13 @@ func (a XcodeDependencyAnalyzer) Analyze(ctx context.Context, input ProjectAnaly
 		SourceType: domain.NodeProject, SourceID: input.Project.ID,
 		TargetType: domain.NodeResource, TargetID: target.ID,
 		Relation:   domain.RelationRequires,
-		Confidence: domain.DefaultConfidence[kind],
+		Confidence: domain.DefaultConfidence[domain.EvidenceInferred],
 	}
 	dependency.ID = domain.DependencyID(dependency.SourceType, dependency.SourceID, dependency.Relation, dependency.TargetType, dependency.TargetID)
 
 	evidence := domain.Evidence{
-		DependencyID: dependency.ID, Kind: kind, SourcePath: sourcePath,
-		Property: "xcode-install", RawValue: declaredValue, ResolvedValue: target.Version,
+		DependencyID: dependency.ID, Kind: domain.EvidenceInferred, SourcePath: input.Project.ManifestPath,
+		Property: "xcode-install", ResolvedValue: target.Version,
 		CollectedAt: now(),
 	}
 	evidence.ID = domain.EvidenceID(evidence.DependencyID, evidence.Kind, evidence.SourcePath, evidence.Property, evidence.RawValue, evidence.ResolvedValue)

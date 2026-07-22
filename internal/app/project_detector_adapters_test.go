@@ -425,6 +425,9 @@ func TestXcodeProjectDetectorAdaptsProjectFact(t *testing.T) {
 	if err := os.Mkdir(bundle, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(bundle, "project.pbxproj"), []byte("// pbxproj\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	got := (XcodeProjectDetector{Detector: xcodeprojadapter.Detector{}}).
 		Observe(context.Background(), scanner.Entry{Path: bundle, Kind: scanner.EntryDirectory})
@@ -436,10 +439,30 @@ func TestXcodeProjectDetectorAdaptsProjectFact(t *testing.T) {
 	}
 }
 
+func TestXcodeProjectDetectorReportsMalformedBundleAsIssue(t *testing.T) {
+	root := t.TempDir()
+	bundle := filepath.Join(root, "Backup.xcodeproj") // no project.pbxproj inside
+	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := (XcodeProjectDetector{Detector: xcodeprojadapter.Detector{}}).
+		Observe(context.Background(), scanner.Entry{Path: bundle, Kind: scanner.EntryDirectory})
+	if len(got.Items) != 0 {
+		t.Fatalf("Observe() items = %#v, want none for a bundle with no project.pbxproj", got.Items)
+	}
+	if len(got.Issues) != 1 || got.Issues[0].Code != IssueMalformedManifest {
+		t.Fatalf("Observe() issues = %#v, want one malformed-manifest issue", got.Issues)
+	}
+}
+
 func TestXcodeProjectDetectorReportsPodsAsProjectResource(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "MyApp.xcodeproj")
 	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "project.pbxproj"), []byte("// pbxproj\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "Podfile"), []byte("platform :ios, '17.0'\n"), 0o644); err != nil {

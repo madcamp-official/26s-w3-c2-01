@@ -9,12 +9,22 @@ import (
 	"github.com/madcamp-official/26s-w3-c2-01/internal/domain"
 )
 
-// InstallLister detects the installed Xcode.app itself -- the macOS
-// analogue of msbuild.VSWhereToolLocator for Visual Studio: a system-managed
-// dev tool, not a cache, so it is reported with SystemManaged set (BLOCKED
-// regardless of install location -- some developers keep Xcode under
-// ~/Applications rather than the system-wide /Applications to avoid sudo,
-// which the path-based protected-root classifier alone would not catch).
+// InstallLister detects the *active* Xcode.app -- the one `xcode-select`
+// currently points at -- as the macOS analogue of msbuild.VSWhereToolLocator
+// for Visual Studio: a system-managed dev tool, not a cache, reported with
+// SystemManaged set (BLOCKED regardless of install location -- some
+// developers keep Xcode under ~/Applications rather than the system-wide
+// /Applications to avoid sudo, which the path-based protected-root
+// classifier alone would not catch).
+//
+// Scope is deliberately the *active* install only, not every Xcode present.
+// A machine can have several side by side (Xcode.app, Xcode-beta.app, custom
+// locations); this reports just the selected one, so an inactive Xcode's
+// disk usage is not counted and `xcode-select`-switching changes what shows
+// up. Enumerating all installs (e.g. via mdfind/Spotlight over *.app bundles
+// and reading each bundle's version metadata) is a documented follow-up
+// (docs/libra_integration_contracts.md §19.9); the resource is named
+// "Xcode (active)" to make this scope visible in output.
 //
 // Only reported when `xcodebuild -version` actually succeeds, i.e. a full
 // Xcode.app is active -- `xcode-select`'s developer directory alone can
@@ -63,7 +73,7 @@ func (l InstallLister) ListResources(ctx context.Context) ([]domain.Resource, er
 	devDir := strings.TrimSpace(string(devDirOut))
 	version := parseXcodebuildVersion(string(versionOut))
 	return []domain.Resource{{
-		Name:          "Xcode",
+		Name:          "Xcode (active)",
 		Type:          domain.ResourceTypeXcodeInstall,
 		Version:       version,
 		DisplayPath:   xcodeAppPath(devDir),

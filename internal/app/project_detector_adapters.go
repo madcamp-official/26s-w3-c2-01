@@ -355,10 +355,13 @@ func (d XcodeWorkspaceDetector) Observe(ctx context.Context, entry scanner.Entry
 }
 
 // SwiftPMProjectDetector wraps internal/adapter/swiftpm's Package.swift
-// project detection and its project-owned .build/ artifact, plus the
-// declared swift-tools-version comment (carried through as a
-// ProjectProperty for XcodeDependencyAnalyzer, the same way MSBuild's
-// declared properties reach MSBuildDependencyAnalyzer).
+// project detection and its project-owned .build/ artifact. It also carries
+// the declared swift-tools-version comment through as a ProjectProperty: it
+// is a real declared fact, but no analyzer consumes it yet -- it is reserved
+// for a future Swift-toolchain resource model. It is deliberately NOT used
+// by XcodeDependencyAnalyzer, since swift-tools-version is a Swift tools
+// compatibility level, not a dependency on a specific Xcode install (see
+// that analyzer's doc comment).
 type SwiftPMProjectDetector struct{ Detector swiftpmadapter.Detector }
 
 func (d SwiftPMProjectDetector) Observe(ctx context.Context, entry scanner.Entry) DetectionResult[ProjectCandidate] {

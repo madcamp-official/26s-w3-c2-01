@@ -30,6 +30,9 @@ func TestDetectorDetectRootsAtParentOfBundle(t *testing.T) {
 	if err := os.Mkdir(bundle, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(bundle, "project.pbxproj"), []byte("// pbxproj\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	modifiedAt := time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC)
 
 	project, err := (Detector{}).Detect(context.Background(), scanner.Entry{Path: bundle, Kind: scanner.EntryDirectory, ModifiedAt: modifiedAt})
@@ -44,5 +47,16 @@ func TestDetectorDetectRootsAtParentOfBundle(t *testing.T) {
 	}
 	if !project.LastModifiedAt.Equal(modifiedAt) {
 		t.Errorf("LastModifiedAt = %v, want %v", project.LastModifiedAt, modifiedAt)
+	}
+}
+
+func TestDetectorRejectsBundleWithoutPbxproj(t *testing.T) {
+	root := t.TempDir()
+	bundle := filepath.Join(root, "Backup.xcodeproj") // leftover bundle, no project.pbxproj
+	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Detector{}).Detect(context.Background(), scanner.Entry{Path: bundle, Kind: scanner.EntryDirectory}); err == nil {
+		t.Fatal("Detect() error = nil, want an error for a .xcodeproj with no project.pbxproj")
 	}
 }

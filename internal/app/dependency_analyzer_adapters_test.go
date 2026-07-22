@@ -148,10 +148,13 @@ func TestCondaDependencyAnalyzerSatisfiesDependencyAnalyzer(t *testing.T) {
 	var _ DependencyAnalyzer = CondaDependencyAnalyzer{}
 }
 
-func TestXcodeDependencyAnalyzerResolvesSwiftPMDeclaredToolsVersion(t *testing.T) {
+func TestXcodeDependencyAnalyzerDoesNotRequireXcodeForSwiftPM(t *testing.T) {
+	// Even with an active Xcode installed AND a declared swift-tools-version,
+	// a SwiftPM project must NOT get a REQUIRES-Xcode edge: swift build runs
+	// under any Swift toolchain. It records an UnverifiedScope instead so the
+	// unmodeled toolchain relationship is not silently dropped.
 	install := domain.Resource{ID: "resource-xcode", Type: domain.ResourceTypeXcodeInstall, Version: "15.4"}
 	index := newMemoryResourceIndex([]domain.Resource{install})
-	collectedAt := time.Date(2026, 7, 22, 9, 0, 0, 0, time.UTC)
 
 	input := ProjectAnalysisInput{
 		Project: domain.BuildProject{ID: "project-1", Type: domain.ProjectTypeSwiftPM, ManifestPath: "/repo/Package.swift"},
@@ -160,16 +163,12 @@ func TestXcodeDependencyAnalyzerResolvesSwiftPMDeclaredToolsVersion(t *testing.T
 		},
 	}
 
-	got := (XcodeDependencyAnalyzer{Now: func() time.Time { return collectedAt }}).Analyze(context.Background(), input, index)
-	if len(got.Items) != 1 {
-		t.Fatalf("Analyze() items = %#v, want one resolved dependency", got.Items)
+	got := (XcodeDependencyAnalyzer{}).Analyze(context.Background(), input, index)
+	if len(got.Items) != 0 {
+		t.Fatalf("Analyze() items = %#v, want no dependency edge for a SwiftPM project", got.Items)
 	}
-	bundle := got.Items[0]
-	if bundle.Dependency.SourceID != "project-1" || bundle.Dependency.TargetID != "resource-xcode" || bundle.Dependency.Relation != domain.RelationRequires {
-		t.Errorf("dependency = %#v", bundle.Dependency)
-	}
-	if len(bundle.Evidence) != 1 || bundle.Evidence[0].Kind != domain.EvidenceDeclared || bundle.Evidence[0].RawValue != "5.9" {
-		t.Errorf("evidence = %#v, want DECLARED with RawValue 5.9", bundle.Evidence)
+	if len(got.Unverified) != 1 {
+		t.Fatalf("Analyze() unverified = %#v, want one scope noting the unmodeled Swift toolchain", got.Unverified)
 	}
 }
 

@@ -92,9 +92,9 @@
 | 재생성 가능하고, 프로젝트 소유·알려진 산출물 경로·reparse point 없음·Git 추적 원본 부재가 모두 검증됨 | `SAFE` |
 | 그 외 전부 | `REVIEW` |
 
-### 신뢰도 모델 (6축, `internal/domain/risk_assessment.go` `ConfidenceProfile`)
+### 신뢰도 모델 (7축, `internal/domain/risk_assessment.go` `ConfidenceProfile`)
 
-`Classification`/`Ownership`/`Dependency`/`CleanupSafety`/`ScanCoverage`/`Freshness` 여섯 축을 0~100으로 따로 매기고, 전체 신뢰도는 **가장 약한 축의 값**을 사용한다(통계적 확률이 아니라 분석 범위 충족도). `Freshness`는 마지막 관측 후 7일 이내 100, 30일 80, 90일 50, 그 이후 20이며, `SAFE`로 분류된 항목이라도 `Freshness < 80`이면 `EVIDENCE_STALE` 사유와 함께 자동으로 `REVIEW`로 강등된다.
+`Classification`/`Ownership`/`Dependency`/`Regenerability`/`PathSafety`/`ScanCoverage`/`Freshness` 일곱 축을 0~100으로 따로 매기고, 전체 신뢰도는 **가장 약한 축의 값**을 사용한다(통계적 확률이 아니라 분석 범위 충족도). `Freshness`는 마지막 관측 후 7일 이내 100, 30일 80, 90일 50, 그 이후 20이며, `SAFE`로 분류된 항목이라도 `Freshness < 80`이면 `EVIDENCE_STALE` 사유와 함께 자동으로 `REVIEW`로 강등된다. `libra explain`은 이 7축을 축별 `Status`(`KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`)와 함께 `Confidence breakdown:` 표로 보여주고, `libra plan`의 자동 선택 대상 여부를 `Cleanup eligibility:` 한 줄로 판정하며(JSON: `confidence_profile`/`confidence_summary`), `KNOWN`이 아닌 축은 `Unverified`(분석하지 못한 범위)로도 함께 보고한다.
 
 ### 정리 파이프라인 (plan → clean → restore / purge)
 
@@ -242,7 +242,7 @@ libra issues --scan scan-20260721-120000
 libra issues --code ACCESS_DENIED --severity warning
 ```
 
-- `libra explain <target>` — 프로젝트 또는 리소스 하나를 골라 종류·경로·크기·근거·영향·복구법·위험도·신뢰도를 전부 보여준다. `<target>` 문법: `<타입>:<버전>`(예: `windows-sdk:10.0.22621.0`), `project:"경로 또는 이름"`, 따옴표로 감싼 절대 경로, 또는 ID/이름. 언제: "이 폴더/SDK가 정확히 뭔지, 왜 여기 있는지" 알고 싶을 때.
+- `libra explain <target>` — 프로젝트 또는 리소스 하나를 골라 종류·경로·크기·근거·영향·복구법·위험도·신뢰도를 전부 보여준다. `<target>` 문법: `<타입>:<버전>`(예: `windows-sdk:10.0.22621.0`), `project:"경로 또는 이름"`, 따옴표로 감싼 절대 경로, 또는 ID/이름. 언제: "이 폴더/SDK가 정확히 뭔지, 왜 여기 있는지" 알고 싶을 때. 리소스 대상은 축약된 `Confidence` 퍼센트 아래에 7축 `Confidence breakdown:` 표(축·점수·상태)와 `Cleanup eligibility:`(`libra plan` 자동 선택 대상 여부, 아니라면 어느 축이 원인인지)를 함께 출력하고(JSON: `confidence_profile`/`confidence_summary`), `KNOWN`이 아닌 축은 `Unverified`(분석하지 못한 범위) 섹션에도 나열한다.
 ```bash
 libra explain windows-sdk:10.0.22621.0
 libra explain "D:\Projects\OldWeb\node_modules"
@@ -345,7 +345,7 @@ go test ./...
 
 ## 데이터 구조
 
-`libra`는 SQLite 단일 파일(`.libra.db`)에 모든 분석 결과를 저장한다. 마이그레이션은 `internal/store/sqlite/migrations/001_initial.sql`부터 `012_resource_confidence_freshness.sql`까지 파일명 순서대로 적용되며, `schema_migrations` 테이블이 적용 이력을 기록해 재실행 시 중복 적용을 막는다.
+`libra`는 SQLite 단일 파일(`.libra.db`)에 모든 분석 결과를 저장한다. 마이그레이션은 `internal/store/sqlite/migrations/001_initial.sql`부터 `013_risk_confidence_model.sql`까지 파일명 순서대로 적용되며, `schema_migrations` 테이블이 적용 이력을 기록해 재실행 시 중복 적용을 막는다.
 
 ### 핵심 테이블
 
@@ -354,7 +354,7 @@ go test ./...
 | `scans` | 스캔 1회의 시작·종료 시각, 대상 루트, 파일 수, 오류 수, 상태 |
 | `projects` | 발견된 프로젝트(이름/타입/루트·manifest 경로(원본·정규화)/드라이브/크기/최종 수정·관측 시각/활동 상태), `workspace_projects`를 통해 `workspaces`와 다대다 연결 |
 | `workspaces` / `workspace_projects` | `.sln` 등 여러 프로젝트를 묶는 workspace와 그 소속 관계(하나의 프로젝트가 여러 workspace에 속할 수 있음) |
-| `resources` | 발견된 SDK·도구·캐시·산출물(타입/버전/경로/크기/재생성 가능 여부/시스템 관리 여부/위험도), 6축 신뢰도 컬럼(`confidence_classification`/`_ownership`/`_dependency`/`_cleanup_safety`/`_scan_coverage`/`_freshness`)과 `risk_reasons`(JSON 배열) 포함 |
+| `resources` | 발견된 SDK·도구·캐시·산출물(타입/버전/경로/크기/재생성 가능 여부/시스템 관리 여부/위험도), 7축 신뢰도 컬럼(`confidence_classification`/`_ownership`/`_dependency`/`_regenerability`/`_path_safety`/`_scan_coverage`/`_freshness`)과 `confidence_assessments`(축별 상태 JSON 배열)·`risk_reasons`(JSON 배열) 포함 |
 | `dependencies` | 프로젝트 ↔ 리소스 의존 관계 edge(`source`/`target` 타입·ID, relation, confidence) |
 | `evidence` | 각 `dependency`를 뒷받침하는 근거(종류, 원본 경로, 속성명, 원본/해석된 값, 수집 시각) |
 | `scan_issues` | 스캔 중 발생한 경고·오류(코드/phase/adapter/경로/operation/심각도/메시지) |
@@ -366,7 +366,7 @@ go test ./...
 - **`Workspace` / `BuildProject`** — Workspace는 `.sln` 등 여러 BuildProject를 묶는 그룹(그 자체는 빌드 의존성이 없음), BuildProject는 실제로 분석 가능한 프로젝트 단위(`ProjectType`: `msbuild-cpp`/`msbuild-dotnet`/`node`/`git`/`python`, `ProjectStatus`: `ACTIVE`/`STALE`/`ARCHIVED`/`UNKNOWN`).
 - **`Resource`** — `ResourceType`(`windows-sdk`/`netfx-sdk`/`visual-studio`/`msbuild`/`dotnet-sdk`/`android-sdk`/`node-modules`/`build-output`/`global-cache`/`docker-cache`/`docker-volume`/`python-venv`/`conda-env`), 논리 크기·재생성 가능 여부·`RiskLevel`(`SAFE`/`REVIEW`/`BLOCKED`)·`ConfidenceProfile`·`RiskReason` 목록·재생성 명령(`RegenerationCommand`)을 갖는다.
 - **`Dependency` / `Evidence`** — 프로젝트→리소스 관계와 그 근거(evidence 종류·출처 경로·속성명·원본/해석값).
-- **`ConfidenceProfile`** — `Classification`/`Ownership`/`Dependency`/`CleanupSafety`/`ScanCoverage`/`Freshness` 6축(각 0~100), `Overall()`은 최솟값을 반환.
+- **`ConfidenceProfile`** — `Classification`/`Ownership`/`Dependency`/`Regenerability`/`PathSafety`/`ScanCoverage`/`Freshness` 7축(각 0~100)과 축별 `ConfidenceAssessment`(`Status`: `KNOWN`/`PARTIAL`/`UNKNOWN`/`CONFLICTED`) 목록, `Overall()`은 최솟값을 반환.
 - **`RiskReason`** — `BLOCKER`/`WARNING`/`SAFEGUARD`/`UNKNOWN` 심각도와 코드·메시지로 위험도 판단 근거를 구조화.
 - **`ImpactAssessment`** — `RUN`/`BUILD`/`DEBUG`/`CI` 범위(`ImpactScope`)별 `NONE`/`LOW`/`HIGH`/`UNKNOWN` 판단(`ImpactLevel`).
 - **`CleanupPlan` / `CleanupPlanItem`, `CleanupTransaction` / `CleanupTransactionItem`** — `plan`/`clean`/`restore`/`purge`가 공유하는 계획·트랜잭션 스냅샷과 상태 전이(`PLANNED`→`RUNNING`→`QUARANTINED`/`PARTIALLY_QUARANTINED`→`RESTORED`/`PURGED`/`PARTIALLY_*`/`FAILED`).

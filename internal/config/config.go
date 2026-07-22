@@ -84,6 +84,33 @@ func EnsureSafetyExcludes(excludes []string) []string {
 	return result
 }
 
+// RemoveExclude returns excludes with name removed (case-insensitive). It
+// refuses to remove a safetyExcludes entry -- those are enforced regardless
+// of user configuration by EnsureSafetyExcludes, so silently dropping them
+// here would just have EnsureSafetyExcludes add them back on the next Load
+// with no explanation -- and errors if name isn't present, so a typo in
+// `config set exclude <name> -d` doesn't silently no-op.
+func RemoveExclude(excludes []string, name string) ([]string, error) {
+	for _, safe := range safetyExcludes {
+		if strings.EqualFold(name, safe) {
+			return nil, fmt.Errorf("%q is a protected exclude and cannot be removed", safe)
+		}
+	}
+	result := make([]string, 0, len(excludes))
+	removed := false
+	for _, existing := range excludes {
+		if strings.EqualFold(existing, name) {
+			removed = true
+			continue
+		}
+		result = append(result, existing)
+	}
+	if !removed {
+		return nil, fmt.Errorf("%q is not in the exclude list", name)
+	}
+	return result, nil
+}
+
 type Config struct {
 	Version      int           `yaml:"version" json:"version"`
 	ProjectRoots []string      `yaml:"project_roots" json:"project_roots"`

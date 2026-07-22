@@ -97,6 +97,31 @@ func TestEnsureSafetyExcludesIsCaseInsensitiveAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestRemoveExcludeRemovesCaseInsensitively(t *testing.T) {
+	got, err := RemoveExclude([]string{"node_modules", "my-temp-dir"}, "MY-TEMP-DIR")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"node_modules"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("RemoveExclude() = %#v, want %#v", got, want)
+	}
+}
+
+func TestRemoveExcludeRejectsSafetyExclude(t *testing.T) {
+	_, err := RemoveExclude([]string{"node_modules", "$RECYCLE.BIN"}, "$recycle.bin")
+	if err == nil {
+		t.Fatal("expected an error removing a protected exclude")
+	}
+}
+
+func TestRemoveExcludeRejectsAbsentEntry(t *testing.T) {
+	_, err := RemoveExclude([]string{"node_modules"}, "not-there")
+	if err == nil {
+		t.Fatal("expected an error removing an absent entry")
+	}
+}
+
 func TestLoadRejectsUnknownFields(t *testing.T) {
 	path := writeConfig(t, "version: 1\nunknown: true\n")
 

@@ -15,9 +15,15 @@ var configShowCmd = &cobra.Command{Use: "show", Short: "Show the effective confi
 var configValidateCmd = &cobra.Command{Use: "validate", Short: "Validate the configuration file", Args: cobra.NoArgs, RunE: validateConfig}
 var configSetCmd = &cobra.Command{Use: "set <key> <value>", Short: "Update a supported configuration value", Args: cobra.ExactArgs(2), RunE: setConfig}
 
+// configSetDelete backs `config set exclude <name> -d`, which removes a
+// single entry from a list-valued key instead of replacing the whole list --
+// see cmd/root.go's jsonOutput for the same package-level flag-var pattern.
+var configSetDelete bool
+
 func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(configShowCmd, configValidateCmd, configSetCmd)
+	configSetCmd.Flags().BoolVarP(&configSetDelete, "delete", "d", false, "remove <value> from the exclude list instead of replacing it (safety excludes cannot be removed)")
 }
 
 func showConfig(cmd *cobra.Command, _ []string) error {
@@ -41,6 +47,20 @@ func setConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	key, value := strings.ToLower(args[0]), args[1]
+	if configSetDelete {
+		if key != "exclude" {
+			return fmt.Errorf("--delete is only supported for the exclude key")
+		}
+		updated, err := config.RemoveExclude(cfg.Exclude, value)
+		if err != nil {
+			return err
+		}
+		cfg.Exclude = updated
+		if err := config.Save(configFilePath(), cfg); err != nil {
+			return err
+		}
+		return output.New(cmd.OutOrStdout(), jsonOutput, "config set").Print(output.ConfigUpdateView{Path: configFilePath(), Key: key, Value: value})
+	}
 	positiveInt := func() (int, error) {
 		n, err := strconv.Atoi(value)
 		if err != nil || n <= 0 {
